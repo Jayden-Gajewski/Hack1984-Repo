@@ -61,7 +61,7 @@ It shows which brokers Tavily Extract can read and which need the search-snippet
 backend/
   app/
     main.py          FastAPI routes, one or two stages each
-    config.py        loads .env; refuses a non-localhost OLLAMA_URL
+    config.py        loads .env; refuses a non-localhost OLLAMA_URL or DATABASE_URL
     outbound.py      the one logged HTTP client + minimal-query guard
     models.py        pydantic models = the API contract
     prompts.py       local LLM prompts

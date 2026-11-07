@@ -21,10 +21,10 @@ Search `backend/app/` and `backend/scripts/` for raw network calls:
 Allowed:
 - `httpx` inside `backend/app/outbound.py` itself, and `fastapi.testclient` in `backend/tests/`.
 - The base URL constants in `backend/app/clients/*.py`, as long as the calls go through `outbound.request`.
-- `backend/app/clients/ollama.py` calling `OLLAMA_URL` with `local=True`. `config.py` refuses a non-localhost `OLLAMA_URL`; flag it if that check was removed.
-- `psycopg` in `backend/app/db.py` talking to the local Postgres container. Flag a `DATABASE_URL` default that points off-machine.
+- `backend/app/clients/ollama.py` calling `OLLAMA_URL` with `local=True`. `outbound.request` refuses `local=True` for a non-localhost host; flag it if that check was removed.
+- `psycopg` in `backend/app/db.py` talking to the local Postgres container. `config.py` refuses a non-localhost `OLLAMA_URL` or `DATABASE_URL`, and `docker-compose.yml` binds Postgres to `127.0.0.1`; flag it if any of these was removed.
 
-Also check `frontend/`: the browser should only call relative `/api/...` URLs (proxied by `next.config.ts` to localhost). Any absolute `https://` fetch, third-party `<script>`, analytics, or `next/font/google` is a violation. On demo laptops, Next.js telemetry should be off (`cd frontend && npx next telemetry status`).
+Also check `frontend/`: the browser should only call relative `/api/...` URLs (proxied by `next.config.ts` to localhost; it throws if `BACKEND_URL` isn't localhost). Any absolute `https://` fetch, third-party `<script>`, analytics, or `next/font/google` is a violation. On demo laptops, Next.js telemetry should be off (`cd frontend && npx next telemetry status`).
 
 ## Check 2: minimal queries
 
@@ -54,6 +54,6 @@ Also check `frontend/`: the browser should only call relative `/api/...` URLs (p
 PRIVACY AUDIT: PASS | FAIL
 Violations: <n>   Warnings: <n>
 - [FAIL] backend/app/stages/s3_breaches.py:42  httpx call to api.tavily.com bypasses outbound.request -> use clients/tavily.py
-- [WARN] backend/app/config.py:31  DATABASE_URL default points off-machine
+- [WARN] docker-compose.yml:10  Postgres published on all interfaces -> bind to 127.0.0.1
 ```
 End with the pitch line you can now honestly say, or the one you can't yet.
