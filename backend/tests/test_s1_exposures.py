@@ -301,3 +301,21 @@ def test_parse_analysis_keeps_several_values_per_field():
     fields = s1.parse_analysis(out, text, known_broker=True)
     counts = {f: sum(x.field == f for x in fields) for f in ("phone", "address", "relatives", "name")}
     assert counts == {"phone": 2, "address": 2, "relatives": 3, "name": 1}
+
+
+def test_select_candidates_skips_social_sites_and_caps_each_site():
+    brokers = [{"id": "pf", "name": "PeopleFinder", "domain": "peoplefinder.example", "opt_out_url": None}]
+    def c(url):
+        return s1.Candidate(url=url, title="Jane Example", snippet="Springfield IL", via="tavily")
+    found = [c(f"https://www.peoplefinder.example/p/{i}") for i in range(5)] + [
+        c("https://www.linkedin.com/in/jane-example"),
+        c("https://listings.example/jane-example"),
+        s1.Candidate(url="https://other.example/x", title="", snippet="", via="exa"),
+    ]
+    picked = [x.url for x in s1.select_candidates(found, "example", brokers, max_pages=10)]
+    assert sum("peoplefinder" in u for u in picked) == s1.MAX_PER_SITE  # capped per site
+    assert picked[0].startswith("https://www.peoplefinder.example")  # known brokers first
+    assert "https://listings.example/jane-example" in picked
+    assert not any("linkedin" in u for u in picked)  # never a listing: no LLM call
+    assert not any("other.example" in u for u in picked)  # doesn't mention the surname
+    assert len(s1.select_candidates(found, "example", brokers, max_pages=2)) == 2

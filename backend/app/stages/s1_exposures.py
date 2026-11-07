@@ -117,6 +117,42 @@ def mentions_place(text: str, city: str, state: str) -> bool:
     return has_word(text, city) or re.search(rf"(?<![A-Za-z]){re.escape(state.upper())}(?![A-Za-z])", text) is not None
 
 
+# Sites that are never people-search listings. Pages on unknown domains only become cards
+# if the model calls them a people-search site, so these would always cost an LLM call
+# (~30-90 s on a CPU) for nothing.
+NOT_LISTING_SITES = (
+    "linkedin.com", "facebook.com", "instagram.com", "x.com", "twitter.com", "threads.net",
+    "tiktok.com", "youtube.com", "reddit.com", "pinterest.com", "quora.com", "medium.com",
+    "github.com", "wikipedia.org", "yelp.com", "imdb.com",
+)
+MAX_PER_SITE = 3  # pages per site; more of the same site rarely adds new fields
+
+
+def is_not_a_listing_site(url: str) -> bool:
+    host = host_of(url)
+    return any(host == d or host.endswith("." + d) for d in NOT_LISTING_SITES)
+
+
+def select_candidates(
+    found: list[Candidate], surname: str, brokers: list[dict[str, Any]], max_pages: int
+) -> list[Candidate]:
+    """Pages worth a local LLM call: they mention the surname, aren't on a site that can't
+    be a listing, at most MAX_PER_SITE per site, known brokers first, at most max_pages."""
+    pool = [
+        c for c in found
+        if mentions(c, surname) and (broker_for(c.url, brokers) or not is_not_a_listing_site(c.url))
+    ]
+    pool.sort(key=lambda c: broker_for(c.url, brokers) is None)  # stable: keeps search order
+    per_site: dict[str, int] = {}
+    picked: list[Candidate] = []
+    for c in pool:
+        host = host_of(c.url)
+        if per_site.get(host, 0) < MAX_PER_SITE:
+            per_site[host] = per_site.get(host, 0) + 1
+            picked.append(c)
+    return picked[:max_pages]
+
+
 def iso_date(value: Any) -> str | None:
     """'2023-05-01T00:00:00.000Z' -> '2023-05-01'. Anything else is unknown, never a guess."""
     if isinstance(value, str) and _ISO_DATE_RE.match(value):
@@ -255,9 +291,7 @@ async def _discover(
     if seed is not None:
         await _discover_similar(seed, query, brokers, add, errors)
 
-    candidates = [c for c in found.values() if mentions(c, surname)]
-    candidates.sort(key=lambda c: broker_for(c.url, brokers) is None)  # known brokers first
-    return candidates[: get_settings().scan_max_pages]
+    return select_candidates(list(found.values()), surname, brokers, get_settings().scan_max_pages)
 
 
 async def _discover_similar(
@@ -278,7 +312,10 @@ async def _discover_similar(
             - {""}
             - {host_of(seed.url)}
         )
-        new_domains = [d for d in new_domains if broker_for(f"https://{d}/", brokers) is None]
+        new_domains = [
+            d for d in new_domains
+            if broker_for(f"https://{d}/", brokers) is None and not is_not_a_listing_site(f"https://{d}/")
+        ]
         if not new_domains:
             return
         more = await tavily.search(
