@@ -120,3 +120,20 @@ def test_local_calls_are_marked_and_truncated(monkeypatch):
     assert entry.local
     assert len(entry.body["prompt"]) <= outbound.LOCAL_BODY_CHARS + 1
     assert outbound.get_log(include_local=False) == []
+
+
+def test_local_flag_is_refused_for_a_remote_host(monkeypatch):
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise AssertionError("a mislabeled remote call must not be sent")
+
+    monkeypatch.setattr(outbound, "_client", _fake_client(handler))
+    outbound.clear_log()
+
+    with pytest.raises(ValueError, match="not this machine"):
+        asyncio.run(
+            outbound.request(
+                "ollama", "POST", "https://ollama.example.com/api/generate",
+                purpose="test", local=True,
+            )
+        )
+    assert outbound.get_log() == []

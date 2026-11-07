@@ -26,6 +26,8 @@ from typing import Any
 import httpx
 from pydantic import BaseModel
 
+from app.config import LOCAL_HOSTS
+
 MAX_LOG_ENTRIES = 500
 LOCAL_BODY_CHARS = 300
 REDACTED = "REDACTED"
@@ -138,6 +140,9 @@ async def request(
     req = client.build_request(
         method.upper(), url, params=params, headers=headers, json=json_body, timeout=timeout
     )
+    if local and req.url.host not in LOCAL_HOSTS:
+        # local=True hides the call in the log panel by default, so it must really be local.
+        raise ValueError(f"local=True but {req.url.host!r} is not this machine")
     body = copy.deepcopy(json_body)
     entry = OutboundEntry(
         id=next(_ids),

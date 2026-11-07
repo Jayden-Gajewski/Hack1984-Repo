@@ -1,7 +1,8 @@
 """Loads settings from the repo-root .env file.
 
-Refuses to start if OLLAMA_URL is not on this machine. Page text is sent to the
-local LLM, so it must never be pointed at a remote host. Don't remove that check.
+Refuses to start if OLLAMA_URL or DATABASE_URL is not on this machine. Page text is
+sent to the local LLM and scans are saved in Postgres, so neither may point at a
+remote host. Don't remove these checks.
 """
 
 import os
@@ -28,17 +29,22 @@ class Settings:
     database_url: str
 
 
+def _require_local(name: str, url: str, why: str) -> None:
+    host = urlparse(url).hostname or ""
+    if host not in LOCAL_HOSTS:
+        raise RuntimeError(f"{name} must point at localhost, got {host!r}. {why}")
+
+
 @lru_cache
 def get_settings() -> Settings:
     load_dotenv(REPO_ROOT / ".env")
 
     ollama_url = os.getenv("OLLAMA_URL", "http://localhost:11434").rstrip("/")
-    host = urlparse(ollama_url).hostname or ""
-    if host not in LOCAL_HOSTS:
-        raise RuntimeError(
-            f"OLLAMA_URL must point at localhost, got {host!r}. "
-            "Page text must never leave this machine."
-        )
+    _require_local("OLLAMA_URL", ollama_url, "Page text must never leave this machine.")
+    database_url = os.getenv(
+        "DATABASE_URL", "postgresql://hack:hack@localhost:5432/hack1984"
+    )
+    _require_local("DATABASE_URL", database_url, "Saved scans must stay on this machine.")
 
     return Settings(
         exa_api_key=os.getenv("EXA_API_KEY", ""),
@@ -46,7 +52,5 @@ def get_settings() -> Settings:
         ollama_url=ollama_url,
         ollama_model=os.getenv("OLLAMA_MODEL", "llama3.1:8b"),
         alias_domain=os.getenv("ALIAS_DOMAIN", "alias.local"),
-        database_url=os.getenv(
-            "DATABASE_URL", "postgresql://hack:hack@localhost:5432/hack1984"
-        ),
+        database_url=database_url,
     )

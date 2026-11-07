@@ -21,7 +21,7 @@ These rules are the product. Do not break them, even temporarily, even to debug.
 - **Database:** PostgreSQL 16 in Docker (`docker-compose.yml`), plain SQL through `psycopg` in `backend/app/db.py`. It holds saved scans for the "load last scan" fallback, and it runs on this laptop only.
 - **Local LLM:** Ollama in JSON mode. The model is set by `OLLAMA_MODEL` (default `llama3.1:8b`).
 - **Frontend:** Next.js (App Router, React, TypeScript) in `frontend/`, on port 3000. It proxies `/api/*` to FastAPI on port 8000, so the browser only ever talks to localhost.
-- **Config:** `.env` at the repo root (`EXA_API_KEY`, `TAVILY_API_KEY`, `OLLAMA_URL`, `OLLAMA_MODEL`, `ALIAS_DOMAIN`, `DATABASE_URL`). `config.py` refuses an `OLLAMA_URL` that isn't localhost. Commit `.env.example`, never `.env`.
+- **Config:** `.env` at the repo root (`EXA_API_KEY`, `TAVILY_API_KEY`, `OLLAMA_URL`, `OLLAMA_MODEL`, `ALIAS_DOMAIN`, `DATABASE_URL`). `config.py` refuses an `OLLAMA_URL` or `DATABASE_URL` that isn't localhost. Commit `.env.example`, never `.env`.
 - **State:** the current scan in memory, saved scans in Postgres, and aliases and reports as JSON in `backend/local/`. Single user, runs on one laptop.
 
 ## Don't build
@@ -34,7 +34,7 @@ User accounts or auth, real Gmail/IMAP integration, vector databases, agent fram
 backend/
   app/
     main.py          FastAPI routes (JSON API only; Next.js serves the frontend)
-    config.py        loads .env; refuses a non-localhost OLLAMA_URL
+    config.py        loads .env; refuses a non-localhost OLLAMA_URL or DATABASE_URL
     outbound.py      logged HTTP client + minimal-query check
     models.py        pydantic models = the API contract with the frontend
     prompts.py       local LLM prompts
