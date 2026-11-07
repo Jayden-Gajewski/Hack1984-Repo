@@ -10,3 +10,16 @@ Thumbs.db
 scans/
 scripts/output/
 .claude/settings.local.json
+
+# Python backend
+backend/.venv/
+backend/local/
+__pycache__/
+.pytest_cache/
+
+# Next.js frontend
+frontend/node_modules/
+frontend/.next/
+frontend/next-env.d.ts
+frontend/out/
+*.tsbuildinfo

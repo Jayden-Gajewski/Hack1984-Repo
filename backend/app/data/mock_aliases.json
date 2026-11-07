@@ -1,0 +1,7 @@
+{
+  "_note": "Demo aliases for Stage 7. All companies and addresses are fictional. Format: {company-slug}.{6 hex}@{ALIAS_DOMAIN}.",
+  "aliases": [
+    { "alias": "shopco.3f9a1c@alias.local", "company": "ShopCo", "company_domains": ["shopco.example"], "created_at": "2026-03-02" },
+    { "alias": "fitapp.8e2b07@alias.local", "company": "FitApp", "company_domains": ["fitapp.example"], "created_at": "2026-05-18" }
+  ]
+}

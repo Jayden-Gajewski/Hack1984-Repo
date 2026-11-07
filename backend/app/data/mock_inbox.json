@@ -1,12 +1,8 @@
 {
-  "_note": "Mocked inbox for the demo (stage 7). All companies and addresses here are fictional.",
-  "aliases": [
-    { "alias": "shopco-x7k2@alias.local", "company": "ShopCo", "companyDomains": ["shopco.example"], "createdAt": "2026-03-02" },
-    { "alias": "fitapp-q9m4@alias.local", "company": "FitApp", "companyDomains": ["fitapp.example"], "createdAt": "2026-05-18" }
-  ],
+  "_note": "Mocked inbox for the Stage 7 demo. All companies and addresses are fictional. The ShopCo order email is legitimate (not a hit); the leadgen-partners email is the Proven alias match.",
   "messages": [
-    { "to": "shopco-x7k2@alias.local", "from": "orders@shopco.example", "subject": "Your order has shipped", "date": "2026-03-10" },
-    { "to": "fitapp-q9m4@alias.local", "from": "hello@fitapp.example", "subject": "Welcome to FitApp!", "date": "2026-05-18" },
-    { "to": "shopco-x7k2@alias.local", "from": "offers@leadgen-partners.example", "subject": "You've been pre-approved!", "date": "2026-08-21" }
+    { "to": "shopco.3f9a1c@alias.local", "from": "orders@shopco.example", "subject": "Your order has shipped", "date": "2026-03-10" },
+    { "to": "fitapp.8e2b07@alias.local", "from": "hello@fitapp.example", "subject": "Welcome to FitApp!", "date": "2026-05-18" },
+    { "to": "shopco.3f9a1c@alias.local", "from": "offers@leadgen-partners.example", "subject": "You've been pre-approved!", "date": "2026-08-21" }
   ]
 }

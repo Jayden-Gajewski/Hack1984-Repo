@@ -1,0 +1,8 @@
+[
+  { "state": "CA", "name": "California Attorney General", "domain": "oag.ca.gov" },
+  { "state": "WA", "name": "Washington Attorney General", "domain": "atg.wa.gov" },
+  { "state": "ME", "name": "Maine Attorney General", "domain": "maine.gov" },
+  { "state": "VT", "name": "Vermont Attorney General", "domain": "ago.vermont.gov" },
+  { "state": "NH", "name": "New Hampshire Department of Justice", "domain": "doj.nh.gov" },
+  { "state": "MA", "name": "Massachusetts Office of Consumer Affairs", "domain": "mass.gov" }
+]
