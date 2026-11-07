@@ -4,10 +4,10 @@
   "private": true,
   "description": "Hack1984 UI: scan form, exposure cards, outbound log.",
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -H 127.0.0.1",
     "build": "next build",
-    "start": "next start",
-    "demo": "next build && next start",
+    "start": "next start -H 127.0.0.1",
+    "demo": "next build && next start -H 127.0.0.1",
     "typecheck": "tsc --noEmit"
   },
   "engines": {
