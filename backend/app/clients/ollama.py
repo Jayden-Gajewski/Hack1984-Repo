@@ -26,6 +26,15 @@ def _slots() -> asyncio.Semaphore:
     return _generate_slots
 
 
+def _options() -> dict[str, Any]:
+    # num_ctx must match on every call, warm-up included: a different value makes Ollama reload the model.
+    return {
+        "temperature": 0,
+        "num_ctx": get_settings().ollama_num_ctx,
+        "num_predict": MAX_OUTPUT_TOKENS,
+    }
+
+
 async def status() -> tuple[bool, bool]:
     """Return (running, model_pulled) for the configured OLLAMA_MODEL."""
     settings = get_settings()
@@ -50,6 +59,30 @@ async def status() -> tuple[bool, bool]:
     return True, model in names or f"{model}:latest" in names
 
 
+async def warm_up() -> None:
+    """Load the model into memory without generating anything, so the load overlaps with the
+    web searches instead of delaying the first real call. Never raises."""
+    settings = get_settings()
+    try:
+        await request(
+            "ollama",
+            "POST",
+            f"{settings.ollama_url}/api/generate",
+            purpose="Load the local LLM while the searches run",
+            local=True,
+            json_body={
+                "model": settings.ollama_model,
+                "prompt": "",
+                "stream": False,
+                "keep_alive": settings.ollama_keep_alive,
+                "options": _options(),
+            },
+            timeout=180.0,
+        )
+    except Exception as exc:
+        log.warning("Local LLM warm-up failed: %s", exc)
+
+
 async def ask_json(prompt: str, *, system: str, purpose: str) -> dict[str, Any]:
     """Ask the local model for a JSON object. Returns {} on any failure; never raises on model output."""
     settings = get_settings()
@@ -68,11 +101,7 @@ async def ask_json(prompt: str, *, system: str, purpose: str) -> dict[str, Any]:
                     "format": "json",
                     "stream": False,
                     "keep_alive": settings.ollama_keep_alive,
-                    "options": {
-                        "temperature": 0,
-                        "num_ctx": settings.ollama_num_ctx,
-                        "num_predict": MAX_OUTPUT_TOKENS,
-                    },
+                    "options": _options(),
                 },
                 timeout=180.0,
             )

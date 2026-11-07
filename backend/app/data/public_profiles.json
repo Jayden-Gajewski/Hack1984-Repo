@@ -1,0 +1,6 @@
+[
+  { "id": "athleticnet", "name": "Athletic.net", "domain": "athletic.net", "opt_out_url": null },
+  { "id": "milesplit", "name": "MileSplit", "domain": "milesplit.com", "opt_out_url": null },
+  { "id": "maxpreps", "name": "MaxPreps", "domain": "maxpreps.com", "opt_out_url": null },
+  { "id": "tfrrs", "name": "TFRRS", "domain": "tfrrs.org", "opt_out_url": null }
+]

@@ -4,6 +4,12 @@ from app.data import load_json
 def test_reference_data_shapes():
     for broker in load_json("brokers.json"):
         assert set(broker) == {"id", "name", "domain", "opt_out_url"}
+    profiles = load_json("public_profiles.json")
+    assert {p["domain"] for p in profiles} >= {"athletic.net"}
+    for profile in profiles:
+        assert set(profile) == {"id", "name", "domain", "opt_out_url"}
+    # A site is a broker or a public profile, never both.
+    assert not {b["domain"] for b in load_json("brokers.json")} & {p["domain"] for p in profiles}
     for company in load_json("companies.json"):
         assert set(company) == {"id", "name", "domains", "privacy_url"}
     for source in load_json("breach_sources.json"):
