@@ -2,7 +2,7 @@
 
 Full spec: backend/app/stages/CLAUDE.md. In short:
 1. Tavily search '"{name}" {city} {state}' restricted to the domains in data/brokers.json,
-   plus Exa search and find_similar to discover brokers we don't list yet.
+   plus Exa search for sites like known brokers to discover brokers we don't list yet.
 2. Drop candidates whose URL, title and snippet don't mention the last name.
 3. Tavily Extract the rest. If a broker blocks it, use the search snippet (text_source="snippet").
 4. Ask the local LLM (prompts.field_extraction_prompt + clients.ollama.ask_json) whether it's

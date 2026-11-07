@@ -7,7 +7,7 @@ One module per stage. Each exposes async functions that take and return `models.
 1. **Discover candidates:**
    - Tavily search on `"{name} {city} {state}"` restricted to the known broker domains in `data/brokers.json`.
    - Exa semantic search for the same person plus "people search profile".
-   - Exa find-similar on one known-broker hit. Collect the new domains it returns, then run a Tavily search restricted to them.
+   - Exa search for sites like a known broker (company-only query, e.g. "people search sites like spokeo.com"; `/findSimilar` is deprecated). Collect the new domains it returns, then run a Tavily search restricted to them.
 2. **Pre-filter cheaply:** drop candidates whose URL, title and snippet don't contain the last name.
 3. **Extract:** Tavily Extract on all candidates. When a broker blocks extraction, fall back to the search snippet, and record `text_source: "snippet"` so the UI can say so.
 4. **Analyze locally:** the LLM decides whether the page is this person and which `FIELD_TYPES` it shows, with a short quote per field. Keep matches with confidence ≥ 0.5.
