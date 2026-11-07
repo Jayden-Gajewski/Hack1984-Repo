@@ -32,3 +32,39 @@ export function safeHref(url: string | null | undefined): string | undefined {
     return undefined;
   }
 }
+
+// ---------- Stages 3, 4 and 6 ----------
+
+export const SOURCE_KIND_LABEL = {
+  ag_notice: "State attorney general notice",
+  news: "News report",
+  web: "Web page",
+} as const;
+
+export const DATE_KIND_LABEL = {
+  occurred: "happened",
+  disclosed: "disclosed",
+  unknown: "date unknown",
+} as const;
+
+export const POLICY_CATEGORY_LABEL = {
+  sale: "Sells personal information",
+  data_broker: "Shares with data brokers",
+  sharing: "Shares with other companies",
+  advertising: "Targeted advertising",
+  affiliates: "Shares with affiliates",
+} as const;
+
+// Flags that go under "This wasn't a hack, they sold it." The rest are listed as "also allows".
+export const SELL_OR_SHARE = new Set(["sale", "data_broker", "sharing"]);
+
+export const REMOVAL_LABEL = {
+  removed: "Removed",
+  still_listed: "Still listed",
+  unconfirmed: "Couldn't check",
+} as const;
+
+/** A mailto: link for an address we parsed ourselves; anything odd gets no link. */
+export function safeMailto(email: string | null | undefined): string | undefined {
+  return email && /^[^\s@<>"']+@[^\s@<>"']+\.[a-z]{2,}$/i.test(email) ? `mailto:${email}` : undefined;
+}

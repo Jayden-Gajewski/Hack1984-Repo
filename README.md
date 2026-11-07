@@ -36,7 +36,7 @@ You need Docker, Python 3.13, Node 20.9 or later, and [Ollama](https://ollama.co
    ```
 4. Open http://localhost:3000. The line under the title shows what's still missing (Ollama, Postgres, API keys).
 
-Stage 1 (find exposures) works. A scan needs at least one search key and Ollama running with the model pulled; if either is missing, it stops before searching and says what to fix. Stage 2 (Wayback dates) works too, so each card shows when the listing was first archived, linked to the snapshot. Stages 3–7 are still stubs, so there are no likely sources yet.
+Stage 1 (find exposures) works. A scan needs at least one search key and Ollama running with the model pulled; if either is missing, it stops before searching and says what to fix. All seven stages work: exposures, Wayback dates, breach timelines, policy flags, likely-source ranking, opt-out drafts with re-scan, and aliases with the mock inbox. Expect about a minute per company for "Check breaches & policies", since the local LLM reads every result.
 
 ## Tests
 

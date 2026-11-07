@@ -133,3 +133,44 @@ section .panel { margin-top: 16px; }
 }
 .tag-local { color: var(--proven); }
 .tag-remote { color: var(--accent); }
+
+h3 { font-size: 0.95rem; margin: 12px 0 4px; }
+select {
+  font: inherit;
+  padding: 7px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+}
+code { font-size: 0.85em; overflow-wrap: anywhere; }
+
+.checks { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 8px 0 12px; }
+.timeline { list-style: none; padding: 0; margin: 4px 0; }
+.timeline li { border-left: 2px solid var(--border); padding: 4px 0 8px 10px; }
+.flag { border-left: 3px solid var(--danger); padding: 4px 0 4px 10px; margin: 8px 0; }
+blockquote { margin: 6px 0; overflow-wrap: anywhere; }
+
+.status { font-size: 0.75rem; font-weight: 600; }
+.status.removed { color: var(--proven); }
+.status.still_listed { color: var(--danger); }
+.status.unconfirmed { color: var(--muted); }
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  z-index: 10;
+}
+.modal { width: min(720px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; }
+.letter {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px;
+  white-space: pre-wrap;
+  font-family: inherit;
+}

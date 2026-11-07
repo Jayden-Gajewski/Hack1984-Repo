@@ -1,11 +1,17 @@
-import type { Exposure } from "@/lib/api";
-import { DATE_SOURCE_LABEL, TIER_HELP, TIER_LABEL, safeHref } from "@/lib/display";
+import type { Exposure, RemovalStatus } from "@/lib/api";
+import { DATE_SOURCE_LABEL, REMOVAL_LABEL, TIER_HELP, TIER_LABEL, safeHref } from "@/lib/display";
 
 const FOUND_VIA_LABEL = { tavily: "Tavily search", exa: "Exa search" } as const;
 
 // Everything on this card comes from scraped pages. React escapes text, and links only render
 // for http(s) URLs. Never pass this data to dangerouslySetInnerHTML.
-export default function ExposureCard({ exposure }: { exposure: Exposure }) {
+interface Props {
+  exposure: Exposure;
+  onDraft?: (exposureId: string) => void;
+  removal?: RemovalStatus; // from the last re-scan
+}
+
+export default function ExposureCard({ exposure, onDraft, removal }: Props) {
   const top = exposure.leads[0];
   const listingHref = safeHref(exposure.url);
   const optOutHref = safeHref(exposure.opt_out_url);
@@ -16,6 +22,7 @@ export default function ExposureCard({ exposure }: { exposure: Exposure }) {
     <article className="card">
       <div className="card-head">
         <strong>{exposure.broker}</strong>
+        {removal && <span className={`status ${removal}`}>{REMOVAL_LABEL[removal]}</span>}
         {top && (
           <span className={`badge ${top.tier}`} title={TIER_HELP[top.tier]}>
             {TIER_LABEL[top.tier]} · likely source: {top.company}
@@ -88,6 +95,11 @@ export default function ExposureCard({ exposure }: { exposure: Exposure }) {
       </details>
 
       <p className="row">
+        {onDraft && (
+          <button type="button" className="secondary" onClick={() => onDraft(exposure.id)}>
+            Draft opt-out
+          </button>
+        )}
         {listingHref && (
           <a href={listingHref} target="_blank" rel="noopener noreferrer">
             View listing
