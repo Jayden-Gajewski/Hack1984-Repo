@@ -48,6 +48,12 @@ The first-hour test (`scripts/test_extract.py`) decides how much Stage 1 can rel
 - The local LLM merges the snippets into breach events: `date`, `date_kind` (occurred, disclosed or unknown), `data_types`, `source_url` and `summary`.
 - Normalize `data_types` to `FIELD_TYPES` (watch out: "email addresses" means `email`, not `address`). Label each date's source, and prefer AG notices.
 
+**Built** (`s3_breaches.py`). Tested on Ticketmaster; these choices came from real results:
+- Tavily news needs `days` (3650 here): it only looks back 7 days by default. Its dates come as RFC 2822 strings.
+- News and web results must name the company in their title or URL; AG notices may name it in the text only. Passing mentions were most of the noise.
+- The LLM cites sources by number, never URL. A date is kept only if its year appears in that source, and a data type only if that source mentions it (the model copied the whole type list otherwise).
+- Events merge per company and year: AG notice first, then an "occurred" date, then the most precise. Undated events show only for a company with no dated ones.
+
 ## Stage 4: Policy check (`s4_policy.py`, Evidence)
 
 - Find the privacy policy URL: use `privacy_url` from `companies.json` if set, or else a Tavily search restricted to the company's domain.
@@ -55,6 +61,12 @@ The first-hour test (`scripts/test_extract.py`) decides how much Stage 1 can rel
 - Each clause gets a `category` (sale, sharing, advertising, affiliates or data_broker), the exact `quote` and a one-line plain-English `explanation`.
 - Sharing with service providers, or sharing that's only legally required, does not count.
 - This stage is the source of the demo line "this wasn't a hack, they sold it", so the quote must be verbatim.
+
+**Built** (`s4_policy.py`). llama3.1:8b mislabeled many sentences, so the design changed:
+- The code pulls out sentences that mention selling, sharing, third parties, affiliates, advertising or brokers, numbers them, and the LLM only picks numbers. Quotes are verbatim by construction.
+- Every pick must pass checks in code: no denials ("we do not sell"), merger boilerplate, legal definitions, statements of the user's rights, headings or table rows; it must be in the company's voice; service providers alone don't count.
+- A strict pattern also flags plain "we share/sell ... with third parties/partners" sentences, because the model's picks vary between runs.
+- Blocked policies fall back to search snippets from the company's own domains (AT&T needs this).
 
 ## Stage 5: Rank likely sources (`s5_ranking.py`, Local LLM & ranking)
 
@@ -71,6 +83,8 @@ Pure function: `(exposures, breaches, policies, alias_hits) -> exposures with le
 - Sort leads Proven, then Likely, then Possible.
 - Never use the words "leaked by" or "who leaked it".
 
+**Built** (`s5_ranking.py`), pure. "Name" never counts as a shared field; a listing's age matches a breach's birthdate. A breach dated only "2024" can't be Likely for a listing public by mid-2024 (it might be after). `tests/test_pipeline_routes.py` runs scan, accounts, inbox and leads through the routes.
+
 ## Stage 6: Resolve (`s6_resolve.py`, Search & extract)
 
 - **Broker opt-out URL:** `brokers.json`, or else a Tavily search restricted to the broker's domain for "opt out remove my information".
@@ -81,8 +95,12 @@ Pure function: `(exposures, breaches, policies, alias_hits) -> exposures with le
   - Name and city only, never more.
 - **Re-scan:** re-extract old listing URLs. `removed` means the page loaded and no longer names the user, `still_listed` means it does, and `unconfirmed` means the page was blocked or failed. This is the subscription hook.
 
+**Built** (`s6_resolve.py`). A page under 500 characters counts as blocked (`unconfirmed`), not removed; "still listed" needs both first and last name. Tested live: Ticketmaster's contact search found privacy@ticketmaster.com.
+
 ## Stage 7: Aliases (`s7_aliases.py`, Local LLM & ranking)
 
 - Format: `{company-slug}.{6 random hex}@{ALIAS_DOMAIN}`. Save aliases to the `aliases` table in Postgres.
 - **Inbox check (local only, no search):** for each message sent to a known alias, if the sender's domain isn't the assigned company's domain or one of its subdomains, it's an `AliasHit` with tier Proven.
 - The demo uses `data/mock_inbox.json` and `data/mock_aliases.json`. Use a fictional company and `.example` domains, never a real company accused on fake data. Include one legitimate email from the company itself, to show it isn't flagged.
+
+**Built** (`s7_aliases.py`, plus the `aliases` table in `db.py`). `match_inbox()` is the pure core. Aliases can be made for companies in `companies.json` or the demo companies; anything else is a 404. If Postgres is down, the demo aliases still list and the inbox check still works.

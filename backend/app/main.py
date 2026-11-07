@@ -86,12 +86,18 @@ async def _stage(
 
 
 async def _call(label: str, fn: Callable[..., Any], *args: Any) -> Any:
-    """Run a stage for a route that has no errors list. Not built yet: HTTP 501."""
+    """Run a stage for a route that has no errors list. Not built yet: HTTP 501.
+    A stage raises LookupError for something unknown (404) and RuntimeError when a service
+    it needs, like Postgres or a missing API key, isn't available (503)."""
     try:
         result = fn(*args)
         return await result if inspect.isawaitable(result) else result
     except NotImplementedError:
         raise HTTPException(501, f"{label} is not implemented yet.") from None
+    except LookupError as exc:
+        raise HTTPException(404, str(exc).strip("'\"")) from None
+    except RuntimeError as exc:
+        raise HTTPException(503, str(exc)) from None
 
 
 def _rank(exposures: list[Exposure]) -> tuple[list[Exposure], list[str]]:

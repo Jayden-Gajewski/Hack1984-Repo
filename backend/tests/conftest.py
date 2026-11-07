@@ -10,6 +10,8 @@ def client(monkeypatch):
     monkeypatch.setattr(db, "init_schema", lambda: None)
     monkeypatch.setattr(db, "save_scan", lambda *args: None)
     monkeypatch.setattr(db, "ping", lambda: False)
+    monkeypatch.setattr(db, "save_alias", lambda *args: "2026-11-07")
+    monkeypatch.setattr(db, "list_aliases", lambda: [])
     monkeypatch.setattr(main, "session", main.Session())
     with TestClient(main.app) as c:
         yield c
