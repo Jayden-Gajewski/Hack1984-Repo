@@ -1,3 +1,4 @@
+import pytest
 """Route tests. Every stage is replaced with a fake, so these stay offline and keep passing
 as the real stages get built."""
 
@@ -86,3 +87,21 @@ def test_outbound_log_endpoint(client):
     res = client.get("/api/outbound-log?include_local=false")
     assert res.status_code == 200
     assert isinstance(res.json(), list)
+
+
+@pytest.mark.parametrize(
+    "person",
+    [
+        {"city": "12 Elm St Springfield"},  # street address
+        {"city": "Springfield 62701"},  # ZIP code
+        {"name": "Jane Example 2"},
+        {"state": "1L"},
+    ],
+)
+def test_scan_rejects_digits_and_bad_state(client, person):
+    body = {"name": "Jane Example", "city": "Springfield", "state": "IL", "consent": True, **person}
+    assert client.post("/api/scan", json=body).status_code == 422
+
+
+def test_requests_for_other_hosts_are_refused(client):
+    assert client.get("/api/status", headers={"Host": "attacker.example"}).status_code == 400

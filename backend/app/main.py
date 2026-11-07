@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 
 from app import db, outbound
 from app.clients import ollama
@@ -123,6 +124,9 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="Hack1984 API", lifespan=lifespan)
+# Only answer requests addressed to this machine, which blocks DNS-rebinding pages from
+# reading saved scans or the outbound log through the browser.
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=["localhost", "127.0.0.1"])
 
 
 @app.get("/api/status", response_model=StatusResponse)

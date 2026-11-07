@@ -45,7 +45,18 @@ class ScanRequest(BaseModel):
     @field_validator("state")
     @classmethod
     def _upper_state(cls, v: str) -> str:
+        if not v.isascii() or not v.isalpha():
+            raise ValueError("State must be a two-letter code, e.g. IL.")
         return v.upper()
+
+    @field_validator("name", "city")
+    @classmethod
+    def _no_digits(cls, v: str) -> str:
+        # Digits mean a street address, ZIP code or similar, which we never send out.
+        assert_minimal_query(v)  # first, so a phone or email gets its specific message
+        if any(ch.isdigit() for ch in v):
+            raise ValueError("Use letters only: no street address, ZIP code or numbers.")
+        return v
 
     @model_validator(mode="after")
     def _minimal_query(self) -> "ScanRequest":

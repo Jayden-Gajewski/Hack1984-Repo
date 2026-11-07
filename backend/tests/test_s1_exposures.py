@@ -245,3 +245,21 @@ def test_url_name_and_date_helpers():
     assert s1.broker_for("https://notpeoplefinder.example/x", BROKERS) is None
     assert s1.iso_date("2023-05-01T00:00:00.000Z") == "2023-05-01"
     assert s1.iso_date("last spring") is None
+
+
+def test_surname_matches_whole_words_only():
+    assert s1.has_word("Jane Li, Springfield", "li")
+    assert s1.has_word("/people/Jane-Li/", "li")
+    assert s1.has_word("/names/jane_li", "li")
+    assert not s1.has_word("Search listings by phone", "li")
+    assert not s1.has_word("anything", "")
+
+
+def test_listing_that_names_someone_else_is_dropped():
+    text = "Jane Dosland, 304 Saxon Dr, Springfield IL"
+    out = {"is_same_person": True, "confidence": 0.9, "fields": [
+        {"field": "name", "quote": "Jane Dosland"}, {"field": "address", "quote": "304 Saxon Dr"}]}
+    assert s1.parse_analysis(out, text, True, surname="example") is None
+    text_ok = "Jane Example, 12 Elm St, Springfield IL"
+    ok = {**out, "fields": [{"field": "name", "quote": "Jane Example"}]}
+    assert s1.parse_analysis(ok, text_ok, True, surname="example") == [FieldFinding(field="name", quote="Jane Example")]

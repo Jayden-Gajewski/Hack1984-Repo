@@ -79,11 +79,17 @@ def last_name(full_name: str) -> str:
     return tokens[-1] if tokens else ""
 
 
+def has_word(text: str, word: str) -> bool:
+    """Whole-word, case-insensitive match, so "Li" doesn't match "listing". "-", "_" and
+    "/" count as separators (URL slugs like /Jane-Example/)."""
+    return bool(word) and re.search(rf"(?<![a-z0-9]){re.escape(word.lower())}(?![a-z0-9])", text.lower()) is not None
+
+
 def mentions(candidate: Candidate, surname: str) -> bool:
     # Only the URL's path and query count: a surname can also appear in a domain name
     # (e.g. "People" in peoplefinders.com), which says nothing about the page.
     parts = urlsplit(candidate.url)
-    return surname in f"{parts.path} {parts.query} {candidate.title} {candidate.snippet}".lower()
+    return has_word(f"{parts.path} {parts.query} {candidate.title} {candidate.snippet}", surname)
 
 
 def iso_date(value: Any) -> str | None:
@@ -102,7 +108,7 @@ def _truthy(value: Any) -> bool:
 
 
 def parse_analysis(
-    out: dict[str, Any], source_text: str, known_broker: bool
+    out: dict[str, Any], source_text: str, known_broker: bool, surname: str = ""
 ) -> list[FieldFinding] | None:
     """Validate the local LLM's answer. Returns the grounded fields if the page is this
     person, or None if it isn't (or the answer can't be trusted).
@@ -139,6 +145,8 @@ def parse_analysis(
             continue  # not in the page: the model made it up
         if field == "address" and not any(ch.isdigit() for ch in quote):
             continue  # just a city or state (what we searched with), not a street address
+        if field == "name" and surname and not has_word(quote, surname):
+            return None  # the listing names someone else (e.g. "Jane Dosland" for "Jane Example")
         seen.add(field)
         fields.append(FieldFinding(field=field, quote=quote))
     return fields
@@ -313,7 +321,7 @@ async def find_exposures(req: ScanRequest) -> tuple[list[Exposure], list[str]]:
     jobs: list[tuple[Candidate, str, str]] = []
     for candidate in candidates:
         extracted = texts.get(normalize_url(candidate.url), "")
-        if len(extracted) >= MIN_EXTRACT_CHARS and surname in extracted.lower():
+        if len(extracted) >= MIN_EXTRACT_CHARS and has_word(extracted, surname):
             jobs.append((candidate, extracted, "extract"))
         elif candidate.snippet.strip():
             jobs.append((candidate, candidate.snippet, "snippet"))
@@ -336,7 +344,7 @@ async def find_exposures(req: ScanRequest) -> tuple[list[Exposure], list[str]]:
             unanswered += 1
             continue
         broker = broker_for(candidate.url, brokers)
-        fields = parse_analysis(answer, text, known_broker=broker is not None)
+        fields = parse_analysis(answer, text, known_broker=broker is not None, surname=surname)
         if fields is None:
             continue
         exposures.append(

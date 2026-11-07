@@ -11,5 +11,5 @@ def client(monkeypatch):
     monkeypatch.setattr(db, "save_scan", lambda *args: None)
     monkeypatch.setattr(db, "ping", lambda: False)
     monkeypatch.setattr(main, "session", main.Session())
-    with TestClient(main.app) as c:
+    with TestClient(main.app, base_url="http://localhost") as c:  # TrustedHostMiddleware
         yield c
