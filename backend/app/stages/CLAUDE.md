@@ -6,12 +6,13 @@ One module per stage. Each exposes async functions that take and return `models.
 
 1. **Discover candidates:**
    - Tavily search on `"{name} {city} {state}"` restricted to the known broker domains in `data/brokers.json`.
+   - A separate Tavily search, same query, restricted to the public-profile sites in `data/public_profiles.json` (sports results pages like Athletic.net that show a name with a school or team). These become cards with `source_kind: "public_profile"`, and the LLM is asked for `prompts.PROFILE_FIELDS` (name, school, age, employer) instead of the broker fields.
    - Exa semantic search for the same person plus "people search profile".
    - Exa search for sites like a known broker (company-only query, e.g. "people search sites like spokeo.com"; `/findSimilar` is deprecated). Collect the new domains it returns, then run a Tavily search restricted to them.
 2. **Pre-filter cheaply:** drop candidates whose URL, title and snippet don't contain the last name.
 3. **Extract:** Tavily Extract on all candidates. When a broker blocks extraction, fall back to the search snippet, and record `text_source: "snippet"` so the UI can say so.
 4. **Analyze locally:** the LLM decides whether the page is this person and which `FIELD_TYPES` it shows, with a short quote per field. Keep matches with confidence ≥ 0.5.
-5. Attach `broker` and `opt_out_url` from `brokers.json` when the domain is known.
+5. Attach `broker`, `source_kind` and `opt_out_url` from `brokers.json` or `public_profiles.json` when the domain is known.
 
 The first-hour test (`scripts/test_extract.py`) decides how much Stage 1 can rely on extracted text versus snippets. Record the result in this file once it's known.
 
@@ -21,7 +22,7 @@ The first-hour test (`scripts/test_extract.py`) decides how much Stage 1 can rel
 - The last-name filter looks at the URL path, title and snippet, never the domain.
 - At most 20 candidates per scan (known brokers first), since each one is a local LLM call.
 - Extracted text under 500 chars, or without the last name, counts as blocked and falls back to the snippet.
-- Pages on domains not in `brokers.json` must also have `is_people_search_site: true` from the LLM, so news stories and social profiles don't become cards.
+- Pages on domains in neither `brokers.json` nor `public_profiles.json` must also have `is_people_search_site: true` from the LLM, so news stories and social profiles don't become cards.
 - Every field quote must appear in the page text; fields are limited to `prompts.LISTING_FIELDS`.
 - Tests: `tests/test_s1_exposures.py` runs the whole stage against a fake internet.
 
@@ -88,6 +89,7 @@ Pure function: `(exposures, breaches, policies, alias_hits) -> exposures with le
 ## Stage 6: Resolve (`s6_resolve.py`, Search & extract)
 
 - **Broker opt-out URL:** `brokers.json`, or else a Tavily search restricted to the broker's domain for "opt out remove my information".
+- **Public profiles** get a removal request (remove or hide the profile, keep it out of search engines) instead of an opt-out, with `Draft.kind = "public_profile"`. Removal page: `public_profiles.json`, or else a Tavily search on the site's domain for "remove my profile privacy request".
 - **Company privacy contact:** a Tavily search restricted to the company's domain. Prefer a `privacy@` style email on that domain, and fall back to the request page URL.
 - **Drafts:** fixed templates filled in locally (deterministic for the demo).
   - Broker: delete the listing, opt out of sale and sharing, say where you got my data.

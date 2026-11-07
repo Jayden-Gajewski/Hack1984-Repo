@@ -1,5 +1,13 @@
 import type { Exposure, RemovalStatus } from "@/lib/api";
-import { DATE_SOURCE_LABEL, REMOVAL_LABEL, RISK_LABEL, TIER_HELP, TIER_LABEL, safeHref } from "@/lib/display";
+import {
+  DATE_SOURCE_LABEL,
+  REMOVAL_LABEL,
+  RISK_LABEL,
+  TIER_HELP,
+  TIER_LABEL,
+  exposureKind,
+  safeHref,
+} from "@/lib/display";
 
 const FOUND_VIA_LABEL = { tavily: "Tavily search", exa: "Exa search" } as const;
 
@@ -19,11 +27,13 @@ export default function ExposureCard({ exposure, onDraft, removal }: Props) {
   const sourceLabel = DATE_SOURCE_LABEL[exposure.public_by_source];
   // Each kind of information once, even when the page shows several values for it.
   const kinds = [...new Set(exposure.fields.map((f) => f.field))];
+  const source = exposureKind(exposure.source_kind); // data broker or public profile
 
   return (
     <article className="card">
       <div className="card-head">
         <strong>{exposure.broker}</strong>
+        <span className="muted">{source.label}</span>
         {exposure.risk && (
           <span className={`risk ${exposure.risk}`} title={exposure.risk_reason}>
             {RISK_LABEL[exposure.risk]}
@@ -136,17 +146,17 @@ export default function ExposureCard({ exposure, onDraft, removal }: Props) {
       <p className="row">
         {onDraft && (
           <button type="button" className="secondary" onClick={() => onDraft(exposure.id)}>
-            Draft opt-out
+            {source.draft}
           </button>
         )}
         {listingHref && (
           <a href={listingHref} target="_blank" rel="noopener noreferrer">
-            View listing
+            {source.view}
           </a>
         )}
         {optOutHref && (
           <a href={optOutHref} target="_blank" rel="noopener noreferrer">
-            Opt-out page
+            {source.page}
           </a>
         )}
       </p>

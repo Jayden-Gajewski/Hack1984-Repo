@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { api, type ScanResponse } from "@/lib/api";
+import { api, type ScanRequest, type ScanResponse } from "@/lib/api";
 
 interface Props {
-  onResult: (result: ScanResponse) => void;
+  onResult: (result: ScanResponse, request: ScanRequest) => void;
 }
 
 export default function ScanForm({ onResult }: Props) {
@@ -20,7 +20,8 @@ export default function ScanForm({ onResult }: Props) {
     setLoading(true);
     setError(null);
     try {
-      onResult(await api.scan({ name, city, state, consent }));
+      const request = { name, city, state, consent };
+      onResult(await api.scan(request), request);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Scan failed");
     } finally {
