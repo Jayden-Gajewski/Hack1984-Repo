@@ -27,7 +27,10 @@ async def status() -> tuple[bool, bool]:
             f"{settings.ollama_url}/api/tags",
             purpose="Check that the local LLM is running",
             local=True,
-            timeout=3.0,
+            # /api/tags can take a few seconds while Ollama is busy or loading a model. A short
+            # timeout made Stage 1 report "not running" and cancel the scan. A stopped Ollama
+            # still fails instantly (connection refused), so the longer wait costs nothing then.
+            timeout=10.0,
         )
         res.raise_for_status()
         names = {m.get("name", "") for m in res.json().get("models", [])}
