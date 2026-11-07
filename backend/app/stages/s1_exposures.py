@@ -136,6 +136,8 @@ def parse_analysis(
         quote = " ".join(quote.split())[:MAX_QUOTE_CHARS]
         if not quote or _squash(quote) not in haystack:
             continue  # not in the page: the model made it up
+        if field == "address" and not any(ch.isdigit() for ch in quote):
+            continue  # just a city or state (what we searched with), not a street address
         seen.add(field)
         fields.append(FieldFinding(field=field, quote=quote))
     return fields

@@ -29,7 +29,7 @@ NEWBROKER_URL = "https://newbroker.example/people/jane-example"  # found via fin
 BLOG_URL = "https://blog.example/jane-example-wins-award"  # about her, but not a listing
 OTHER_PERSON_URL = "https://peoplefinder.example/john-smith"  # wrong person
 
-FILLER = " Sponsored public records search." * 30
+FILLER = " More text on this page." * 30
 PAGES = {
     PEOPLEFINDER_URL: "PAGE-PF Jane Example, age 34, Springfield, IL. Current address: 12 Elm St, "
     "Springfield, IL. Phone: (217) 555-0142. Relatives: John Example." + FILLER,
@@ -207,6 +207,9 @@ def test_parse_analysis_is_conservative():
     assert s1.parse_analysis({**ok, "fields": [{"field": "ssn", "quote": "Jane"}]}, text, True) == []
     assert s1.parse_analysis({**ok, "fields": [{"field": "email", "quote": "jane@x.example"}]}, text, True) == []
     assert s1.parse_analysis({**ok, "fields": "address"}, text, True) == []
+    # A city on its own is what we searched with, not a street address.
+    city_only = {**ok, "fields": [{"field": "address", "quote": "Springfield IL"}]}
+    assert s1.parse_analysis(city_only, "Jane Example, 34, Springfield IL.", True) == []
 
 
 def test_url_name_and_date_helpers():
