@@ -28,3 +28,6 @@ backend/local/
 
 # impeccable's 17 MB Windows-only binary; each teammate installs their own
 .claude/skills/impeccable/scripts/bin/
+
+.agents/
+.aider-desk/
