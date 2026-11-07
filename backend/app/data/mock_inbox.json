@@ -1,0 +1,8 @@
+{
+  "_note": "Mocked inbox for the Stage 7 demo. All companies and addresses are fictional. The ShopCo order email is legitimate (not a hit); the leadgen-partners email is the Proven alias match.",
+  "messages": [
+    { "to": "shopco.3f9a1c@alias.local", "from": "orders@shopco.example", "subject": "Your order has shipped", "date": "2026-03-10" },
+    { "to": "fitapp.8e2b07@alias.local", "from": "hello@fitapp.example", "subject": "Welcome to FitApp!", "date": "2026-05-18" },
+    { "to": "shopco.3f9a1c@alias.local", "from": "offers@leadgen-partners.example", "subject": "You've been pre-approved!", "date": "2026-08-21" }
+  ]
+}

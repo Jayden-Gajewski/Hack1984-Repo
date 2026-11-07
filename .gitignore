@@ -11,16 +11,19 @@ scans/
 scripts/output/
 .claude/settings.local.json
 
-# Python
+# Python backend
 .venv/
 __pycache__/
 *.pyc
+.pytest_cache/
 
-# Next.js
+# Next.js frontend
 .next/
 next-env.d.ts
+frontend/out/
+*.tsbuildinfo
 
-# user data (exported scans) stays local
+# user data (aliases, reports, exported scans) stays local
 backend/local/
 
 # impeccable's 17 MB Windows-only binary; each teammate installs their own

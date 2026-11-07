@@ -12,48 +12,47 @@ These rules are the product. Do not break them, even temporarily, even to debug.
 2. **One door out.** Every request to an outside service goes through `backend/app/outbound.py`. No direct `httpx`/`requests` calls or vendor SDKs anywhere else. That module feeds the outbound log panel. The Next.js app talks only to the FastAPI backend on localhost. Its server code (route handlers, server components) never calls Exa, Tavily or any other external service.
 3. **Minimal queries.** Search with name + city/state only, or a company name. Never send phone numbers, emails, SSNs or birthdates. `outbound.py` rejects queries that contain them. Don't weaken that check.
 4. **Self-scan only.** A scan requires a `consent: true` flag. Demos use a consenting teammate.
-5. **User data stays on this laptop and out of git.** User data lives in the local Postgres database (localhost only, never a hosted database) or in `backend/local/` (gitignored). Never commit real scan results, names or page text. Fixtures use fictional people and `.example` domains.
+5. **User data stays on this laptop and out of git.** User data lives in memory, in `backend/local/` (gitignored), or in the local Postgres container (never a hosted database). Never commit real scan results, names or page text. Fixtures use fictional people and `.example` domains.
 6. **Wording.** Say "likely source", never "who leaked it" or "leaked by". Every date shows its source. A missing date is "unknown", never a guess.
 
 ## Stack
 
 - **Backend:** Python 3.13, FastAPI, async `httpx`, pydantic v2. Call the Exa and Tavily REST APIs directly (not their SDKs), so the log captures exactly what was sent.
+- **Database:** PostgreSQL 16 in Docker (`docker-compose.yml`), plain SQL through `psycopg` in `backend/app/db.py`. It holds saved scans for the "load last scan" fallback, and it runs on this laptop only.
 - **Local LLM:** Ollama in JSON mode. The model is set by `OLLAMA_MODEL` (default `llama3.1:8b`).
-- **Database:** PostgreSQL 16 on localhost, accessed through SQLAlchemy 2.0 (async) with `asyncpg`. Tables are created on startup; there are no migrations for a weekend build.
-- **Frontend:** Next.js (App Router), React and TypeScript in `frontend/`, on `http://localhost:3000`. `next.config.ts` rewrites `/api/*` to FastAPI on `http://localhost:8000`.
-- **Config:** `.env` at the repo root (`EXA_API_KEY`, `TAVILY_API_KEY`, `OLLAMA_URL`, `OLLAMA_MODEL`, `ALIAS_DOMAIN`, `DATABASE_URL`). `config.py` refuses an `OLLAMA_URL` or `DATABASE_URL` that isn't localhost. Commit `.env.example`, never `.env`.
-- **State:** Postgres for scans, exposures, aliases and the outbound log; `backend/local/` for exported scans (the demo fallback). Single user, runs on one laptop.
-
-**Legacy starter code:** `server/`, `web/`, `scripts/*.js`, `package.json` and `vite.config.js` are an earlier Node/Express + Vite prototype. Port logic from them into `backend/` and `frontend/`, but don't extend them. Some agents and skills in `.claude/` still describe that layout.
+- **Frontend:** Next.js (App Router, React, TypeScript) in `frontend/`, on port 3000. It proxies `/api/*` to FastAPI on port 8000, so the browser only ever talks to localhost.
+- **Config:** `.env` at the repo root (`EXA_API_KEY`, `TAVILY_API_KEY`, `OLLAMA_URL`, `OLLAMA_MODEL`, `ALIAS_DOMAIN`, `DATABASE_URL`). `config.py` refuses an `OLLAMA_URL` that isn't localhost. Commit `.env.example`, never `.env`.
+- **State:** the current scan in memory, saved scans in Postgres, and aliases and reports as JSON in `backend/local/`. Single user, runs on one laptop.
 
 ## Don't build
 
-User accounts or auth, real Gmail/IMAP integration, vector databases, agent frameworks (LangChain, CrewAI, etc.), multiple agents, hosted or cloud databases, analytics or telemetry of any kind. If a task seems to need one of these, stop and ask.
+User accounts or auth, real Gmail/IMAP integration, vector databases, agent frameworks (LangChain, CrewAI, etc.), multiple agents, an ORM or a second database, hosted or cloud databases, analytics or telemetry of any kind, extra frontend frameworks or UI component libraries on top of Next.js. If a task seems to need one of these, stop and ask.
 
 ## Layout (target; create files here as you build)
 
 ```
 backend/
   app/
-    main.py          FastAPI routes (JSON API only)
-    config.py        loads .env; refuses a non-localhost OLLAMA_URL or DATABASE_URL
-    db.py            SQLAlchemy engine, session and tables
+    main.py          FastAPI routes (JSON API only; Next.js serves the frontend)
+    config.py        loads .env; refuses a non-localhost OLLAMA_URL
     outbound.py      logged HTTP client + minimal-query check
     models.py        pydantic models = the API contract with the frontend
     prompts.py       local LLM prompts
+    db.py            PostgreSQL: saved scans
     clients/         exa.py, tavily.py, wayback.py, ollama.py
     stages/          s1_exposures.py ... s7_aliases.py
     data/            checked-in reference data: brokers.json, companies.json,
                      breach_sources.json, mock_inbox.json, mock_aliases.json
-  local/             gitignored: exported scans (demo fallback)
+  local/             gitignored: aliases, reports
   scripts/           one-off tests, e.g. test_extract.py
+  tests/             pytest, offline
   requirements.txt
-frontend/            Next.js app
-  app/               routes and layouts (App Router)
-  components/        cards, outbound log panel, modals
-  lib/api.ts         typed fetch helpers for /api/...
-  lib/types.ts       TypeScript mirror of backend/app/models.py
-  public/fonts/      self-hosted font files
+frontend/
+  app/               Next.js pages and components
+  lib/api.ts         typed API client; mirrors models.py
+  lib/display.ts     wording rules (tier labels, date sources) and safe links
+  next.config.ts     /api proxy to the backend
+docker-compose.yml   local Postgres
 ```
 
 ## Pipeline and owners
@@ -72,7 +71,7 @@ frontend/            Next.js app
 
 Details for each stage are in `backend/app/stages/CLAUDE.md`.
 
-**Shared files:** `models.py` (and its mirror `frontend/lib/types.ts`), `db.py`, `outbound.py` and the API routes in `main.py` affect everyone. Keep changes to them additive, and call them out in the commit message.
+**Shared files:** `models.py`, `db.py`, `outbound.py`, the API routes in `main.py`, and `frontend/lib/api.ts` (which mirrors `models.py`) affect everyone. Keep changes to them additive, and call them out in the commit message. Every stage starts as a stub that raises `NotImplementedError`, and its route already exists, so you can usually fill in your stage without touching the shared files.
 
 ## Build order
 
@@ -86,23 +85,24 @@ Finish the current tier before starting the next.
 ## Commands
 
 ```bash
-# Postgres (or use a local install), bound to localhost only
-docker run -d --name hack1984-db -p 127.0.0.1:5432:5432 -e POSTGRES_PASSWORD=dev -e POSTGRES_DB=hack1984 postgres:16
+docker compose up -d              # local Postgres (from the repo root)
+ollama pull llama3.1:8b
 
 # Backend
 cd backend
 python -m venv .venv
 .venv\Scripts\activate            # Windows (macOS/Linux: source .venv/bin/activate)
 pip install -r requirements.txt
-ollama pull llama3.1:8b
-uvicorn app.main:app --reload     # http://localhost:8000
+uvicorn app.main:app --reload     # API on http://localhost:8000
+pytest                            # offline tests
 python -m scripts.test_extract --name "Jane Doe" --city "Boston" --state "MA"
 
 # Frontend (second terminal)
 cd frontend
 npm install
-npx next telemetry disable
-npm run dev                       # http://localhost:3000
+npx next telemetry disable        # once per laptop: Next.js telemetry isn't in our outbound log
+npm run dev                       # UI on http://localhost:3000
+npm run demo                      # production build for the demo (no dev-only network calls)
 ```
 
 ## Demo script (about 3 minutes)

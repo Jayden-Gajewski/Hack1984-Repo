@@ -1,68 +1,83 @@
 ---
 name: add-stage-endpoint
-description: The pattern for wiring a pipeline stage module (server/stages/N-*.js) to an Express route under /api and calling it from the React UI in web/src. Use when implementing or exposing a stage (exposures, dates, breaches, policy, rank, resolve, alias), adding a new API endpoint, or hooking a UI button or card up to backend data.
+description: The pattern for implementing a pipeline stage (backend/app/stages/sN_*.py), exposing it through a FastAPI route in backend/app/main.py, and calling it from the Next.js UI through frontend/lib/api.ts. Use when implementing or exposing a stage (exposures, dates, breaches, policy, rank, resolve, alias), adding a new API endpoint, or hooking a UI button or card up to backend data.
 ---
 
 # add-stage-endpoint
 
-Stages: `1-exposures`, `2-dates`, `3-breaches`, `4-policy`, `5-rank`, `6-resolve`, `7-alias` in `server/stages/`. (Check the actual filenames; only 1 and 7 are fixed.)
+Stages live in `backend/app/stages/`: `s1_exposures.py`, `s2_dating.py`, `s3_breaches.py`, `s4_policy.py`, `s5_ranking.py`, `s6_resolve.py` and `s7_aliases.py`. Each one starts as a stub that raises `NotImplementedError`, and the routes for all of them already exist in `main.py` (table in `backend/CLAUDE.md`). Usually you only fill in the stage.
 MVP order: Stages 1, 4, 6 + the outbound log. Then 2, 3, 5. Stage 7 last.
 
-## 1. Stage module: pure-ish, one export
+## 1. Stage module: keep the signature, fill in the body
 
-```js
-// server/stages/4-policy.js
-import { extract } from '../services/tavily.js';      // services wrap outboundFetch
-import { askJSON } from '../lib/ollama.js';
-import * as P from '../prompts/policy.js';
+```python
+# backend/app/stages/s4_policy.py
+import asyncio
 
-export async function run({ companies }) {
-  return Promise.all(companies.map(async (c) => {
-    try { /* service calls -> askJSON -> P.validate */ }
-    catch (err) { return { company: c.name, error: String(err.message), source: 'unavailable' }; }
-  }));
-}
+from app.clients import ollama, tavily          # clients wrap outbound.request
+from app.data import load_json
+from app.models import PolicyResult
+
+
+async def check_policies(company_ids: list[str]) -> tuple[list[PolicyResult], list[str]]:
+    companies = [c for c in load_json("companies.json") if c["id"] in company_ids]
+    results = await asyncio.gather(*(_check_one(c) for c in companies), return_exceptions=True)
+    policies, errors = [], []
+    for company, result in zip(companies, results):
+        if isinstance(result, Exception):
+            errors.append(f"{company['name']}: policy check failed ({result})")
+        else:
+            policies.append(result)
+    return policies, errors
 ```
 Rules:
-- External calls only through `server/services/*` (which use `outboundFetch`). Never `fetch` directly.
-- Search queries use name + city only. Let `assertMinimalQuery` throw, then catch it and return an error, don't strip the data silently.
-- Per-item try/catch: one blocked broker or company must not fail the whole stage.
-- Every date or claim carries its `source` label (e.g. `"wayback"`, `"published"`, `"unknown"`).
-- Read the service files for real function names before importing. Don't assume `extract`/`search` exist with those names.
+- Keep the function name and signature: `main.py`, the tests and the frontend depend on them. Return `models.py` types plus a list of error strings.
+- External calls only through `backend/app/clients/*` (which use `outbound.request`). Never import `httpx` in a stage.
+- Search queries use name + city only, or a company name. The clients pass them as `guard=[query]`. If the guard raises, report it as an error string; don't strip the data silently.
+- Per-item failures go in the errors list: one blocked broker or company must not fail the whole stage. (`main.py` also turns an uncaught exception into an error string, but don't rely on that.)
+- Every date or claim carries its source label (`public_by_source`, `date_kind`, `source_kind`).
+- Read the client files for the real function names and parameters before calling them.
 
-## 2. Express route
+## 2. FastAPI route (only if you need a new one)
 
-Find where the app registers routes (the server entry, e.g. `server/index.js`, or a routes file). Follow the existing style:
+Check the route table in `backend/CLAUDE.md` first; most routes already exist. If you do add one to `backend/app/main.py`, follow the existing style:
 
-```js
-import * as policy from './stages/4-policy.js';
-app.post('/api/policy', async (req, res) => {
-  try { res.json(await policy.run(req.body)); }
-  catch (err) { res.status(500).json({ error: err.message }); }
-});
+```python
+@app.post("/api/policy-only", response_model=AccountsResponse)
+async def policy_only(req: AccountsRequest):
+    policies, errors = await _stage("Stage 4 (policy check)", [], s4_policy.check_policies, req.companies)
+    return AccountsResponse(breaches=[], policies=policies, errors=errors)
 ```
 - Use `POST` with a JSON body for anything carrying personal data (name, city). Keep it out of URLs and query strings.
-- Make sure `express.json()` is applied.
-- Don't touch `GET /api/outbound`. It's the log.
+- Request and response bodies are pydantic models in `models.py`. Add fields, don't rename them, and mirror every change in `frontend/lib/api.ts`.
+- `main.py`, `models.py` and `frontend/lib/api.ts` are shared files: keep changes additive and call them out in the commit message.
+- Don't touch `GET /api/outbound-log`. It's the log.
 
-## 3. UI call (web/src)
+## 3. UI call (frontend/)
 
-Vite proxies `/api` to :3001, so use relative URLs only:
+Add the call to the `api` object in `frontend/lib/api.ts` (relative URL; `next.config.ts` proxies `/api` to `:8000`), then use it from a client component:
 
-```js
-const res = await fetch('/api/policy', {
-  method: 'POST', headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ companies }),
-});
-const data = await res.json();
+```tsx
+"use client";
+const [data, setData] = useState<AccountsResponse | null>(null);
+const [error, setError] = useState<string | null>(null);
+
+async function run() {
+  try {
+    setData(await api.accounts(selected));
+  } catch (err) {
+    setError(err instanceof Error ? err.message : String(err));
+  }
+}
 ```
-- Put loading and error states on the card. Show "unknown" or "unavailable" rather than blank.
-- After any stage call, refresh `OutboundLog.jsx` (or let it poll `/api/outbound`) so the demo shows the new requests.
-- Render evidence tiers as Proven, Likely or Possible, with the text "likely source".
+- Put loading and error states on the card. Show "unknown" or "unavailable" rather than blank, and show the response's `errors` too.
+- The outbound log panel polls `/api/outbound-log`, so new requests appear on their own.
+- Render evidence tiers with `TIER_LABEL` and `TIER_HELP` from `lib/display.ts`, with the text "likely source". Links from scraped data go through `safeHref()`.
 
 ## 4. Verify
 
-1. `npm run dev`, then `curl -X POST localhost:3001/api/<stage> -H "Content-Type: application/json" -d '{...}'`.
-2. Check that `GET /api/outbound` shows the new calls with the right `service` names.
-3. Click through in the UI at :5173.
-4. Run the `privacy-audit` skill if the stage adds a new service call.
+1. `cd backend && pytest` (offline). Add a fixture-based test for pure logic (Stage 5 ranking, Stage 7 inbox matching).
+2. `uvicorn app.main:app --reload`, then `curl -X POST localhost:8000/api/<route> -H "Content-Type: application/json" -d '{...}'`.
+3. Check that `GET localhost:8000/api/outbound-log` shows the new calls with the right `service` names and a readable `purpose`.
+4. `cd frontend && npm run dev`, then click through at http://localhost:3000.
+5. Run the `privacy-audit` skill if the stage adds a new client call.

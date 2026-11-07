@@ -1,20 +1,21 @@
 # Frontend (UI & demo)
 
-Next.js (App Router) with React and TypeScript, running at `http://localhost:3000`. Call the backend with `fetch` on relative `/api/...` paths, through the typed helpers in `lib/api.ts`. `next.config.ts` rewrites those paths to FastAPI on `localhost:8000`. The routes are listed in `backend/CLAUDE.md`, and the response types in `lib/types.ts` mirror `backend/app/models.py`.
+Next.js (App Router) with React and TypeScript, at `http://localhost:3000`. Call the backend through the `api` object in `lib/api.ts`, which uses relative `/api/...` URLs; `next.config.ts` proxies them to FastAPI on `:8000` (routes are listed in `backend/CLAUDE.md`). The types in `lib/api.ts` mirror `backend/app/models.py`, so change them together. No other UI frameworks or component libraries.
 
 ## Nothing leaves the laptop
 
 The outbound log claims to show everything that left the laptop, so it has to be true.
 
 - **No external calls from Next.js.** Route handlers, server components and server actions only call the FastAPI backend. Don't add Next.js API routes that call Exa, Tavily or any other service.
-- **Fonts are self-hosted.** Use `next/font/local` with files in `public/fonts/`, or a system font stack. Never use `next/font/google`, a Google Fonts `<link>` or `@import`, even if a design skill suggests it.
-- **No third-party CDNs, analytics or telemetry.** No `@vercel/analytics`, no tracking scripts, and run `npx next telemetry disable` once per machine.
+- **No web fonts from third parties.** Use a system font stack, or `next/font/local` with files checked into the repo. Never use `next/font/google`, a Google Fonts `<link>` or `@import`, even if a design skill suggests it.
+- **No third-party CDNs, analytics or telemetry.** No `@vercel/analytics`, no tracking scripts, and run `npx next telemetry disable` once per laptop.
 - **No remote images.** Don't render broker logos or favicons from external URLs; that leaks the scan to those sites. Use text or local assets.
+- **Demo from `npm run demo`.** It's a production build, so it skips the dev server's version check against npm.
 - Most interactive UI is client-side. Mark components that poll or hold state with `"use client"`.
 
 ## Security
 
-Everything shown on screen (page titles, field quotes, policy quotes, email subjects) comes from scraped web pages. Render it as normal JSX text, which React escapes. **Never pass it to `dangerouslySetInnerHTML`**, and don't put scraped URLs in `href` without checking they start with `http://` or `https://` (a `javascript:` link would run). A broker page must not be able to inject script into our demo.
+Everything shown on screen (page titles, field quotes, policy quotes, email subjects) comes from scraped web pages. React escapes text you render with `{...}`, so **never use `dangerouslySetInnerHTML`** with this data. Links from scraped data go through `safeHref()` in `lib/display.ts`, which only allows http(s) URLs (a `javascript:` link would run). A broker page must not be able to inject script into our demo.
 
 ## Screens and components
 
@@ -36,6 +37,8 @@ Everything shown on screen (page titles, field quotes, policy quotes, email subj
 
 ## Wording
 
+`lib/display.ts` holds the tier labels, the tier hover text and the date-source labels below. Use them rather than writing new strings.
+
 - Use "Likely source", never "who leaked it".
 - Tier badges:
   - **Proven**: an alias match.
@@ -46,4 +49,4 @@ Everything shown on screen (page titles, field quotes, policy quotes, email subj
 
 ## Demo
 
-The demo is the 3-minute script in the root `CLAUDE.md`. It ends on the outbound log, so that panel should look good full-screen. Make sure each step works without a page reload, and have loading states (scans take a while with a local LLM). Keep a fallback: a "load last scan" option that reads a saved result from the backend, in case the venue Wi-Fi fails.
+The demo is the 3-minute script in the root `CLAUDE.md`. It ends on the outbound log, so that panel should look good full-screen. Make sure each step works without a page reload, and have loading states (scans take a while with a local LLM). Keep a fallback: the "Load last scan" button reads the last saved scan from local Postgres (`GET /api/scans/latest`), in case the venue Wi-Fi fails.

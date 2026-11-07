@@ -1,0 +1,15 @@
+# Local PostgreSQL for saved scans. Data stays on this laptop.
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: hack
+      POSTGRES_PASSWORD: hack
+      POSTGRES_DB: hack1984
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
