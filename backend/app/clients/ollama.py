@@ -13,8 +13,26 @@ from app.outbound import request
 
 log = logging.getLogger(__name__)
 
-# Small local models slow down fast under load, so at most 2 generate calls run at once.
-_generate_slots = asyncio.Semaphore(2)
+# How many generate calls run at once (OLLAMA_PARALLEL, default 1). On a CPU, parallel
+# calls just split the cores and queue inside Ollama, where they can time out.
+_generate_slots: asyncio.Semaphore | None = None
+MAX_OUTPUT_TOKENS = 1024  # JSON answers are short; this only stops a runaway generation
+
+
+def _slots() -> asyncio.Semaphore:
+    global _generate_slots
+    if _generate_slots is None:
+        _generate_slots = asyncio.Semaphore(get_settings().ollama_parallel)
+    return _generate_slots
+
+
+def _options() -> dict[str, Any]:
+    # num_ctx must match on every call, warm-up included: a different value makes Ollama reload the model.
+    return {
+        "temperature": 0,
+        "num_ctx": get_settings().ollama_num_ctx,
+        "num_predict": MAX_OUTPUT_TOKENS,
+    }
 
 
 async def status() -> tuple[bool, bool]:
@@ -41,10 +59,34 @@ async def status() -> tuple[bool, bool]:
     return True, model in names or f"{model}:latest" in names
 
 
+async def warm_up() -> None:
+    """Load the model into memory without generating anything, so the load overlaps with the
+    web searches instead of delaying the first real call. Never raises."""
+    settings = get_settings()
+    try:
+        await request(
+            "ollama",
+            "POST",
+            f"{settings.ollama_url}/api/generate",
+            purpose="Load the local LLM while the searches run",
+            local=True,
+            json_body={
+                "model": settings.ollama_model,
+                "prompt": "",
+                "stream": False,
+                "keep_alive": settings.ollama_keep_alive,
+                "options": _options(),
+            },
+            timeout=180.0,
+        )
+    except Exception as exc:
+        log.warning("Local LLM warm-up failed: %s", exc)
+
+
 async def ask_json(prompt: str, *, system: str, purpose: str) -> dict[str, Any]:
     """Ask the local model for a JSON object. Returns {} on any failure; never raises on model output."""
     settings = get_settings()
-    async with _generate_slots:
+    async with _slots():
         try:
             res = await request(
                 "ollama",
@@ -58,7 +100,8 @@ async def ask_json(prompt: str, *, system: str, purpose: str) -> dict[str, Any]:
                     "system": system,
                     "format": "json",
                     "stream": False,
-                    "options": {"temperature": 0, "num_ctx": 8192},
+                    "keep_alive": settings.ollama_keep_alive,
+                    "options": _options(),
                 },
                 timeout=180.0,
             )

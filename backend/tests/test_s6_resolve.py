@@ -15,6 +15,8 @@ KNOWN = Exposure(id="e1", broker="PeopleFinder", broker_id="peoplefinder",
                  url="https://www.peoplefinder.example/jane-example", opt_out_url="https://peoplefinder.example/optout")
 UNKNOWN = Exposure(id="e2", broker="newbroker.example", url="https://newbroker.example/p/jane-example")
 GONE = Exposure(id="e3", broker="ListingSite", url="https://listings.example/p/jane-example")
+PROFILE = Exposure(id="e4", broker="MeetResults", broker_id="meetresults", source_kind="public_profile",
+                   url="https://meetresults.example/athlete/4417")
 FILLER = " More text on this page." * 30
 SHOPCO = {"id": "shopco", "name": "ShopCo", "domains": ["shopco.example"], "privacy_url": None}
 
@@ -22,6 +24,10 @@ SHOPCO = {"id": "shopco", "name": "ShopCo", "domains": ["shopco.example"], "priv
 def fake_web(request: httpx.Request) -> httpx.Response:
     host, path = request.url.host, request.url.path
     body = json.loads(request.content or b"{}")
+    if host == "api.tavily.com" and path == "/search" and body["include_domains"] == ["meetresults.example"]:
+        return httpx.Response(200, json={"results": [
+            {"url": "https://meetresults.example/privacy-request", "title": "Privacy request: hide my profile"},
+        ]})
     if host == "api.tavily.com" and path == "/search" and body["include_domains"] == ["newbroker.example"]:
         return httpx.Response(200, json={"results": [
             {"url": "https://newbroker.example/about", "title": "About us"},
@@ -50,7 +56,7 @@ def fake_internet(monkeypatch):
     from app.config import get_settings
     get_settings.cache_clear()
     monkeypatch.setattr(outbound, "_client", httpx.AsyncClient(transport=httpx.MockTransport(fake_web)))
-    monkeypatch.setattr(s6, "load_json", lambda name: {"brokers.json": []}[name])
+    monkeypatch.setattr(s6, "load_json", lambda name: {"brokers.json": [], "public_profiles.json": []}[name])
     monkeypatch.setattr(s6, "all_companies", lambda: [SHOPCO])
     outbound.clear_log()
     yield
@@ -73,6 +79,17 @@ def test_unknown_broker_opt_out_page_is_searched_by_broker_name_only():
     assert "Jane" not in json.dumps(search.body)
 
 
+def test_public_profile_gets_a_removal_request_not_a_broker_opt_out():
+    draft = asyncio.run(s6.draft_broker_opt_out(PROFILE, PERSON))
+    assert draft.kind == "public_profile" and draft.recipient == "MeetResults"
+    assert draft.send_to_url == "https://meetresults.example/privacy-request"
+    assert "remove my public profile" in draft.body and PROFILE.url in draft.body
+    assert "Stop selling" not in draft.body
+    [search] = outbound.get_log()
+    assert search.body["query"] == "MeetResults remove my profile privacy request"
+    assert "Jane" not in json.dumps(search.body)
+
+
 def test_company_draft_prefers_a_privacy_mailbox_on_the_companys_domain():
     draft = asyncio.run(s6.draft_company_request("shopco", PERSON))
     assert draft.send_to_email == "privacy@shopco.example"
@@ -83,9 +100,10 @@ def test_company_draft_prefers_a_privacy_mailbox_on_the_companys_domain():
 
 def test_letters_hold_name_and_city_only():
     from app.outbound import assert_minimal_query
-    for _, body in (s6.broker_letter(KNOWN, PERSON), s6.company_letter("ShopCo", PERSON)):
+    letters = (s6.broker_letter(KNOWN, PERSON), s6.profile_letter(PROFILE, PERSON), s6.company_letter("ShopCo", PERSON))
+    for _, body in letters:
         assert "Jane Example, Springfield, IL" in body
-        assert_minimal_query(body.replace(KNOWN.url, ""))  # no email, phone, SSN or birthdate
+        assert_minimal_query(body.replace(KNOWN.url, "").replace(PROFILE.url, ""))  # no email, phone, SSN or birthdate
 
 
 def test_pick_privacy_email():
@@ -98,3 +116,11 @@ def test_rescan_reports_each_listing():
     items, errors = asyncio.run(s6.rescan([KNOWN, GONE, UNKNOWN], PERSON))
     assert errors == []
     assert {i.exposure_id: i.status for i in items} == {"e1": "still_listed", "e3": "removed", "e2": "unconfirmed"}
+
+
+def test_removal_status_matches_whole_words_only():
+    person = ScanRequest(name="Ana Li", city="Springfield", state="IL", consent=True)
+    filler = "Search public records and listings for anyone in Illinois. " * 20
+    assert s6.removal_status(filler, person) == "removed"  # "li" inside "listings" doesn't count
+    assert s6.removal_status(filler + " Ana Li, age 34", person) == "still_listed"
+    assert s6.removal_status("too short", person) == "unconfirmed"

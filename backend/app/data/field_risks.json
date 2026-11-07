@@ -1,0 +1,97 @@
+{
+  "_note": "Plain-English explanations for each kind of information a listing can show. Used by app/explain.py to write each exposure's summary and details. Edit the wording here, not in code. Never say a company 'leaked' anything.",
+  "fields": {
+    "address": {
+      "label": "Home address",
+      "noun": "home address",
+      "plural": "home addresses",
+      "why": "It tells anyone where you live, and past addresses map out where you've lived before.",
+      "misuse": [
+        "Find your home or show up there",
+        "Send mail or packages in your name, or redirect your mail",
+        "Answer \"confirm your address\" questions when opening credit in your name"
+      ],
+      "protect": "Freeze your credit with Equifax, Experian and TransUnion (it's free), so no one can open accounts in your name."
+    },
+    "phone": {
+      "label": "Phone number",
+      "noun": "phone number",
+      "plural": "phone numbers",
+      "why": "Your phone number is tied to your accounts and often receives your login codes.",
+      "misuse": [
+        "Spam calls and scam texts that use your name to look real",
+        "SIM-swap attacks that move your number to their phone and catch your login codes",
+        "Look you up on other people-search sites"
+      ],
+      "protect": "Ask your carrier for a port-out PIN or SIM lock, and use an authenticator app instead of text-message codes."
+    },
+    "email": {
+      "label": "Email address",
+      "noun": "email address",
+      "plural": "email addresses",
+      "why": "Your email address is the username for most of your accounts.",
+      "misuse": [
+        "Phishing emails that look like they come from services you use",
+        "Trying passwords from old breaches against your accounts",
+        "Finding your other accounts and profiles"
+      ],
+      "protect": "Turn on two-step login for your email, and give it a password you don't use anywhere else."
+    },
+    "relatives": {
+      "label": "Relatives and associates",
+      "noun": "relatives",
+      "plural": "relatives",
+      "why": "Family names are the answers to common security questions, and they make scams believable.",
+      "misuse": [
+        "Answer security questions like your mother's maiden name",
+        "\"Family emergency\" scams that pretend to be someone you know",
+        "Find and target the people close to you"
+      ],
+      "protect": "Stop using real family names as security answers; use random answers saved in a password manager."
+    },
+    "age": {
+      "label": "Age",
+      "noun": "age",
+      "plural": "ages",
+      "why": "Your age narrows down your birth year, which many identity checks ask for.",
+      "misuse": [
+        "Guess your date of birth for identity checks",
+        "Target you with scams aimed at your age group"
+      ],
+      "protect": "Don't use your birth year or date in passwords or PINs."
+    },
+    "birthdate": {
+      "label": "Date of birth",
+      "noun": "date of birth",
+      "plural": "dates of birth",
+      "why": "Banks, phone carriers and government services use your date of birth to confirm it's you.",
+      "misuse": [
+        "Pass identity checks to open accounts or credit in your name",
+        "Reset passwords on accounts that ask for your birth date"
+      ],
+      "protect": "Freeze your credit, and add a verbal password to your bank and phone accounts."
+    },
+    "employer": {
+      "label": "Employer",
+      "noun": "employer",
+      "plural": "employers",
+      "why": "Where you work makes phishing look official, and tells people where to find you during the day.",
+      "misuse": [
+        "Fake emails from your \"boss\" or IT team (spear phishing)",
+        "Find you at work"
+      ],
+      "protect": "Be wary of urgent work requests that come from outside your company's email."
+    },
+    "name": {
+      "label": "Full name",
+      "noun": "full name",
+      "plural": "names",
+      "why": "Your name is the key that links this listing to everything else about you online.",
+      "misuse": [
+        "Search other sites to build a fuller profile of you",
+        "Link this listing to your social media accounts"
+      ],
+      "protect": "Request removal here, so this page stops connecting your name to your details."
+    }
+  }
+}

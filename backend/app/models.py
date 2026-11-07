@@ -16,7 +16,7 @@ from app.outbound import assert_minimal_query
 # can compare them directly. The LLM's answers are filtered to these values.
 FieldType = Literal[
     "name", "address", "phone", "email", "relatives", "age", "birthdate",
-    "employer", "ssn", "password", "financial", "health",
+    "employer", "ssn", "password", "financial", "health", "school",
 ]
 FIELD_TYPES: tuple[str, ...] = get_args(FieldType)
 
@@ -27,6 +27,9 @@ DateSource = Literal["wayback", "published_date", "unknown"]
 TextSource = Literal["extract", "snippet"]
 PolicyCategory = Literal["sale", "sharing", "advertising", "affiliates", "data_broker"]
 RemovalStatus = Literal["removed", "still_listed", "unconfirmed"]
+# Where an exposure was found: a data broker (data/brokers.json, or an unlisted people-search
+# site), or a public profile such as a sports results page (data/public_profiles.json).
+SourceKind = Literal["broker", "public_profile"]
 
 
 # ---------- Stages 1 and 2: scan ----------
@@ -41,6 +44,9 @@ class ScanRequest(BaseModel):
     city: str = Field(min_length=2, max_length=100)
     state: str = Field(min_length=2, max_length=2)
     consent: bool = False
+    # A person scanned before gets their newest saved scan back from local Postgres, with no
+    # searching. refresh=True skips that and runs a fresh scan.
+    refresh: bool = False
 
     @field_validator("state")
     @classmethod
@@ -70,6 +76,20 @@ class FieldFinding(BaseModel):
     quote: str  # short quote copied from the page, so the UI can show the evidence
 
 
+RiskLevel = Literal["high", "medium", "low"]
+
+
+class FieldInsight(BaseModel):
+    """What one kind of information on a listing means for the person (set by explain.py)."""
+
+    field: FieldType
+    label: str  # "Home address"
+    found: list[str]  # the exact text the page shows, one entry per value
+    why_it_matters: str
+    misuse: list[str]  # what someone could do with it
+    protect: str  # one concrete thing the person can do about it
+
+
 class Lead(BaseModel):
     """A likely source for one exposure. Never call it "who leaked it"."""
 
@@ -81,8 +101,9 @@ class Lead(BaseModel):
 
 class Exposure(BaseModel):
     id: str
-    broker: str
+    broker: str  # the site's name; for a public profile this is the site, not a broker
     broker_id: str | None = None
+    source_kind: SourceKind = "broker"
     url: str
     title: str = ""
     found_via: Literal["tavily", "exa"] | None = None
@@ -94,12 +115,18 @@ class Exposure(BaseModel):
     public_by_evidence_url: str | None = None  # Wayback snapshot link when source is "wayback"
     opt_out_url: str | None = None
     leads: list[Lead] = []  # set by Stage 5, strongest first
+    # Set by explain.py after Stage 2: a plain-English write-up of what this listing shows.
+    summary: str = ""
+    risk: RiskLevel | None = None
+    risk_reason: str = ""
+    insights: list[FieldInsight] = []
 
 
 class ScanResponse(BaseModel):
     scan_id: str
     exposures: list[Exposure]
     errors: list[str]
+    saved_at: str | None = None  # ISO timestamp when this came from a saved scan; null for a fresh one
 
 
 # ---------- Stages 3 and 4: accounts ----------
@@ -177,8 +204,8 @@ class OptOutRequest(BaseModel):
 
 
 class Draft(BaseModel):
-    kind: Literal["broker", "company"]
-    recipient: str  # broker or company name
+    kind: Literal["broker", "company", "public_profile"]
+    recipient: str  # broker, site or company name
     send_to_url: str | None = None  # opt-out page or privacy request form
     send_to_email: str | None = None  # privacy@ style address, if one was found
     subject: str

@@ -1,12 +1,12 @@
 [
   { "id": "linkedin", "name": "LinkedIn", "domains": ["linkedin.com"], "privacy_url": "https://www.linkedin.com/legal/privacy-policy" },
-  { "id": "ticketmaster", "name": "Ticketmaster", "domains": ["ticketmaster.com", "livenation.com"], "privacy_url": null },
+  { "id": "ticketmaster", "name": "Ticketmaster", "domains": ["ticketmaster.com", "livenation.com"], "privacy_url": "https://privacy.ticketmaster.com/privacy-policy" },
   { "id": "att", "name": "AT&T", "domains": ["att.com"], "privacy_url": "https://www.att.com/privacy/privacy-notice/" },
-  { "id": "tmobile", "name": "T-Mobile", "domains": ["t-mobile.com"], "privacy_url": null },
+  { "id": "tmobile", "name": "T-Mobile", "domains": ["t-mobile.com"], "privacy_url": "https://www.t-mobile.com/privacy-center/privacy-notices/t-mobile-privacy-notice" },
   { "id": "23andme", "name": "23andMe", "domains": ["23andme.com"], "privacy_url": "https://www.23andme.com/legal/privacy/" },
   { "id": "chegg", "name": "Chegg", "domains": ["chegg.com"], "privacy_url": null },
-  { "id": "doordash", "name": "DoorDash", "domains": ["doordash.com"], "privacy_url": null },
+  { "id": "doordash", "name": "DoorDash", "domains": ["doordash.com"], "privacy_url": "https://www.doordash.com/privacy/" },
   { "id": "canva", "name": "Canva", "domains": ["canva.com"], "privacy_url": "https://www.canva.com/policies/privacy-policy/" },
-  { "id": "myfitnesspal", "name": "MyFitnessPal", "domains": ["myfitnesspal.com"], "privacy_url": null },
+  { "id": "myfitnesspal", "name": "MyFitnessPal", "domains": ["myfitnesspal.com"], "privacy_url": "https://www.myfitnesspal.com/privacy-policy" },
   { "id": "experian", "name": "Experian", "domains": ["experian.com"], "privacy_url": null }
 ]

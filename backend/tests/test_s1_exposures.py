@@ -8,7 +8,7 @@ import json
 import httpx
 import pytest
 
-from app import outbound
+from app import outbound, prompts
 from app.clients import ollama, wayback
 from app.config import get_settings
 from app.models import FieldFinding
@@ -22,12 +22,17 @@ BROKERS = [
      "opt_out_url": "https://peoplefinder.example/optout"},
     {"id": "listingsite", "name": "ListingSite", "domain": "listings.example", "opt_out_url": None},
 ]
+PROFILES = [
+    {"id": "meetresults", "name": "MeetResults", "domain": "meetresults.example", "opt_out_url": None},
+]
+DATA = {"brokers.json": BROKERS, "public_profiles.json": PROFILES}
 
 PEOPLEFINDER_URL = "https://www.peoplefinder.example/jane-example/springfield-il"
 LISTINGS_URL = "https://listings.example/p/jane-example"  # blocks extraction
 NEWBROKER_URL = "https://newbroker.example/people/jane-example"  # found via find-similar
 BLOG_URL = "https://blog.example/jane-example-wins-award"  # about her, but not a listing
 OTHER_PERSON_URL = "https://peoplefinder.example/john-smith"  # wrong person
+PROFILE_URL = "https://www.meetresults.example/athlete/4417"  # public profile: no name in the URL
 
 FILLER = " More text on this page." * 30
 PAGES = {
@@ -35,6 +40,7 @@ PAGES = {
     "Springfield, IL. Phone: (217) 555-0142. Relatives: John Example." + FILLER,
     NEWBROKER_URL: "PAGE-NB Jane Example in Springfield. Possible match." + FILLER,
     BLOG_URL: "PAGE-BLOG Jane Example of Springfield won the county award." + FILLER,
+    PROFILE_URL: "PAGE-PROF Jane Example. Springfield High School, Class of 2019. 1600m: 5:42.10" + FILLER,
 }
 LISTINGS_SNIPPET = "PAGE-LS Jane Example, 34, Springfield IL. Relatives: John Example."
 
@@ -51,6 +57,11 @@ ANSWERS = {
     "PAGE-NB": {"is_same_person": True, "confidence": 0.3, "is_people_search_site": True, "fields": []},
     "PAGE-BLOG": {"is_same_person": True, "confidence": 0.95, "is_people_search_site": False,
                   "fields": [{"field": "name", "quote": "Jane Example"}]},
+    # Not a people-search site, but it's on our public-profile list, so it counts.
+    "PAGE-PROF": {"is_same_person": True, "confidence": 0.8, "is_people_search_site": False, "fields": [
+        {"field": "school", "quote": "Springfield High School, Class of 2019"},
+        {"field": "phone", "quote": "5:42.10"},  # not a profile field: dropped
+    ]},
 }
 
 
@@ -67,6 +78,9 @@ def fake_web(request: httpx.Request) -> httpx.Response:
                 {"url": LISTINGS_URL, "title": "Jane Example - ListingSite", "content": LISTINGS_SNIPPET},
                 {"url": OTHER_PERSON_URL, "title": "John Smith | PeopleFinder", "content": "John Smith, Chicago"},
             ]
+        elif domains == ["meetresults.example"]:
+            results = [{"url": PROFILE_URL, "title": "Jane Example - Springfield High School Track",
+                        "content": "Jane Example, Springfield High School"}]
         elif "newbroker.example" in domains:
             results = [{"url": NEWBROKER_URL, "title": "Jane Example | NewBroker",
                         "content": "Jane Example, Springfield"}]
@@ -91,6 +105,8 @@ def fake_web(request: httpx.Request) -> httpx.Response:
         })
     if host == "localhost" and path == "/api/tags":
         return httpx.Response(200, json={"models": [{"name": "llama3.1:8b"}]})
+    if host == "localhost" and path == "/api/generate" and not body["prompt"]:
+        return httpx.Response(200, json={"response": "", "done": True})  # warm-up: load only
     if host == "localhost" and path == "/api/generate":
         marker = next(m for m in ANSWERS if m in body["prompt"])
         return httpx.Response(200, json={"response": json.dumps(ANSWERS[marker])})
@@ -121,7 +137,7 @@ def fake_internet(monkeypatch):
     monkeypatch.setenv("OLLAMA_MODEL", "llama3.1:8b")
     get_settings.cache_clear()
     _use_transport(monkeypatch, fake_web)
-    monkeypatch.setattr(s1, "load_json", lambda name: BROKERS)
+    monkeypatch.setattr(s1, "load_json", lambda name: DATA[name])
     yield
     get_settings.cache_clear()
 
@@ -137,13 +153,14 @@ def test_scan_finds_grounded_exposures(client, fake_internet):
     by_broker = {e["broker"]: e for e in body["exposures"]}
     # The wrong person, the news article and the low-confidence match are all dropped,
     # and the page both engines found shows up once.
-    assert sorted(by_broker) == ["ListingSite", "PeopleFinder"]
+    assert sorted(by_broker) == ["ListingSite", "MeetResults", "PeopleFinder"]
 
     found = by_broker["PeopleFinder"]
     assert found["url"] == PEOPLEFINDER_URL
     assert found["text_source"] == "extract"
     assert found["found_via"] == "tavily"
     assert found["opt_out_url"] == "https://peoplefinder.example/optout"
+    assert found["source_kind"] == "broker"
     assert found["fields"] == [
         {"field": "address", "quote": "12 Elm St, Springfield, IL"},
         {"field": "phone", "quote": "(217) 555-0142"},
@@ -159,6 +176,11 @@ def test_scan_finds_grounded_exposures(client, fake_internet):
     assert blocked["fields"] == [{"field": "relatives", "quote": "John Example"}]
     # Never archived and no published date: unknown, not a guess.
     assert (blocked["public_by"], blocked["public_by_source"]) == (None, "unknown")
+
+    profile = by_broker["MeetResults"]
+    assert profile["source_kind"] == "public_profile"
+    assert profile["broker_id"] == "meetresults"
+    assert profile["fields"] == [{"field": "school", "quote": "Springfield High School, Class of 2019"}]
 
     assert body["errors"] == []
 
@@ -184,7 +206,14 @@ def test_scan_sends_only_name_and_city_and_keeps_page_text_local(client, fake_in
                 assert "Jane Example" in entry.body["query"]
     local = [e for e in log if e.local]
     assert local and all(e.service == "ollama" for e in local)
-    assert sum(e.url.endswith("/api/generate") for e in local) == 4  # one per surviving candidate
+    generates = [e for e in local if e.url.endswith("/api/generate")]
+    assert sum(e.purpose.startswith("Check on this laptop") for e in generates) == 5  # one per candidate
+    [warm] = [e for e in generates if e.purpose.startswith("Load the local LLM")]
+    settings = get_settings()
+    assert warm.body["prompt"] == "" and warm.body["keep_alive"] == settings.ollama_keep_alive
+    # Every call sends the same num_ctx, warm-up included, or Ollama reloads the model.
+    assert {e.body["options"]["num_ctx"] for e in generates} == {settings.ollama_num_ctx}
+
 
 
 def test_scan_stops_before_searching_when_nothing_is_set_up(client, monkeypatch):
@@ -227,6 +256,12 @@ def test_parse_analysis_is_conservative():
     assert s1.parse_analysis({**ok, "fields": [{"field": "ssn", "quote": "Jane"}]}, text, True) == []
     assert s1.parse_analysis({**ok, "fields": [{"field": "email", "quote": "jane@x.example"}]}, text, True) == []
     assert s1.parse_analysis({**ok, "fields": "address"}, text, True) == []
+    # Public profiles use their own field list.
+    school = {**ok, "fields": [{"field": "school", "quote": "Jane Example"}]}
+    assert s1.parse_analysis(school, text, True) == []
+    assert s1.parse_analysis(school, text, True, allowed_fields=("name", "school")) == [
+        FieldFinding(field="school", quote="Jane Example")
+    ]
     # A city on its own is what we searched with, not a street address.
     city_only = {**ok, "fields": [{"field": "address", "quote": "Springfield IL"}]}
     assert s1.parse_analysis(city_only, "Jane Example, 34, Springfield IL.", True) == []
@@ -243,8 +278,28 @@ def test_url_name_and_date_helpers():
     )
     assert s1.broker_for("https://people.peoplefinder.example/x", BROKERS)["id"] == "peoplefinder"
     assert s1.broker_for("https://notpeoplefinder.example/x", BROKERS) is None
+    assert s1.known_site("https://meetresults.example/a/1", BROKERS, PROFILES)[1] == "public_profile"
+    assert s1.known_site("https://peoplefinder.example/x", BROKERS, PROFILES)[1] == "broker"
+    assert s1.known_site("https://other.example/x", BROKERS, PROFILES) == (None, "broker")
+    # Profile pages are asked for profile fields, broker pages for listing fields.
+    profile = s1.Candidate(url=PROFILE_URL, title="", snippet="", via="tavily")
+    listing = s1.Candidate(url=PEOPLEFINDER_URL, title="", snippet="", via="tavily")
+    assert s1._fields_for(profile, BROKERS, PROFILES) == prompts.PROFILE_FIELDS
+    assert s1._fields_for(listing, BROKERS, PROFILES) == prompts.LISTING_FIELDS
+    assert '"field": "name|school|age|employer"' in prompts.field_extraction_prompt(
+        "Jane Example", "Springfield", "IL", "text", fields=prompts.PROFILE_FIELDS
+    )
     assert s1.iso_date("2023-05-01T00:00:00.000Z") == "2023-05-01"
     assert s1.iso_date("last spring") is None
+
+
+def test_public_profiles_rank_after_brokers_and_before_unknown_sites():
+    def cand(url):
+        return s1.Candidate(url=url, title="Jane Example", snippet="", via="tavily")
+
+    found = [cand("https://other.example/jane-example"), cand(PROFILE_URL), cand(PEOPLEFINDER_URL)]
+    picked = s1.select_candidates(found, "example", BROKERS, 10, PROFILES)
+    assert [c.url for c in picked] == [PEOPLEFINDER_URL, PROFILE_URL, "https://other.example/jane-example"]
 
 
 def test_surname_matches_whole_words_only():
@@ -263,3 +318,59 @@ def test_listing_that_names_someone_else_is_dropped():
     text_ok = "Jane Example, 12 Elm St, Springfield IL"
     ok = {**out, "fields": [{"field": "name", "quote": "Jane Example"}]}
     assert s1.parse_analysis(ok, text_ok, True, surname="example") == [FieldFinding(field="name", quote="Jane Example")]
+
+
+def test_window_keeps_the_listing_from_a_long_page():
+    page = "menu " * 3000 + "Jane Example, 12 Elm St" + " footer" * 500
+    win = s1.window_around(page, "example", size=1000)
+    assert len(win) == 1000 and "Jane Example, 12 Elm St" in win
+    assert s1.window_around("short page", "example") == "short page"
+    assert s1.window_around("x" * 2000, "absent", size=500) == "x" * 500  # no mention: the start
+
+
+def test_pages_without_city_or_state_skip_the_llm():
+    assert s1.mentions_place("Jane Example, Springfield", "Springfield", "IL")
+    assert s1.mentions_place("Jane Example, Peoria, IL 61602", "Springfield", "IL")
+    assert not s1.mentions_place("Jane Example, Austin, TX", "Springfield", "IL")
+    # state codes match only as written, so ordinary words don't count
+    assert not s1.mentions_place("Jane lives in a house", "Springfield", "IN")
+    assert s1.mentions_place("Jane Example, Gary, IN", "Springfield", "IN")
+
+
+def test_parse_analysis_keeps_several_values_per_field():
+    text = ("Jane Example. Phones: (217) 555-0142, (217) 555-0199. Addresses: 12 Elm St, Springfield IL; "
+            "40 Oak Ave, Peoria IL. Relatives: John Example, Mary Example, Sam Example, Ann Example.")
+    out = {"is_same_person": True, "confidence": 0.9, "fields": [
+        {"field": "phone", "quote": "(217) 555-0142"},
+        {"field": "phone", "quote": "(217) 555-0199"},
+        {"field": "phone", "quote": "555-0142"},  # part of a value we already have
+        {"field": "address", "quote": "12 Elm St, Springfield IL"},
+        {"field": "address", "quote": "40 Oak Ave, Peoria IL"},
+        {"field": "relatives", "quote": "John Example"},
+        {"field": "relatives", "quote": "Mary Example"},
+        {"field": "relatives", "quote": "Sam Example"},
+        {"field": "relatives", "quote": "Ann Example"},  # over the limit of 3
+        {"field": "name", "quote": "Jane Example"},
+        {"field": "name", "quote": "Jane Example"},
+    ]}
+    fields = s1.parse_analysis(out, text, known_broker=True)
+    counts = {f: sum(x.field == f for x in fields) for f in ("phone", "address", "relatives", "name")}
+    assert counts == {"phone": 2, "address": 2, "relatives": 3, "name": 1}
+
+
+def test_select_candidates_skips_social_sites_and_caps_each_site():
+    brokers = [{"id": "pf", "name": "PeopleFinder", "domain": "peoplefinder.example", "opt_out_url": None}]
+    def c(url):
+        return s1.Candidate(url=url, title="Jane Example", snippet="Springfield IL", via="tavily")
+    found = [c(f"https://www.peoplefinder.example/p/{i}") for i in range(5)] + [
+        c("https://www.linkedin.com/in/jane-example"),
+        c("https://listings.example/jane-example"),
+        s1.Candidate(url="https://other.example/x", title="", snippet="", via="exa"),
+    ]
+    picked = [x.url for x in s1.select_candidates(found, "example", brokers, max_pages=10)]
+    assert sum("peoplefinder" in u for u in picked) == s1.MAX_PER_SITE  # capped per site
+    assert picked[0].startswith("https://www.peoplefinder.example")  # known brokers first
+    assert "https://listings.example/jane-example" in picked
+    assert not any("linkedin" in u for u in picked)  # never a listing: no LLM call
+    assert not any("other.example" in u for u in picked)  # doesn't mention the surname
+    assert len(s1.select_candidates(found, "example", brokers, max_pages=2)) == 2

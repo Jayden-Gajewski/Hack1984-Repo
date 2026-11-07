@@ -27,6 +27,18 @@ class Settings:
     ollama_model: str
     alias_domain: str
     database_url: str
+    # Performance knobs. Defaults suit a CPU-only 16 GB laptop; raise them on a GPU machine.
+    ollama_num_ctx: int = 6144  # tokens of context; less = less RAM per loaded model
+    ollama_parallel: int = 1  # LLM calls at once; >1 only helps with a GPU
+    ollama_keep_alive: str = "2m"  # unload the model this long after the last call
+    scan_max_pages: int = 8  # pages analyzed per scan (known brokers first)
+
+
+def _int_env(name: str, default: int, lo: int, hi: int) -> int:
+    try:
+        return max(lo, min(hi, int(os.getenv(name, default))))
+    except ValueError:
+        return default
 
 
 def _require_local(name: str, url: str, why: str) -> None:
@@ -53,4 +65,8 @@ def get_settings() -> Settings:
         ollama_model=os.getenv("OLLAMA_MODEL", "llama3.1:8b"),
         alias_domain=os.getenv("ALIAS_DOMAIN", "alias.local"),
         database_url=database_url,
+        ollama_num_ctx=_int_env("OLLAMA_NUM_CTX", 6144, 2048, 32768),
+        ollama_parallel=_int_env("OLLAMA_PARALLEL", 1, 1, 8),
+        ollama_keep_alive=os.getenv("OLLAMA_KEEP_ALIVE", "2m").strip() or "2m",
+        scan_max_pages=_int_env("SCAN_MAX_PAGES", 8, 1, 50),
     )

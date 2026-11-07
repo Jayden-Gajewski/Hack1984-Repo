@@ -4,7 +4,7 @@
 
 export const FIELD_TYPES = [
   "name", "address", "phone", "email", "relatives", "age", "birthdate",
-  "employer", "ssn", "password", "financial", "health",
+  "employer", "ssn", "password", "financial", "health", "school",
 ] as const;
 export type FieldType = (typeof FIELD_TYPES)[number];
 export type Tier = "proven" | "likely" | "possible";
@@ -12,6 +12,8 @@ export type DateSource = "wayback" | "published_date" | "unknown";
 export type TextSource = "extract" | "snippet";
 export type PolicyCategory = "sale" | "sharing" | "advertising" | "affiliates" | "data_broker";
 export type RemovalStatus = "removed" | "still_listed" | "unconfirmed";
+// A data broker, or a public profile such as a sports results page.
+export type SourceKind = "broker" | "public_profile";
 
 // ---------- Stages 1 and 2: scan ----------
 
@@ -20,11 +22,25 @@ export interface ScanRequest {
   city: string;
   state: string;
   consent: boolean;
+  // Someone scanned before gets their newest saved scan back; true forces a fresh scan.
+  refresh?: boolean;
 }
 
 export interface FieldFinding {
   field: FieldType;
   quote: string;
+}
+
+export type RiskLevel = "high" | "medium" | "low";
+
+// What one kind of information on a listing means for the person (backend: explain.py).
+export interface FieldInsight {
+  field: FieldType;
+  label: string;
+  found: string[]; // the exact text the page shows, one entry per value
+  why_it_matters: string;
+  misuse: string[]; // what someone could do with it
+  protect: string;
 }
 
 export interface Lead {
@@ -36,8 +52,9 @@ export interface Lead {
 
 export interface Exposure {
   id: string;
-  broker: string;
+  broker: string; // the site's name; for a public profile this is the site, not a broker
   broker_id: string | null;
+  source_kind: SourceKind;
   url: string;
   title: string;
   found_via: "tavily" | "exa" | null;
@@ -50,12 +67,17 @@ export interface Exposure {
   public_by_evidence_url: string | null;
   opt_out_url: string | null;
   leads: Lead[]; // strongest first
+  summary: string;
+  risk: RiskLevel | null;
+  risk_reason: string;
+  insights: FieldInsight[];
 }
 
 export interface ScanResponse {
   scan_id: string;
   exposures: Exposure[];
   errors: string[];
+  saved_at: string | null; // ISO timestamp when this came from a saved scan; null for a fresh one
 }
 
 // ---------- Stages 3 and 4: accounts ----------
@@ -98,7 +120,7 @@ export interface LeadsResponse {
 }
 
 export interface Draft {
-  kind: "broker" | "company";
+  kind: "broker" | "company" | "public_profile";
   recipient: string;
   send_to_url: string | null;
   send_to_email: string | null;

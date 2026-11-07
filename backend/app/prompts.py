@@ -12,9 +12,11 @@ MAX_PAGE_CHARS = 12_000  # small local models lose the thread on longer inputs
 
 # Fields a people-search listing can show (a subset of models.FIELD_TYPES).
 LISTING_FIELDS = ("name", "address", "phone", "email", "relatives", "age", "birthdate", "employer")
+# Fields a public profile (e.g. a sports results page) can show.
+PROFILE_FIELDS = ("name", "school", "age", "employer")
 
 FIELD_EXTRACTION_SYSTEM = (
-    "You extract facts from a people-search web page. "
+    "You extract facts from a web page that lists a person: a people-search listing or a public profile. "
     "Only report what the page shows. Reply with JSON only."
 )
 
@@ -34,18 +36,23 @@ Rules:
 - is_people_search_site is true only for a people-search, background-check or public
   records listing. It is false for social profiles, news stories and company pages.
 - Only include a field if the page shows it for this person.
+- List each value as its own entry: every street address, phone number, email address
+  and relative the page shows for this person, at most 3 of each.
 - address means a street address with a house number. A city or state alone is not an address.
+- school means a school, college or team the page ties to this person. Include a class year if shown.
 - Quotes must be copied exactly from the page.
 - If unsure, set is_same_person to false. Missing data is better than a wrong claim.
 """
 
 
-def field_extraction_prompt(name: str, city: str, state: str, page_text: str) -> str:
+def field_extraction_prompt(
+    name: str, city: str, state: str, page_text: str, fields: tuple[str, ...] = LISTING_FIELDS
+) -> str:
     return FIELD_EXTRACTION_TEMPLATE.format(
         name=name,
         city=city,
         state=state,
-        fields="|".join(LISTING_FIELDS),
+        fields="|".join(fields),
         page_text=page_text[:MAX_PAGE_CHARS],
     )
 

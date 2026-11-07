@@ -19,7 +19,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 
-from app import db, outbound
+from app import db, explain, outbound
 from app.clients import ollama
 from app.companies import add_company, all_companies
 from app.config import get_settings
@@ -172,9 +172,16 @@ async def add_company_route(req: CompanyRequest):
 
 @app.post("/api/scan", response_model=ScanResponse)
 async def scan(req: ScanRequest):
-    """Stages 1 and 2."""
+    """Stages 1 and 2. A person scanned before gets their newest saved scan back instead,
+    unless req.refresh is set."""
     if not req.consent:
         raise HTTPException(400, "A scan needs consent: you can only scan yourself.")
+
+    if not req.refresh:
+        saved = await _saved_scan(req)
+        if saved is not None:
+            session.person, session.exposures = req, saved.exposures
+            return saved
 
     exposures, errors = await _stage(
         "Stage 1 (find exposures)", [], s1_exposures.find_exposures, req
@@ -184,6 +191,7 @@ async def scan(req: ScanRequest):
             "Stage 2 (public-by dates)", exposures, s2_dating.date_exposures, exposures
         )
         errors += more
+    exposures = [explain.explain(e) for e in exposures]  # summary, risk and per-field details
     session.person, session.exposures = req, exposures
 
     response = ScanResponse(scan_id=str(uuid.uuid4()), exposures=exposures, errors=errors)
@@ -191,12 +199,28 @@ async def scan(req: ScanRequest):
         await asyncio.to_thread(
             db.save_scan,
             response.scan_id,
-            req.model_dump(exclude={"consent"}),
+            req.model_dump(exclude={"consent", "refresh"}),
             response.model_dump(),
         )
     except Exception as exc:
         log.warning("Scan not saved: %s", exc)
         response.errors.append(f"Scan not saved. {DB_DOWN}")
+    return response
+
+
+async def _saved_scan(req: ScanRequest) -> ScanResponse | None:
+    """The newest saved scan of this person from local Postgres, or None. If Postgres is down
+    or the saved row doesn't fit the current models, the caller just runs a fresh scan."""
+    try:
+        row = await asyncio.to_thread(db.find_scan, req.name, req.city, req.state)
+        if row is None:
+            return None
+        saved_at, saved_response = row
+        response = ScanResponse.model_validate(saved_response)
+    except Exception as exc:
+        log.warning("Couldn't check for a saved scan, so running a fresh one: %s", exc)
+        return None
+    response.saved_at = saved_at
     return response
 
 
@@ -212,6 +236,8 @@ async def latest_scan():
         raise HTTPException(404, "No saved scans yet.")
     saved_request, saved_response = row
     response = ScanResponse.model_validate(saved_response)
+    # Re-run the write-up: older saved scans don't have it, and its wording may have changed.
+    response.exposures = [explain.explain(e) for e in response.exposures]
     session.person = ScanRequest(**saved_request, consent=True)  # it was consented when it ran
     session.exposures = response.exposures
     return response

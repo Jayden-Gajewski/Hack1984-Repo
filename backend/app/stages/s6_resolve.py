@@ -2,6 +2,9 @@
 
 - Broker opt-out URL: the exposure's opt_out_url (from data/brokers.json), else a Tavily
   search restricted to the broker's domain for "opt out remove my information".
+- Public profiles (data/public_profiles.json, e.g. sports results pages) get a removal
+  request instead of an opt-out: remove or hide the profile, keep it out of search engines.
+  Their removal page is searched for the same way, with "remove my profile privacy request".
 - Company privacy contact: a Tavily search restricted to the company's domains. A
   privacy@-style email on one of those domains wins; else the privacy page URL.
 - Drafts are fixed templates filled in locally, so they're deterministic for the demo, and
@@ -19,7 +22,7 @@ from app.clients import tavily
 from app.companies import all_companies
 from app.data import load_json
 from app.models import Draft, Exposure, RescanItem, ScanRequest
-from app.stages.s1_exposures import MIN_EXTRACT_CHARS, host_of, last_name, normalize_url
+from app.stages.s1_exposures import MIN_EXTRACT_CHARS, has_word, host_of, last_name, normalize_url
 
 _EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 _PRIVACY_MAILBOXES = ("privacy", "dataprotection", "data-protection", "dpo", "gdpr", "ccpa", "legal")
@@ -45,6 +48,23 @@ def broker_letter(exposure: Exposure, person: ScanRequest) -> tuple[str, str]:
         "3. Tell me where you got my information.\n\n"
         f"To identify me: {_who(person)}.\n\n"
         "Please confirm in writing when the listing has been removed, and keep it from being listed again.\n\n"
+        f"Thank you,\n{person.name}"
+    )
+    return subject, body
+
+
+def profile_letter(exposure: Exposure, person: ScanRequest) -> tuple[str, str]:
+    subject = "Please remove or hide my public profile"
+    body = (
+        f"Hello {exposure.broker},\n\n"
+        "I'm asking you to remove my public profile from your website, or hide it from public view. "
+        f"The profile is here:\n{exposure.url}\n\n"
+        "Please:\n"
+        "1. Remove the profile, or make it private, so my name isn't shown with my school, team or results.\n"
+        "2. Keep the page out of search engines (for example with a noindex tag) and ask them to drop it.\n"
+        "3. Tell me who supplied the information on it.\n\n"
+        f"To identify me: {_who(person)}.\n\n"
+        "Please confirm in writing when the profile has been removed or hidden.\n\n"
         f"Thank you,\n{person.name}"
     )
     return subject, body
@@ -80,9 +100,9 @@ def removal_status(text: str, person: ScanRequest) -> str:
     """'still_listed', 'removed' or 'unconfirmed' for one re-extracted listing page."""
     if len(text) < MIN_EXTRACT_CHARS:
         return "unconfirmed"  # blocked, captcha or empty: can't tell
-    lowered = text.lower()
-    first = person.name.split()[0].lower()
-    return "still_listed" if first in lowered and last_name(person.name) in lowered else "removed"
+    # Whole words, so a short name like "Li" doesn't match "listing".
+    first = person.name.split()[0]
+    return "still_listed" if has_word(text, first) and has_word(text, last_name(person.name)) else "removed"
 
 
 # ---------- searches ----------
@@ -91,23 +111,27 @@ def removal_status(text: str, person: ScanRequest) -> str:
 async def _find_opt_out_url(exposure: Exposure, errors: list[str]) -> str | None:
     if exposure.opt_out_url:
         return exposure.opt_out_url
-    known = next((b for b in load_json("brokers.json") if b["id"] == exposure.broker_id), None)
+    profile = exposure.source_kind == "public_profile"
+    sites = load_json("public_profiles.json" if profile else "brokers.json")
+    known = next((b for b in sites if b["id"] == exposure.broker_id), None)
     if known and known.get("opt_out_url"):
         return known["opt_out_url"]
+    page = "removal page" if profile else "opt-out page"
+    ask = "remove my profile privacy request" if profile else "opt out remove my information"
     try:
         data = await tavily.search(
-            f"{exposure.broker} opt out remove my information",
-            purpose=f"Find {exposure.broker}'s opt-out page",
+            f"{exposure.broker} {ask}",
+            purpose=f"Find {exposure.broker}'s {page}",
             include_domains=[host_of(exposure.url)],
             max_results=5,
         )
     except Exception as exc:
-        errors.append(f"Searching for {exposure.broker}'s opt-out page failed: {exc}")
+        errors.append(f"Searching for {exposure.broker}'s {page} failed: {exc}")
         return None
     results = [r for r in data.get("results", []) if r.get("url")]
     hit = next((r["url"] for r in results if _OPT_OUT_HINT.search(f"{r['url']} {r.get('title', '')}")), None)
     if hit is None:
-        errors.append(f"Couldn't find {exposure.broker}'s opt-out page; send this from the listing page instead.")
+        errors.append(f"Couldn't find {exposure.broker}'s {page}; send this from the site's contact page instead.")
     return hit
 
 
@@ -138,11 +162,17 @@ async def _find_privacy_contact(company: dict[str, Any], errors: list[str]) -> t
 
 
 async def draft_broker_opt_out(exposure: Exposure, person: ScanRequest) -> Draft:
-    """Ask the broker to delete the listing, stop selling or sharing it, and say where it got the data."""
+    """Ask the broker to delete the listing, stop selling or sharing it, and say where it got the data.
+    For a public profile, ask the site to remove or hide it instead."""
     errors: list[str] = []
     url = await _find_opt_out_url(exposure, errors)
-    subject, body = broker_letter(exposure, person)
-    return Draft(kind="broker", recipient=exposure.broker, send_to_url=url, subject=subject, body=body, errors=errors)
+    if exposure.source_kind == "public_profile":
+        subject, body = profile_letter(exposure, person)
+    else:
+        subject, body = broker_letter(exposure, person)
+    return Draft(
+        kind=exposure.source_kind, recipient=exposure.broker, send_to_url=url, subject=subject, body=body, errors=errors
+    )
 
 
 async def draft_company_request(company_id: str, person: ScanRequest) -> Draft:

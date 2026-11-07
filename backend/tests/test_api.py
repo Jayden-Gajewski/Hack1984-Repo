@@ -39,10 +39,63 @@ def test_scan_returns_the_contract_shape(client, monkeypatch):
 
     body = res.json()
     assert res.status_code == 200
-    assert set(body) == {"scan_id", "exposures", "errors"}
+    assert set(body) == {"scan_id", "exposures", "errors", "saved_at"}
+    assert body["saved_at"] is None  # a fresh scan
     assert body["exposures"][0]["public_by_source"] == "unknown"
     assert main.session.person.state == "IL"
     assert main.session.exposures[0].id == "e1"
+
+
+def _saved(monkeypatch, calls):
+    saved = {"scan_id": "old-scan", "errors": [],
+             "exposures": [{"id": "s1", "broker": "ExampleBroker", "url": "https://people.example/jane"}]}
+
+    def find_scan(name, city, state):
+        calls.append((name, city, state))
+        return "2026-11-06T18:30:00+00:00", saved
+
+    monkeypatch.setattr(main.db, "find_scan", find_scan)
+
+
+def test_a_person_scanned_before_gets_the_saved_scan_without_searching(client, monkeypatch):
+    calls = []
+    _saved(monkeypatch, calls)
+
+    async def must_not_run(req):
+        raise AssertionError("searched although a saved scan exists")
+
+    monkeypatch.setattr(main.s1_exposures, "find_exposures", must_not_run)
+    res = client.post("/api/scan", json=PERSON)
+
+    body = res.json()
+    assert res.status_code == 200
+    assert body["scan_id"] == "old-scan" and body["saved_at"] == "2026-11-06T18:30:00+00:00"
+    assert calls == [("Jane Example", "Springfield", "IL")]
+    assert main.session.exposures[0].id == "s1"  # opt-outs and re-scan work on the loaded scan
+
+
+def test_refresh_runs_a_fresh_scan_even_when_one_is_saved(client, monkeypatch):
+    calls = []
+    _saved(monkeypatch, calls)
+    _fake_stages(monkeypatch, [Exposure(id="e1", broker="ExampleBroker", url="https://people.example/jane")])
+
+    body = client.post("/api/scan", json={**PERSON, "refresh": True}).json()
+    assert calls == [] and body["saved_at"] is None and body["exposures"][0]["id"] == "e1"
+
+
+def test_saved_scans_still_need_consent(client, monkeypatch):
+    _saved(monkeypatch, [])
+    assert client.post("/api/scan", json={**PERSON, "consent": False}).status_code == 400
+
+
+def test_postgres_down_means_a_fresh_scan(client, monkeypatch):
+    def down(*args):
+        raise OSError("connection refused")
+
+    monkeypatch.setattr(main.db, "find_scan", down)
+    _fake_stages(monkeypatch, [Exposure(id="e1", broker="ExampleBroker", url="https://people.example/jane")])
+    body = client.post("/api/scan", json=PERSON).json()
+    assert body["saved_at"] is None and body["exposures"][0]["id"] == "e1"
 
 
 def test_a_missing_or_broken_stage_becomes_an_error_string(client, monkeypatch):
