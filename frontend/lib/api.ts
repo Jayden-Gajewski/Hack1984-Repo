@@ -27,6 +27,18 @@ export interface FieldFinding {
   quote: string;
 }
 
+export type RiskLevel = "high" | "medium" | "low";
+
+// What one kind of information on a listing means for the person (backend: explain.py).
+export interface FieldInsight {
+  field: FieldType;
+  label: string;
+  found: string[]; // the exact text the page shows, one entry per value
+  why_it_matters: string;
+  misuse: string[]; // what someone could do with it
+  protect: string;
+}
+
 export interface Lead {
   company: string;
   tier: Tier;
@@ -50,6 +62,10 @@ export interface Exposure {
   public_by_evidence_url: string | null;
   opt_out_url: string | null;
   leads: Lead[]; // strongest first
+  summary: string;
+  risk: RiskLevel | null;
+  risk_reason: string;
+  insights: FieldInsight[];
 }
 
 export interface ScanResponse {

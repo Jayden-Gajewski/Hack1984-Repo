@@ -1,5 +1,5 @@
 import type { Exposure, RemovalStatus } from "@/lib/api";
-import { DATE_SOURCE_LABEL, REMOVAL_LABEL, TIER_HELP, TIER_LABEL, safeHref } from "@/lib/display";
+import { DATE_SOURCE_LABEL, REMOVAL_LABEL, RISK_LABEL, TIER_HELP, TIER_LABEL, safeHref } from "@/lib/display";
 
 const FOUND_VIA_LABEL = { tavily: "Tavily search", exa: "Exa search" } as const;
 
@@ -17,11 +17,18 @@ export default function ExposureCard({ exposure, onDraft, removal }: Props) {
   const optOutHref = safeHref(exposure.opt_out_url);
   const evidenceHref = safeHref(exposure.public_by_evidence_url);
   const sourceLabel = DATE_SOURCE_LABEL[exposure.public_by_source];
+  // Each kind of information once, even when the page shows several values for it.
+  const kinds = [...new Set(exposure.fields.map((f) => f.field))];
 
   return (
     <article className="card">
       <div className="card-head">
         <strong>{exposure.broker}</strong>
+        {exposure.risk && (
+          <span className={`risk ${exposure.risk}`} title={exposure.risk_reason}>
+            {RISK_LABEL[exposure.risk]}
+          </span>
+        )}
         {removal && <span className={`status ${removal}`}>{REMOVAL_LABEL[removal]}</span>}
         {top && (
           <span className={`badge ${top.tier}`} title={TIER_HELP[top.tier]}>
@@ -31,13 +38,15 @@ export default function ExposureCard({ exposure, onDraft, removal }: Props) {
       </div>
 
       <div className="chips">
-        {exposure.fields.length === 0 && <span className="muted">Lists your name</span>}
-        {exposure.fields.map((f, i) => (
-          <span key={`${f.field}-${i}`} className="chip" title={f.quote}>
-            {f.field}
+        {kinds.length === 0 && <span className="muted">Lists your name</span>}
+        {kinds.map((field) => (
+          <span key={field} className="chip">
+            {field}
           </span>
         ))}
       </div>
+
+      {exposure.summary && <p>{exposure.summary}</p>}
 
       <p className="muted">
         Public by: {exposure.public_by ?? "unknown"}
@@ -62,7 +71,37 @@ export default function ExposureCard({ exposure, onDraft, removal }: Props) {
 
       <details className="detail">
         <summary>Details</summary>
-        {exposure.fields.length > 0 && (
+        {exposure.risk && (
+          <p>
+            <strong>{RISK_LABEL[exposure.risk]}.</strong> {exposure.risk_reason}
+          </p>
+        )}
+        {exposure.insights.map((insight) => (
+          <section key={insight.field} className="insight">
+            <h4>{insight.label}</h4>
+            <p className="muted">What the page shows:</p>
+            <ul className="quotes">
+              {insight.found.map((value, i) => (
+                <li key={i}>&ldquo;{value}&rdquo;</li>
+              ))}
+            </ul>
+            <p>
+              <strong>Why it matters:</strong> {insight.why_it_matters}
+            </p>
+            <p>
+              <strong>What someone could do with it:</strong>
+            </p>
+            <ul className="quotes">
+              {insight.misuse.map((use, i) => (
+                <li key={i}>{use}</li>
+              ))}
+            </ul>
+            <p>
+              <strong>Protect yourself:</strong> {insight.protect}
+            </p>
+          </section>
+        ))}
+        {exposure.insights.length === 0 && exposure.fields.length > 0 && (
           <ul className="quotes">
             {exposure.fields.map((f, i) => (
               <li key={`${f.field}-${i}`}>

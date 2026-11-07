@@ -174,3 +174,11 @@ blockquote { margin: 6px 0; overflow-wrap: anywhere; }
   white-space: pre-wrap;
   font-family: inherit;
 }
+
+.risk { font-size: 0.75rem; font-weight: 600; border-radius: 999px; padding: 1px 8px; border: 1px solid currentColor; }
+.risk.high { color: var(--danger); }
+.risk.medium { color: var(--likely); }
+.risk.low { color: var(--muted); }
+.insight { border-top: 1px solid var(--border); padding-top: 8px; margin-top: 8px; }
+.insight h4 { margin: 0 0 4px; font-size: 0.95rem; }
+.insight p { margin: 4px 0; }

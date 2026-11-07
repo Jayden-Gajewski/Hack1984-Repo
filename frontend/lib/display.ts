@@ -68,3 +68,5 @@ export const REMOVAL_LABEL = {
 export function safeMailto(email: string | null | undefined): string | undefined {
   return email && /^[^\s@<>"']+@[^\s@<>"']+\.[a-z]{2,}$/i.test(email) ? `mailto:${email}` : undefined;
 }
+
+export const RISK_LABEL = { high: "High risk", medium: "Medium risk", low: "Low risk" } as const;
