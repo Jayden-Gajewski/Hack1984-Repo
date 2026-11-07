@@ -9,7 +9,7 @@ import httpx
 import pytest
 
 from app import outbound
-from app.clients import ollama
+from app.clients import ollama, wayback
 from app.config import get_settings
 from app.models import FieldFinding
 from app.outbound import assert_minimal_query
@@ -94,12 +94,22 @@ def fake_web(request: httpx.Request) -> httpx.Response:
     if host == "localhost" and path == "/api/generate":
         marker = next(m for m in ANSWERS if m in body["prompt"])
         return httpx.Response(200, json={"response": json.dumps(ANSWERS[marker])})
+    if host == "web.archive.org" and path == "/cdx/search/cdx":
+        # Stage 2: only the PeopleFinder listing was ever archived.
+        if request.url.params["url"] == PEOPLEFINDER_URL:
+            return httpx.Response(200, json=[["timestamp", "original"], [SNAPSHOT, PEOPLEFINDER_URL]])
+        return httpx.Response(200, json=[])
     raise AssertionError(f"unexpected request: {request.method} {request.url}")
+
+
+SNAPSHOT = "20210315120000"
 
 
 def _use_transport(monkeypatch, handler) -> None:
     monkeypatch.setattr(outbound, "_client", httpx.AsyncClient(transport=httpx.MockTransport(handler)))
-    monkeypatch.setattr(ollama, "_generate_slots", asyncio.Semaphore(2))  # fresh per event loop
+    # Fresh concurrency limits per test: asyncio semaphores bind to one event loop.
+    monkeypatch.setattr(ollama, "_generate_slots", asyncio.Semaphore(2))
+    monkeypatch.setattr(wayback, "_slots", asyncio.Semaphore(4))
     outbound.clear_log()
 
 
@@ -139,11 +149,18 @@ def test_scan_finds_grounded_exposures(client, fake_internet):
         {"field": "phone", "quote": "(217) 555-0142"},
     ]  # the made-up SSN and email are gone
 
+    # Stage 2 dated it from its earliest Wayback snapshot, with the link as evidence.
+    assert found["public_by"] == "2021-03-15"
+    assert found["public_by_source"] == "wayback"
+    assert found["public_by_evidence_url"] == f"https://web.archive.org/web/{SNAPSHOT}/{PEOPLEFINDER_URL}"
+
     blocked = by_broker["ListingSite"]
     assert blocked["text_source"] == "snippet"  # extraction was blocked
     assert blocked["fields"] == [{"field": "relatives", "quote": "John Example"}]
+    # Never archived and no published date: unknown, not a guess.
+    assert (blocked["public_by"], blocked["public_by_source"]) == (None, "unknown")
 
-    assert [e for e in body["errors"] if not e.startswith("Stage 2")] == []
+    assert body["errors"] == []
 
 
 def test_scan_sends_only_name_and_city_and_keeps_page_text_local(client, fake_internet):
@@ -151,7 +168,7 @@ def test_scan_sends_only_name_and_city_and_keeps_page_text_local(client, fake_in
 
     log = outbound.get_log()
     remote = [e for e in log if not e.local]
-    assert {e.service for e in remote} == {"tavily", "exa"}
+    assert {e.service for e in remote} == {"tavily", "exa", "wayback"}
     exa_queries = [e.body["query"] for e in remote if e.service == "exa"]
     assert "people search sites like peoplefinder.example" in exa_queries  # broker discovery ran
     for entry in remote:

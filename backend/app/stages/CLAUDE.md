@@ -32,6 +32,12 @@ The first-hour test (`scripts/test_extract.py`) decides how much Stage 1 can rel
 - If there's neither, use `date: null, source: "unknown"`. Never guess.
 - **Stretch:** fetch a few monthly snapshots, run the Stage 1 field prompt on each (locally), and record when each field first appears.
 
+**Built** (`s2_dating.py`), except the stretch goal:
+- One CDX lookup per listing, at most 4 at once with a 10 s timeout. `www.`, `http` and trailing-slash variants of a URL match the same snapshot.
+- If archive.org errors or times out, that listing falls back to `published_date` or "unknown" like a missing snapshot, and the scan's errors say how many lookups failed.
+- A CDX timestamp that isn't 14 digits is ignored rather than turned into a date.
+- Tests: `tests/test_s2_dating.py` covers every fallback; `tests/test_s1_exposures.py` checks dates end to end through `/api/scan`.
+
 ## Stage 3: Breach timelines (`s3_breaches.py`, Evidence)
 
 - Runs for each company the user picks from `data/companies.json`. Queries contain the company name only.
