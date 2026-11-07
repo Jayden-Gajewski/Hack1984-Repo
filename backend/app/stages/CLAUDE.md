@@ -15,6 +15,16 @@ One module per stage. Each exposes async functions that take and return `models.
 
 The first-hour test (`scripts/test_extract.py`) decides how much Stage 1 can rely on extracted text versus snippets. Record the result in this file once it's known.
 
+**Built.** Choices worth knowing, all in `s1_exposures.py`:
+- The Tavily query quotes only the name: `"Jane Doe" Springfield IL`.
+- Before any search, it checks for a search key and a running Ollama with the model pulled, so a scan never spends credits on pages it can't analyze.
+- The last-name filter looks at the URL path, title and snippet, never the domain.
+- At most 20 candidates per scan (known brokers first), since each one is a local LLM call.
+- Extracted text under 500 chars, or without the last name, counts as blocked and falls back to the snippet.
+- Pages on domains not in `brokers.json` must also have `is_people_search_site: true` from the LLM, so news stories and social profiles don't become cards.
+- Every field quote must appear in the page text; fields are limited to `prompts.LISTING_FIELDS`.
+- Tests: `tests/test_s1_exposures.py` runs the whole stage against a fake internet.
+
 ## Stage 2: Date them (`s2_dating.py`, Evidence)
 
 - **"Public by"** is the date of the earliest Wayback snapshot, with `source: "wayback"` and the snapshot link as evidence.

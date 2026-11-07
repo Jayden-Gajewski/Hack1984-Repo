@@ -103,6 +103,11 @@ button:disabled { opacity: 0.5; cursor: default; }
 button.secondary { background: transparent; color: var(--accent); }
 
 .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+
+.detail { margin: 8px 0; font-size: 0.9rem; }
+.detail summary { cursor: pointer; color: var(--accent); }
+.quotes { margin: 8px 0; padding-left: 18px; }
+.quotes li { margin: 4px 0; overflow-wrap: anywhere; }
 section .panel { margin-top: 16px; }
 
 .error { color: var(--danger); font-size: 0.9rem; }
