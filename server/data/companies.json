@@ -1,0 +1,12 @@
+[
+  { "id": "linkedin", "name": "LinkedIn", "domains": ["linkedin.com"], "policyUrl": "https://www.linkedin.com/legal/privacy-policy" },
+  { "id": "ticketmaster", "name": "Ticketmaster", "domains": ["ticketmaster.com", "livenation.com"], "policyUrl": null },
+  { "id": "att", "name": "AT&T", "domains": ["att.com"], "policyUrl": "https://www.att.com/privacy/privacy-notice/" },
+  { "id": "tmobile", "name": "T-Mobile", "domains": ["t-mobile.com"], "policyUrl": null },
+  { "id": "23andme", "name": "23andMe", "domains": ["23andme.com"], "policyUrl": "https://www.23andme.com/legal/privacy/" },
+  { "id": "chegg", "name": "Chegg", "domains": ["chegg.com"], "policyUrl": null },
+  { "id": "doordash", "name": "DoorDash", "domains": ["doordash.com"], "policyUrl": null },
+  { "id": "canva", "name": "Canva", "domains": ["canva.com"], "policyUrl": "https://www.canva.com/policies/privacy-policy/" },
+  { "id": "myfitnesspal", "name": "MyFitnessPal", "domains": ["myfitnesspal.com"], "policyUrl": null },
+  { "id": "experian", "name": "Experian", "domains": ["experian.com"], "policyUrl": null }
+]

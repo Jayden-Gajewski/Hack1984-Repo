@@ -1,0 +1,29 @@
+{
+  "name": "hack1984",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Find where your personal data is exposed, which company most likely leaked it, and get it taken down, without handing your data to yet another company.",
+  "scripts": {
+    "dev": "concurrently -n server,web -c blue,magenta \"npm:dev:server\" \"npm:dev:web\"",
+    "dev:server": "node --watch server/index.js",
+    "dev:web": "vite",
+    "build": "vite build",
+    "test:extract": "node scripts/test-extract.js",
+    "check:ollama": "node scripts/check-ollama.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "vite": "^5.4.11"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

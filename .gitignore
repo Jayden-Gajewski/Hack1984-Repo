@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+.env.local
+*.log
+.DS_Store
+Thumbs.db
+.vscode/
+# scan results may contain real personal data, keep them off GitHub
+scans/
+scripts/output/
+.claude/settings.local.json

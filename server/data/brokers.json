@@ -1,0 +1,12 @@
+[
+  { "id": "spokeo", "name": "Spokeo", "domain": "spokeo.com", "optOutUrl": "https://www.spokeo.com/optout" },
+  { "id": "whitepages", "name": "Whitepages", "domain": "whitepages.com", "optOutUrl": "https://www.whitepages.com/suppression-requests" },
+  { "id": "beenverified", "name": "BeenVerified", "domain": "beenverified.com", "optOutUrl": "https://www.beenverified.com/app/optout/search" },
+  { "id": "fastpeoplesearch", "name": "FastPeopleSearch", "domain": "fastpeoplesearch.com", "optOutUrl": "https://www.fastpeoplesearch.com/removal" },
+  { "id": "truepeoplesearch", "name": "TruePeopleSearch", "domain": "truepeoplesearch.com", "optOutUrl": "https://www.truepeoplesearch.com/removal" },
+  { "id": "radaris", "name": "Radaris", "domain": "radaris.com", "optOutUrl": null },
+  { "id": "peoplefinders", "name": "PeopleFinders", "domain": "peoplefinders.com", "optOutUrl": null },
+  { "id": "thatsthem", "name": "ThatsThem", "domain": "thatsthem.com", "optOutUrl": null },
+  { "id": "nuwber", "name": "Nuwber", "domain": "nuwber.com", "optOutUrl": null },
+  { "id": "clustrmaps", "name": "ClustrMaps", "domain": "clustrmaps.com", "optOutUrl": null }
+]
