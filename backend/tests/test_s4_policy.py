@@ -127,3 +127,29 @@ def test_merge_caps_clauses_per_category():
         [f"We share your personal data with partner number {i} for their own marketing." for i in range(6)]
     )
     assert len(s4.merge_clauses(clauses)) == s4.MAX_PER_CATEGORY
+
+
+def test_merge_drops_truncated_and_repeated_quotes():
+    full = "We share information that identifies you personally with our affiliates, such as Cricket."
+    clauses = [
+        s4.PolicyClause(category="sharing", quote="We share information that identifies you personally with our", explanation="x"),
+        s4.PolicyClause(category="affiliates", quote=full, explanation="x"),
+        s4.PolicyClause(category="affiliates", quote=full, explanation="y"),
+    ]
+    assert [c.quote for c in s4.merge_clauses(clauses)] == [full]
+
+
+def test_candidate_sentences_rejoin_split_ligatures():
+    text = "We share information that identi fi es you personally with our advertising partners."
+    assert s4.candidate_sentences(text) == [
+        "We share information that identifies you personally with our advertising partners."
+    ]
+
+
+def test_pattern_flags_a_sale_under_state_law_without_the_model():
+    quote = (
+        "We also share information in ways that may be considered a sale of information under some state "
+        "laws, such as exchanging subscriber lists for marketing or sharing identifiers and other "
+        "information with non-AT&T advertising companies."
+    )
+    assert [c.category for c in s4.pattern_clauses([quote], "AT&T")] == ["sale"]

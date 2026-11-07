@@ -77,7 +77,7 @@ _USER_RIGHTS = re.compile(
 )
 # A sentence that plainly says the company sells or shares data with outsiders.
 _STRONG = re.compile(
-    r"\b(sell|sells|sold|shar(e|es)|disclos(e|es))\b[^.]{0,150}\b(to|with)\b[^.]{0,150}"
+    r"\b(sell|sells|sold|shar(e|es|ing)|disclos(e|es|ing))\b[^.]{0,150}\b(to|with)\b[^.]{0,150}"
     r"(third[- ]part|partner|advertis|marketing|broker|affiliat|other compan)",
     re.I,
 )
@@ -86,6 +86,8 @@ _STRONG = re.compile(
 _SERVICE_PROVIDER = re.compile(r"service providers?|vendors?|on (our|its) behalf|support services|perform(s)? (services|functions)", re.I)
 _OUTSIDERS = re.compile(r"partner|advertis|marketing|broker|affiliat|other third[- ]part", re.I)
 _MD_LINK = re.compile(r"\[([^\]]+)\]\([^)]*\)")
+_LIGATURE = re.compile(r"(?<=[a-z]) (ffi|ffl|fi|fl|ff) (?=[a-z])")
+SAME_OPENING_CHARS = 80  # quotes that start the same are one clause (snippets repeat and truncate)
 _BANNED = re.compile(r"leak", re.I)
 CATEGORY_ORDER = {c: i for i, c in enumerate(("sale", "data_broker", "sharing", "advertising", "affiliates"))}
 DEFAULT_EXPLANATION = {
@@ -110,6 +112,7 @@ def is_heading(line: str) -> bool:
 
 def candidate_sentences(text: str) -> list[str]:
     """Sentences (or bullet lines) that mention selling or sharing, cleaned of markdown markers."""
+    text = _LIGATURE.sub(r"\1", text)  # PDF-style splits: "identi fi es" -> "identifies"
     pieces = re.split(r"(?<=[.!?])\s+(?=[A-Z\"“(])|\n+", text)
     sentences: list[str] = []
     for piece in pieces:
@@ -165,7 +168,7 @@ def pattern_clauses(sentences: list[str], company: str = "") -> list[PolicyClaus
         lowered = quote.lower()
         if "broker" in lowered:
             category = "data_broker"
-        elif re.search(r"\bsell|\bsold\b", lowered):
+        elif re.search(r"\bsell|\bsold\b|considered a sale|\bsale of (your |personal )?(information|data)", lowered):
             category = "sale"
         elif re.search(r"advertis|marketing", lowered):
             category = "advertising"
@@ -203,11 +206,20 @@ def parse_clauses(out: dict[str, Any], sentences: list[str], company: str = "") 
 
 
 def merge_clauses(clauses: list[PolicyClause]) -> list[PolicyClause]:
-    seen: dict[str, PolicyClause] = {}
+    """Drop repeats (the same sentence, or a truncated copy of it, keeping the fuller one),
+    then cap each category."""
+    unique: list[tuple[str, PolicyClause]] = []
     for clause in clauses:
-        seen.setdefault(clause.quote, clause)
+        key = re.sub(r"[^a-z0-9]", "", clause.quote.lower())
+        for i, (other, _) in enumerate(unique):
+            if key.startswith(other) or other.startswith(key) or key[:SAME_OPENING_CHARS] == other[:SAME_OPENING_CHARS]:
+                if len(key) > len(other):
+                    unique[i] = (key, clause)
+                break
+        else:
+            unique.append((key, clause))
     kept, per_category = [], {}
-    for clause in sorted(seen.values(), key=lambda c: CATEGORY_ORDER[c.category]):
+    for clause in sorted((c for _, c in unique), key=lambda c: CATEGORY_ORDER[c.category]):
         per_category[clause.category] = per_category.get(clause.category, 0) + 1
         if per_category[clause.category] <= MAX_PER_CATEGORY:
             kept.append(clause)

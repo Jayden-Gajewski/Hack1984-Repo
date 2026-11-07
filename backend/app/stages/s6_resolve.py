@@ -18,7 +18,7 @@ from typing import Any
 from app.clients import tavily
 from app.data import load_json
 from app.models import Draft, Exposure, RescanItem, ScanRequest
-from app.stages.s1_exposures import MIN_EXTRACT_CHARS, host_of, last_name, normalize_url
+from app.stages.s1_exposures import MIN_EXTRACT_CHARS, has_word, host_of, last_name, normalize_url
 
 _EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 _PRIVACY_MAILBOXES = ("privacy", "dataprotection", "data-protection", "dpo", "gdpr", "ccpa", "legal")
@@ -79,9 +79,9 @@ def removal_status(text: str, person: ScanRequest) -> str:
     """'still_listed', 'removed' or 'unconfirmed' for one re-extracted listing page."""
     if len(text) < MIN_EXTRACT_CHARS:
         return "unconfirmed"  # blocked, captcha or empty: can't tell
-    lowered = text.lower()
-    first = person.name.split()[0].lower()
-    return "still_listed" if first in lowered and last_name(person.name) in lowered else "removed"
+    # Whole words, so a short name like "Li" doesn't match "listing".
+    first = person.name.split()[0]
+    return "still_listed" if has_word(text, first) and has_word(text, last_name(person.name)) else "removed"
 
 
 # ---------- searches ----------

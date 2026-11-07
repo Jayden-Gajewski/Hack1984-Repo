@@ -97,3 +97,11 @@ def test_rescan_reports_each_listing():
     items, errors = asyncio.run(s6.rescan([KNOWN, GONE, UNKNOWN], PERSON))
     assert errors == []
     assert {i.exposure_id: i.status for i in items} == {"e1": "still_listed", "e3": "removed", "e2": "unconfirmed"}
+
+
+def test_removal_status_matches_whole_words_only():
+    person = ScanRequest(name="Ana Li", city="Springfield", state="IL", consent=True)
+    filler = "Search public records and listings for anyone in Illinois. " * 20
+    assert s6.removal_status(filler, person) == "removed"  # "li" inside "listings" doesn't count
+    assert s6.removal_status(filler + " Ana Li, age 34", person) == "still_listed"
+    assert s6.removal_status("too short", person) == "unconfirmed"
