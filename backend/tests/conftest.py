@@ -13,5 +13,5 @@ def client(monkeypatch):
     monkeypatch.setattr(db, "save_alias", lambda *args: "2026-11-07")
     monkeypatch.setattr(db, "list_aliases", lambda: [])
     monkeypatch.setattr(main, "session", main.Session())
-    with TestClient(main.app) as c:
+    with TestClient(main.app, base_url="http://localhost") as c:  # TrustedHostMiddleware
         yield c
