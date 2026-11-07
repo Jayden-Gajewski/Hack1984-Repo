@@ -263,3 +263,20 @@ def test_listing_that_names_someone_else_is_dropped():
     text_ok = "Jane Example, 12 Elm St, Springfield IL"
     ok = {**out, "fields": [{"field": "name", "quote": "Jane Example"}]}
     assert s1.parse_analysis(ok, text_ok, True, surname="example") == [FieldFinding(field="name", quote="Jane Example")]
+
+
+def test_window_keeps_the_listing_from_a_long_page():
+    page = "menu " * 3000 + "Jane Example, 12 Elm St" + " footer" * 500
+    win = s1.window_around(page, "example", size=1000)
+    assert len(win) == 1000 and "Jane Example, 12 Elm St" in win
+    assert s1.window_around("short page", "example") == "short page"
+    assert s1.window_around("x" * 2000, "absent", size=500) == "x" * 500  # no mention: the start
+
+
+def test_pages_without_city_or_state_skip_the_llm():
+    assert s1.mentions_place("Jane Example, Springfield", "Springfield", "IL")
+    assert s1.mentions_place("Jane Example, Peoria, IL 61602", "Springfield", "IL")
+    assert not s1.mentions_place("Jane Example, Austin, TX", "Springfield", "IL")
+    # state codes match only as written, so ordinary words don't count
+    assert not s1.mentions_place("Jane lives in a house", "Springfield", "IN")
+    assert s1.mentions_place("Jane Example, Gary, IN", "Springfield", "IN")

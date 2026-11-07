@@ -13,8 +13,17 @@ from app.outbound import request
 
 log = logging.getLogger(__name__)
 
-# Small local models slow down fast under load, so at most 2 generate calls run at once.
-_generate_slots = asyncio.Semaphore(2)
+# How many generate calls run at once (OLLAMA_PARALLEL, default 1). On a CPU, parallel
+# calls just split the cores and queue inside Ollama, where they can time out.
+_generate_slots: asyncio.Semaphore | None = None
+MAX_OUTPUT_TOKENS = 1024  # JSON answers are short; this only stops a runaway generation
+
+
+def _slots() -> asyncio.Semaphore:
+    global _generate_slots
+    if _generate_slots is None:
+        _generate_slots = asyncio.Semaphore(get_settings().ollama_parallel)
+    return _generate_slots
 
 
 async def status() -> tuple[bool, bool]:
@@ -44,7 +53,7 @@ async def status() -> tuple[bool, bool]:
 async def ask_json(prompt: str, *, system: str, purpose: str) -> dict[str, Any]:
     """Ask the local model for a JSON object. Returns {} on any failure; never raises on model output."""
     settings = get_settings()
-    async with _generate_slots:
+    async with _slots():
         try:
             res = await request(
                 "ollama",
@@ -58,7 +67,12 @@ async def ask_json(prompt: str, *, system: str, purpose: str) -> dict[str, Any]:
                     "system": system,
                     "format": "json",
                     "stream": False,
-                    "options": {"temperature": 0, "num_ctx": 8192},
+                    "keep_alive": settings.ollama_keep_alive,
+                    "options": {
+                        "temperature": 0,
+                        "num_ctx": settings.ollama_num_ctx,
+                        "num_predict": MAX_OUTPUT_TOKENS,
+                    },
                 },
                 timeout=180.0,
             )

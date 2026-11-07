@@ -8,7 +8,7 @@ Full spec: backend/app/stages/CLAUDE.md. What this does:
      domain, never the page URL); the new domains it returns get a Tavily search
      restricted to them.
 2. Drop candidates whose URL, title and snippet don't mention the last name, and keep at
-   most MAX_CANDIDATES (known brokers first): each one costs a local LLM call.
+   most SCAN_MAX_PAGES (known brokers first): each one costs a local LLM call.
 3. Tavily Extract the rest. Blocked or thin pages fall back to the search snippet
    (text_source="snippet").
 4. The local LLM decides whether the page is this person and which fields it shows. Only
@@ -33,7 +33,11 @@ from app.config import get_settings
 from app.data import load_json
 from app.models import Exposure, FieldFinding, ScanRequest
 
-MAX_CANDIDATES = 20  # pages extracted and analyzed per scan; each one is a local LLM call
+# Pages extracted and analyzed per scan come from SCAN_MAX_PAGES (default 8): each is a
+# local LLM call, and on a CPU-only laptop each takes ~20-40 s.
+# Page text sent to the LLM: a window around the surname. On a CPU the model reads ~17
+# tokens/s, so this is the main cost per page (3000 chars ~ 90 s, 6000 ~ 150 s).
+PAGE_WINDOW_CHARS = 3000
 MIN_CONFIDENCE = 0.5
 MIN_EXTRACT_CHARS = 500  # extracted text shorter than this is almost always a block page
 MAX_QUOTE_CHARS = 200
@@ -90,6 +94,26 @@ def mentions(candidate: Candidate, surname: str) -> bool:
     # (e.g. "People" in peoplefinders.com), which says nothing about the page.
     parts = urlsplit(candidate.url)
     return has_word(f"{parts.path} {parts.query} {candidate.title} {candidate.snippet}", surname)
+
+
+def window_around(text: str, word: str, size: int = PAGE_WINDOW_CHARS) -> str:
+    """The `size` characters around the first whole-word mention of `word` (or the start).
+
+    Broker pages often open with long navigation, so the listing can sit past the first few
+    thousand characters. Sending only this window is faster and keeps the listing in view.
+    """
+    if len(text) <= size:
+        return text
+    m = re.search(rf"(?<![a-z0-9]){re.escape(word.lower())}(?![a-z0-9])", text.lower()) if word else None
+    start = max(0, (m.start() if m else 0) - size // 4)
+    return text[start : start + size]
+
+
+def mentions_place(text: str, city: str, state: str) -> bool:
+    """True if the text names the city (whole words) or the 2-letter state code (as written,
+    so "IN" or "OR" don't match ordinary words). Without either, the model can't confirm the
+    page is this person, so it isn't worth a local LLM call."""
+    return has_word(text, city) or re.search(rf"(?<![A-Za-z]){re.escape(state.upper())}(?![A-Za-z])", text) is not None
 
 
 def iso_date(value: Any) -> str | None:
@@ -228,7 +252,7 @@ async def _discover(
 
     candidates = [c for c in found.values() if mentions(c, surname)]
     candidates.sort(key=lambda c: broker_for(c.url, brokers) is None)  # known brokers first
-    return candidates[:MAX_CANDIDATES]
+    return candidates[: get_settings().scan_max_pages]
 
 
 async def _discover_similar(
@@ -322,9 +346,14 @@ async def find_exposures(req: ScanRequest) -> tuple[list[Exposure], list[str]]:
     for candidate in candidates:
         extracted = texts.get(normalize_url(candidate.url), "")
         if len(extracted) >= MIN_EXTRACT_CHARS and has_word(extracted, surname):
-            jobs.append((candidate, extracted, "extract"))
+            job = (candidate, window_around(extracted, surname), "extract")
         elif candidate.snippet.strip():
-            jobs.append((candidate, candidate.snippet, "snippet"))
+            job = (candidate, candidate.snippet, "snippet")
+        else:
+            continue
+        # No city or state in view: the model would have to answer "not sure", so skip the call.
+        if mentions_place(job[1], req.city, req.state):
+            jobs.append(job)
 
     answers = await asyncio.gather(
         *(
