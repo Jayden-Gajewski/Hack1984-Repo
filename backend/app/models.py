@@ -244,3 +244,31 @@ class StatusResponse(BaseModel):
     ollama_model: str
     model_pulled: bool
     database: bool
+
+
+# ---------- Local accounts (stored in the local Postgres only) ----------
+
+
+class Credentials(BaseModel):
+    email: str = Field(max_length=254)
+    password: str = Field(max_length=256)
+
+    @field_validator("email")
+    @classmethod
+    def _email(cls, v: str) -> str:
+        v = v.strip().lower()
+        local, _, domain = v.partition("@")
+        if not local or "." not in domain or " " in v:
+            raise ValueError("Enter a valid email address.")
+        return v
+
+    @field_validator("password")
+    @classmethod
+    def _password(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("Use at least 8 characters for your password.")
+        return v
+
+
+class User(BaseModel):
+    email: str

@@ -16,10 +16,10 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Cookie, FastAPI, HTTPException, Query, Response
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 
-from app import db, explain, outbound
+from app import auth, db, explain, outbound
 from app.clients import ollama
 from app.config import get_settings
 from app.data import load_json
@@ -30,6 +30,7 @@ from app.models import (
     AliasHit,
     AliasRequest,
     BreachEvent,
+    Credentials,
     Draft,
     Exposure,
     LeadsResponse,
@@ -39,6 +40,7 @@ from app.models import (
     ScanRequest,
     ScanResponse,
     StatusResponse,
+    User,
 )
 from app.outbound import OutboundEntry
 from app.stages import (
@@ -313,3 +315,69 @@ async def outbound_log(include_local: bool = Query(default=True)):
 async def clear_outbound_log():
     outbound.clear_log()
     return {"cleared": True}
+
+
+# ---------- Local accounts ----------
+# Users and sessions live in the local Postgres. The session is an httpOnly cookie the
+# browser only ever sends to localhost.
+
+
+def _start_session(response: Response, user_id: str) -> None:
+    token = auth.new_token()
+    db.create_session(user_id, token)
+    response.set_cookie(
+        auth.COOKIE, token, httponly=True, samesite="lax", max_age=30 * 24 * 3600, path="/"
+    )
+
+
+@app.post("/api/auth/signup", response_model=User)
+async def signup(req: Credentials, response: Response):
+    hashed = await asyncio.to_thread(auth.hash_password, req.password)
+    try:
+        created = await asyncio.to_thread(db.create_user, req.email, hashed)
+        if not created:
+            raise HTTPException(409, "An account with that email already exists. Log in instead.")
+        user = await asyncio.to_thread(db.get_user, req.email)
+        await asyncio.to_thread(_start_session, response, user[0])
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(503, DB_DOWN) from exc
+    return User(email=req.email)
+
+
+@app.post("/api/auth/login", response_model=User)
+async def login(req: Credentials, response: Response):
+    try:
+        user = await asyncio.to_thread(db.get_user, req.email)
+    except Exception as exc:
+        raise HTTPException(503, DB_DOWN) from exc
+    ok = user is not None and await asyncio.to_thread(auth.verify_password, req.password, user[1])
+    if not ok:
+        raise HTTPException(401, "That email and password don't match.")
+    await asyncio.to_thread(_start_session, response, user[0])
+    return User(email=req.email)
+
+
+@app.post("/api/auth/logout")
+async def logout(response: Response, h84_session: str | None = Cookie(default=None)):
+    if h84_session:
+        try:
+            await asyncio.to_thread(db.delete_session, h84_session)
+        except Exception:
+            pass  # the cookie is cleared either way
+    response.delete_cookie(auth.COOKIE, path="/")
+    return {"ok": True}
+
+
+@app.get("/api/auth/me", response_model=User)
+async def me(h84_session: str | None = Cookie(default=None)):
+    if not h84_session:
+        raise HTTPException(401, "Log in to continue.")
+    try:
+        found = await asyncio.to_thread(db.session_user, h84_session)
+    except Exception as exc:
+        raise HTTPException(503, DB_DOWN) from exc
+    if not found:
+        raise HTTPException(401, "Your session ended. Log in again.")
+    return User(email=found)

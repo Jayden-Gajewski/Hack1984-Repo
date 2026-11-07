@@ -26,7 +26,7 @@ These rules are the product. Do not break them, even temporarily, even to debug.
 
 ## Don't build
 
-User accounts or auth, real Gmail/IMAP integration, vector databases, agent frameworks (LangChain, CrewAI, etc.), multiple agents, an ORM or a second database, hosted or cloud databases, analytics or telemetry of any kind, extra frontend frameworks or UI component libraries on top of Next.js. If a task seems to need one of these, stop and ask.
+Hosted accounts or third-party auth (the local accounts in `auth.py`, stored in the local Postgres, are the only kind), real Gmail/IMAP integration, vector databases, agent frameworks (LangChain, CrewAI, etc.), multiple agents, an ORM or a second database, hosted or cloud databases, analytics or telemetry of any kind, extra frontend frameworks or UI component libraries on top of Next.js. If a task seems to need one of these, stop and ask.
 
 ## Layout (target; create files here as you build)
 
@@ -38,7 +38,8 @@ backend/
     outbound.py      logged HTTP client + minimal-query check
     models.py        pydantic models = the API contract with the frontend
     prompts.py       local LLM prompts
-    db.py            PostgreSQL: saved scans
+    db.py            PostgreSQL: saved scans, local users and sessions
+    auth.py          local accounts: scrypt password hashes, session tokens
     clients/         exa.py, tavily.py, wayback.py, ollama.py
     stages/          s1_exposures.py ... s7_aliases.py
     data/            checked-in reference data: brokers.json, companies.json,
@@ -52,6 +53,7 @@ frontend/
   lib/api.ts         typed API client; mirrors models.py
   lib/display.ts     wording rules (tier labels, date sources) and safe links
   next.config.ts     /api proxy to the backend
+  proxy.ts           sends /app to /login when there's no session cookie
 docker-compose.yml   local Postgres
 ```
 

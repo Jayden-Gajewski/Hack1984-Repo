@@ -30,6 +30,21 @@ create table if not exists aliases (
     company_domains jsonb not null,
     created_at      timestamptz not null default now()
 );
+
+create table if not exists users (
+    id            uuid primary key,
+    email         text unique not null,
+    password_hash text not null,
+    created_at    timestamptz not null default now()
+);
+-- Accounts are email + password only; drop the name column an earlier version created.
+alter table users drop column if exists name;
+
+create table if not exists sessions (
+    token       text primary key,
+    user_id     uuid not null references users(id) on delete cascade,
+    created_at  timestamptz not null default now()
+);
 """
 
 
@@ -110,3 +125,49 @@ def list_aliases() -> list[dict[str, Any]]:
         {"alias": a, "company": c, "company_domains": d, "created_at": t.date().isoformat()}
         for a, c, d, t in rows
     ]
+
+
+# ---------- Local accounts ----------
+
+
+def create_user(email: str, password_hash: str) -> bool:
+    """Insert a user. Returns False if the email is already taken."""
+    with connect() as conn:
+        row = conn.execute(
+            "insert into users (id, email, password_hash) values (%s, %s, %s)"
+            " on conflict (email) do nothing returning id",
+            (uuid.uuid4(), email, password_hash),
+        ).fetchone()
+    return row is not None
+
+
+def get_user(email: str) -> tuple[str, str] | None:
+    """(id, password_hash) for an email, or None."""
+    with connect() as conn:
+        row = conn.execute(
+            "select id, password_hash from users where email = %s", (email,)
+        ).fetchone()
+    return (str(row[0]), row[1]) if row else None
+
+
+def create_session(user_id: str, token: str) -> None:
+    with connect() as conn:
+        conn.execute(
+            "insert into sessions (token, user_id) values (%s, %s)", (token, uuid.UUID(user_id))
+        )
+
+
+def session_user(token: str) -> str | None:
+    """The email for a session token, or None. Sessions last 30 days."""
+    with connect() as conn:
+        row = conn.execute(
+            "select u.email from sessions s join users u on u.id = s.user_id"
+            " where s.token = %s and s.created_at > now() - interval '30 days'",
+            (token,),
+        ).fetchone()
+    return row[0] if row else None
+
+
+def delete_session(token: str) -> None:
+    with connect() as conn:
+        conn.execute("delete from sessions where token = %s", (token,))
