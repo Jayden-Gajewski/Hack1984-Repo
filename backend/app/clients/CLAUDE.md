@@ -4,12 +4,12 @@ Thin async wrappers, one per service. Each one builds a request, sends it throug
 
 Use REST, not vendor SDKs, so the outbound log shows the exact payload. Raise a clear `RuntimeError` when an API key is missing. Check the docs before relying on a parameter; these APIs change.
 
-## Exa (`exa.py`), https://docs.exa.ai
+## Exa (`exa.py`), https://exa.ai/docs
 
 - Auth: `x-api-key` header. Base URL: `https://api.exa.ai`.
-- `POST /search`: `query`, `type: "auto"`, `numResults`, `includeDomains`, `excludeDomains`, `startPublishedDate` / `endPublishedDate` (ISO 8601), `category` (e.g. `"news"`), and `contents: {text: {maxCharacters}}` for snippets.
-- `POST /findSimilar`: `url`, `numResults`, `excludeSourceDomain: true`. Stage 1 uses it to discover broker domains we don't already list.
-- Results contain `url`, `title`, `publishedDate` and `text`.
+- `POST /search`: the default body is `query`, `type: "auto"` and `contents: {highlights: true}`, nothing else. Add `objective` (the goal this search serves; guarded like the query) when the search is one step of a stage. Only add `numResults`, `includeDomains`, `category` or `startPublishedDate` when the stage needs it (broker allowlist, breach date window). Don't stack `text`/`summary` on top of `highlights`.
+- `/findSimilar` is deprecated. To discover brokers we don't list, use `search` with a company-only query (e.g. "people search sites like spokeo.com"), never a page URL or title that contains the user's name.
+- Results contain `url`, `title`, `publishedDate` and `highlights` (list of strings). `exa.snippet(result)` joins them for the snippet fallback.
 
 ## Tavily (`tavily.py`), https://docs.tavily.com
 

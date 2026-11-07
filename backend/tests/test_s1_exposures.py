@@ -71,17 +71,17 @@ def fake_web(request: httpx.Request) -> httpx.Response:
             results = [{"url": NEWBROKER_URL, "title": "Jane Example | NewBroker",
                         "content": "Jane Example, Springfield"}]
         return httpx.Response(200, json={"results": results})
-    if host == "api.exa.ai" and path == "/search":
-        return httpx.Response(200, json={"results": [
-            {"url": BLOG_URL, "title": "County award for Jane Example",
-             "text": "Jane Example of Springfield...", "publishedDate": "2024-03-02T00:00:00.000Z"},
-            # The same PeopleFinder page Tavily found, spelled differently: must be deduped.
-            {"url": "https://peoplefinder.example/jane-example/springfield-il/", "title": "dup", "text": "dup"},
-        ]})
-    if host == "api.exa.ai" and path == "/findSimilar":
+    if host == "api.exa.ai" and path == "/search" and body["query"].startswith("people search sites like"):
         return httpx.Response(200, json={"results": [
             {"url": "https://newbroker.example/people/someone-else"},
             {"url": "https://www.peoplefinder.example/other"},  # already known: not "new"
+        ]})
+    if host == "api.exa.ai" and path == "/search":
+        return httpx.Response(200, json={"results": [
+            {"url": BLOG_URL, "title": "County award for Jane Example",
+             "highlights": ["Jane Example of Springfield..."], "publishedDate": "2024-03-02T00:00:00.000Z"},
+            # The same PeopleFinder page Tavily found, spelled differently: must be deduped.
+            {"url": "https://peoplefinder.example/jane-example/springfield-il/", "title": "dup", "highlights": ["dup"]},
         ]})
     if host == "api.tavily.com" and path == "/extract":
         urls = body["urls"]
@@ -152,8 +152,8 @@ def test_scan_sends_only_name_and_city_and_keeps_page_text_local(client, fake_in
     log = outbound.get_log()
     remote = [e for e in log if not e.local]
     assert {e.service for e in remote} == {"tavily", "exa"}
-    paths = {e.url.split("?")[0] for e in remote}
-    assert "https://api.exa.ai/findSimilar" in paths  # discovery of new broker sites ran
+    exa_queries = [e.body["query"] for e in remote if e.service == "exa"]
+    assert "people search sites like peoplefinder.example" in exa_queries  # broker discovery ran
     for entry in remote:
         sent = entry.url + json.dumps(entry.body)
         assert "Elm St" not in sent and "555-0142" not in sent  # page text never goes back out
@@ -161,7 +161,10 @@ def test_scan_sends_only_name_and_city_and_keeps_page_text_local(client, fake_in
         assert "test-exa-key" not in json.dumps(entry.headers)
         if isinstance(entry.body, dict) and "query" in entry.body:
             assert_minimal_query(entry.body["query"])
-            assert "Jane Example" in entry.body["query"]
+            if entry.body["query"].startswith("people search sites like"):
+                assert "Example" not in entry.body["query"]  # company-only: no name, no page URL
+            else:
+                assert "Jane Example" in entry.body["query"]
     local = [e for e in log if e.local]
     assert local and all(e.service == "ollama" for e in local)
     assert sum(e.url.endswith("/api/generate") for e in local) == 4  # one per surviving candidate

@@ -4,8 +4,9 @@ Full spec: backend/app/stages/CLAUDE.md. What this does:
 1. Discover candidate pages, using name + city/state only:
    - Tavily search restricted to the broker domains in data/brokers.json.
    - Exa search for the person plus "people search profile" (finds sites we don't list).
-   - Exa find_similar on one known-broker hit; the new domains it returns get a Tavily
-     search restricted to them.
+   - Exa search for sites like one known-broker hit (company-only query: the broker's
+     domain, never the page URL); the new domains it returns get a Tavily search
+     restricted to them.
 2. Drop candidates whose URL, title and snippet don't mention the last name, and keep at
    most MAX_CANDIDATES (known brokers first): each one costs a local LLM call.
 3. Tavily Extract the rest. Blocked or thin pages fall back to the search snippet
@@ -168,7 +169,7 @@ def _from_exa(result: dict[str, Any]) -> Candidate | None:
     return Candidate(
         url=result["url"],
         title=result.get("title") or "",
-        snippet=result.get("text") or "",
+        snippet=exa.snippet(result),
         via="exa",
         published_date=iso_date(result.get("publishedDate")),
     )
@@ -228,9 +229,11 @@ async def _discover_similar(
     """Find broker sites we don't list yet, then search them for this person."""
     seed_broker = broker_for(seed.url, brokers)
     try:
-        similar = await exa.find_similar(
-            seed.url,
+        # Company-only query: the seed's domain, never its URL (which has the person's name).
+        similar = await exa.search(
+            f"people search sites like {seed_broker['domain']}",
             purpose=f"Discover people-search sites similar to {seed_broker['name']}",
+            objective="Other people-search or background-check websites, not news or social media.",
             num_results=10,
         )
         new_domains = sorted(
