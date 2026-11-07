@@ -129,7 +129,7 @@ section .panel { margin-top: 16px; }
   border-radius: 6px;
   overflow-x: auto;
   white-space: pre-wrap;
-  word-break: break-all;
+  overflow-wrap: anywhere;
 }
 .tag-local { color: var(--proven); }
 .tag-remote { color: var(--accent); }
@@ -182,3 +182,17 @@ blockquote { margin: 6px 0; overflow-wrap: anywhere; }
 .insight { border-top: 1px solid var(--border); padding-top: 8px; margin-top: 8px; }
 .insight h4 { margin: 0 0 4px; font-size: 0.95rem; }
 .insight p { margin: 4px 0; }
+
+/* Links use the theme's accent (the browser default is dark blue, unreadable in dark mode). */
+a { color: var(--accent); text-underline-offset: 2px; }
+.log-row { overflow-wrap: anywhere; }
+
+/* Card header: broker + risk on the left, likely source + evidence tier on the right. */
+.card-title { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.lead-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--muted); }
+.lead-badge strong { color: var(--text); }
+.tier { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+  border: 1px solid currentColor; border-radius: 999px; padding: 1px 8px; }
+.tier.proven { color: var(--proven); }
+.tier.likely { color: var(--likely); }
+.tier.possible { color: var(--possible); }
