@@ -12,8 +12,10 @@ FastAPI app in `app/`. Read the privacy rules in the root `CLAUDE.md` first.
   - `local=True`: for Ollama calls. They're logged, with long text truncated, and marked as never leaving the machine.
 - **Log what was actually sent.** Each entry records the final URL, the headers that were sent (API keys redacted), the body, the status and the duration. Never log API keys.
 - **Partial failure is normal.** A broker blocks extraction, archive.org times out, a key is missing. Stages collect error strings and return them next to their results. One failed source must not fail the whole scan.
-- **`models.py` is the contract with the frontend.** Add fields; don't rename or remove them without telling the UI owner.
-- **Reference data goes in `app/data/*.json`, and user data in `local/`.** Don't hard-code broker lists or company domains in Python.
+- **`models.py` is the contract with the frontend.** Add fields; don't rename or remove them without telling the UI owner, who keeps `frontend/lib/types.ts` in sync.
+- **Reference data goes in `app/data/*.json`, and user data in Postgres.** Don't hard-code broker lists or company domains in Python, and don't load reference data into the database.
+- **Database (`db.py`).** Use one async engine from `DATABASE_URL` and a session per request via a FastAPI dependency. Keep ORM tables in `db.py`, separate from the pydantic API models in `models.py`. Use parameterized queries only (SQLAlchemy does this; never build SQL with f-strings). Scraped page text is stored only as far as a feature needs it, and `DELETE /api/outbound-log` and a "clear my data" route really delete rows.
+- **No CORS.** The browser reaches FastAPI only through the Next.js `/api` rewrite, so don't add `CORSMiddleware` or `allow_origins=["*"]`.
 - **Treat scraped content as untrusted.** It can contain prompt injection aimed at the local LLM. Validate LLM output against enums (e.g. `FIELD_TYPES`, tier names) and drop anything else.
 
 ## Local LLM (`prompts.py`, `clients/ollama.py`)
@@ -39,7 +41,7 @@ FastAPI app in `app/`. Read the privacy rules in the root `CLAUDE.md` first.
 | GET | `/api/inbox/check` | | `AliasHit[]` from the mock inbox (Stage 7) |
 | GET/DELETE | `/api/outbound-log` | `?include_local=` | log entries / clear |
 
-Reject `/api/scan` with HTTP 400 when `consent` is false. Mount `frontend/` as static files after the API routes.
+Reject `/api/scan` with HTTP 400 when `consent` is false. FastAPI serves JSON only; the Next.js app serves the UI.
 
 ## Testing
 

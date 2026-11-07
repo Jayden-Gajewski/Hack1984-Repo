@@ -10,3 +10,18 @@ Thumbs.db
 scans/
 scripts/output/
 .claude/settings.local.json
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Next.js
+.next/
+next-env.d.ts
+
+# user data (exported scans) stays local
+backend/local/
+
+# impeccable's 17 MB Windows-only binary; each teammate installs their own
+.claude/skills/impeccable/scripts/bin/

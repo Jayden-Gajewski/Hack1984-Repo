@@ -67,6 +67,6 @@ Pure function: `(exposures, breaches, policies, alias_hits) -> exposures with le
 
 ## Stage 7: Aliases (`s7_aliases.py`, Local LLM & ranking)
 
-- Format: `{company-slug}.{6 random hex}@{ALIAS_DOMAIN}`. Save aliases to `backend/local/aliases.json`.
+- Format: `{company-slug}.{6 random hex}@{ALIAS_DOMAIN}`. Save aliases to the `aliases` table in Postgres.
 - **Inbox check (local only, no search):** for each message sent to a known alias, if the sender's domain isn't the assigned company's domain or one of its subdomains, it's an `AliasHit` with tier Proven.
 - The demo uses `data/mock_inbox.json` and `data/mock_aliases.json`. Use a fictional company and `.example` domains, never a real company accused on fake data. Include one legitimate email from the company itself, to show it isn't flagged.

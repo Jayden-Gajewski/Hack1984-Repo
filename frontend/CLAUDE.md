@@ -1,10 +1,20 @@
 # Frontend (UI & demo)
 
-Plain HTML/CSS/JS (`index.html`, `app.js`, `styles.css`), served by FastAPI at `http://localhost:8000`. No frameworks, no bundler, no npm. Call the backend with `fetch` on `/api/...` (routes are listed in `backend/CLAUDE.md`). Load nothing from third-party CDNs: no fonts, analytics or scripts. The outbound log claims to show everything that left the laptop, so it has to be true.
+Next.js (App Router) with React and TypeScript, running at `http://localhost:3000`. Call the backend with `fetch` on relative `/api/...` paths, through the typed helpers in `lib/api.ts`. `next.config.ts` rewrites those paths to FastAPI on `localhost:8000`. The routes are listed in `backend/CLAUDE.md`, and the response types in `lib/types.ts` mirror `backend/app/models.py`.
+
+## Nothing leaves the laptop
+
+The outbound log claims to show everything that left the laptop, so it has to be true.
+
+- **No external calls from Next.js.** Route handlers, server components and server actions only call the FastAPI backend. Don't add Next.js API routes that call Exa, Tavily or any other service.
+- **Fonts are self-hosted.** Use `next/font/local` with files in `public/fonts/`, or a system font stack. Never use `next/font/google`, a Google Fonts `<link>` or `@import`, even if a design skill suggests it.
+- **No third-party CDNs, analytics or telemetry.** No `@vercel/analytics`, no tracking scripts, and run `npx next telemetry disable` once per machine.
+- **No remote images.** Don't render broker logos or favicons from external URLs; that leaks the scan to those sites. Use text or local assets.
+- Most interactive UI is client-side. Mark components that poll or hold state with `"use client"`.
 
 ## Security
 
-Everything shown on screen (page titles, field quotes, policy quotes, email subjects) comes from scraped web pages. **Always escape it.** Use `textContent`, or a single `escapeHtml()` helper, before any `innerHTML`. A broker page must not be able to inject script into our demo.
+Everything shown on screen (page titles, field quotes, policy quotes, email subjects) comes from scraped web pages. Render it as normal JSX text, which React escapes. **Never pass it to `dangerouslySetInnerHTML`**, and don't put scraped URLs in `href` without checking they start with `http://` or `https://` (a `javascript:` link would run). A broker page must not be able to inject script into our demo.
 
 ## Screens and components
 
@@ -36,4 +46,4 @@ Everything shown on screen (page titles, field quotes, policy quotes, email subj
 
 ## Demo
 
-The demo is the 3-minute script in the root `CLAUDE.md`. It ends on the outbound log, so that panel should look good full-screen. Make sure each step works without a page reload, and have loading states (scans take a while with a local LLM). Keep a fallback: a "load last scan" option that reads a saved result, in case the venue Wi-Fi fails.
+The demo is the 3-minute script in the root `CLAUDE.md`. It ends on the outbound log, so that panel should look good full-screen. Make sure each step works without a page reload, and have loading states (scans take a while with a local LLM). Keep a fallback: a "load last scan" option that reads a saved result from the backend, in case the venue Wi-Fi fails.
