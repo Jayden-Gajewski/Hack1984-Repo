@@ -1,6 +1,8 @@
 import type { Exposure } from "@/lib/api";
 import { DATE_SOURCE_LABEL, TIER_HELP, TIER_LABEL, safeHref } from "@/lib/display";
 
+const FOUND_VIA_LABEL = { tavily: "Tavily search", exa: "Exa search" } as const;
+
 // Everything on this card comes from scraped pages. React escapes text, and links only render
 // for http(s) URLs. Never pass this data to dangerouslySetInnerHTML.
 export default function ExposureCard({ exposure }: { exposure: Exposure }) {
@@ -22,6 +24,7 @@ export default function ExposureCard({ exposure }: { exposure: Exposure }) {
       </div>
 
       <div className="chips">
+        {exposure.fields.length === 0 && <span className="muted">Lists your name</span>}
         {exposure.fields.map((f, i) => (
           <span key={`${f.field}-${i}`} className="chip" title={f.quote}>
             {f.field}
@@ -49,6 +52,40 @@ export default function ExposureCard({ exposure }: { exposure: Exposure }) {
       {exposure.text_source === "snippet" && (
         <p className="muted">From search snippet; page blocked extraction.</p>
       )}
+
+      <details className="detail">
+        <summary>Details</summary>
+        {exposure.fields.length > 0 && (
+          <ul className="quotes">
+            {exposure.fields.map((f, i) => (
+              <li key={`${f.field}-${i}`}>
+                <strong>{f.field}</strong>: &ldquo;{f.quote}&rdquo;
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="muted">
+          {exposure.title && <>{exposure.title} · </>}
+          Found with {exposure.found_via ? FOUND_VIA_LABEL[exposure.found_via] : "search"}, read from{" "}
+          {exposure.text_source === "extract" ? "the page itself" : "the search snippet"}. Checked
+          on this laptop by the local LLM.
+        </p>
+        {exposure.leads.length > 0 && (
+          <div>
+            <strong>Likely sources</strong>
+            <ul className="quotes">
+              {exposure.leads.map((lead) => (
+                <li key={lead.company}>
+                  <span className={`badge ${lead.tier}`} title={TIER_HELP[lead.tier]}>
+                    {TIER_LABEL[lead.tier]}
+                  </span>{" "}
+                  {lead.company}: {lead.reasons.join(" ")}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </details>
 
       <p className="row">
         {listingHref && (

@@ -36,7 +36,7 @@ You need Docker, Python 3.13, Node 20.9 or later, and [Ollama](https://ollama.co
    ```
 4. Open http://localhost:3000. The line under the title shows what's still missing (Ollama, Postgres, API keys).
 
-Every stage starts as a stub, so right now a scan returns no exposures and the note "Stage 1 (find exposures) is not implemented yet." That's expected until Stage 1 lands.
+Stage 1 (find exposures) works. A scan needs at least one search key and Ollama running with the model pulled; if either is missing, it stops before searching and says what to fix. Stages 2–7 are still stubs, so cards show "Public by: unknown" and no likely sources yet.
 
 ## Tests
 
