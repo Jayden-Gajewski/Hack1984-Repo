@@ -33,14 +33,16 @@ export default function ExposureCard({ exposure, onDraft, removal }: Props) {
   return (
     <article className="card">
       <div className="card-head">
-        <h3>{exposure.broker}</h3>
-        <span className="muted small">{source.label}</span>
-        {exposure.risk && (
-          <span className={`risk ${exposure.risk}`} title={exposure.risk_reason}>
-            {RISK_LABEL[exposure.risk]}
-          </span>
-        )}
-        {removal && <span className={`status ${removal}`}>{REMOVAL_LABEL[removal]}</span>}
+        <div className="card-title">
+          <h3>{exposure.broker}</h3>
+          <span className="muted small">{source.label}</span>
+          {exposure.risk && (
+            <span className={`risk ${exposure.risk}`} title={exposure.risk_reason}>
+              {RISK_LABEL[exposure.risk]}
+            </span>
+          )}
+          {removal && <span className={`status ${removal}`}>{REMOVAL_LABEL[removal]}</span>}
+        </div>
       </div>
 
       {top && <TierClaim tier={top.tier} company={top.company} />}

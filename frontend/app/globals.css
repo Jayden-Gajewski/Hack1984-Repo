@@ -460,7 +460,7 @@ code, .mono { font-family: var(--mono); font-size: 0.875em; overflow-wrap: anywh
   margin: 8px 0 0;
   overflow-x: auto;
   white-space: pre-wrap;
-  word-break: break-all;
+  overflow-wrap: anywhere;
 }
 
 /* Outbound log: a tab hanging from the top-left edge with the live count; the log drops down from it. */
@@ -670,3 +670,9 @@ code, .mono { font-family: var(--mono); font-size: 0.875em; overflow-wrap: anywh
 .insight { border-top: 1px solid var(--border); padding-top: 8px; margin-top: 8px; }
 .insight h4 { margin: 0 0 4px; font-size: 0.95rem; }
 .insight p { margin: 4px 0; }
+
+/* Long URLs in the outbound log wrap inside the panel instead of overflowing it. */
+.log-row { overflow-wrap: anywhere; }
+
+/* Card header: broker, site type, risk and removal status grouped on the left. */
+.card-title { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
