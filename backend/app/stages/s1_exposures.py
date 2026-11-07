@@ -41,6 +41,7 @@ PAGE_WINDOW_CHARS = 3000
 MIN_CONFIDENCE = 0.5
 MIN_EXTRACT_CHARS = 500  # extracted text shorter than this is almost always a block page
 MAX_QUOTE_CHARS = 200
+MAX_VALUES_PER_FIELD = 3  # e.g. several phone numbers or past addresses on one listing
 MAX_NEW_DOMAINS = 10
 _NAME_SUFFIXES = {"jr", "sr", "ii", "iii", "iv"}
 _ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}")
@@ -157,12 +158,14 @@ def parse_analysis(
     haystack = _squash(source_text)
     raw_fields = out.get("fields")
     fields: list[FieldFinding] = []
-    seen: set[str] = set()
     for item in raw_fields if isinstance(raw_fields, list) else []:
         if not isinstance(item, dict):
             continue
         field, quote = item.get("field"), item.get("quote")
-        if field not in prompts.LISTING_FIELDS or field in seen or not isinstance(quote, str):
+        if field not in prompts.LISTING_FIELDS or not isinstance(quote, str):
+            continue
+        same_field = [_squash(f.quote) for f in fields if f.field == field]
+        if len(same_field) >= (1 if field == "name" else MAX_VALUES_PER_FIELD):
             continue
         quote = " ".join(quote.split())[:MAX_QUOTE_CHARS]
         if not quote or _squash(quote) not in haystack:
@@ -171,7 +174,9 @@ def parse_analysis(
             continue  # just a city or state (what we searched with), not a street address
         if field == "name" and surname and not has_word(quote, surname):
             return None  # the listing names someone else (e.g. "Jane Dosland" for "Jane Example")
-        seen.add(field)
+        squashed = _squash(quote)
+        if any(squashed in other or other in squashed for other in same_field):
+            continue  # the same value again, or part of one we already have
         fields.append(FieldFinding(field=field, quote=quote))
     return fields
 

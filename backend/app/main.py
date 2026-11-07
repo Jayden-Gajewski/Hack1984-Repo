@@ -19,7 +19,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 
-from app import db, outbound
+from app import db, explain, outbound
 from app.clients import ollama
 from app.config import get_settings
 from app.data import load_json
@@ -174,6 +174,7 @@ async def scan(req: ScanRequest):
             "Stage 2 (public-by dates)", exposures, s2_dating.date_exposures, exposures
         )
         errors += more
+    exposures = [explain.explain(e) for e in exposures]  # summary, risk and per-field details
     session.person, session.exposures = req, exposures
 
     response = ScanResponse(scan_id=str(uuid.uuid4()), exposures=exposures, errors=errors)
@@ -202,6 +203,8 @@ async def latest_scan():
         raise HTTPException(404, "No saved scans yet.")
     saved_request, saved_response = row
     response = ScanResponse.model_validate(saved_response)
+    # Re-run the write-up: older saved scans don't have it, and its wording may have changed.
+    response.exposures = [explain.explain(e) for e in response.exposures]
     session.person = ScanRequest(**saved_request, consent=True)  # it was consented when it ran
     session.exposures = response.exposures
     return response

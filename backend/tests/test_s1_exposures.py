@@ -280,3 +280,24 @@ def test_pages_without_city_or_state_skip_the_llm():
     # state codes match only as written, so ordinary words don't count
     assert not s1.mentions_place("Jane lives in a house", "Springfield", "IN")
     assert s1.mentions_place("Jane Example, Gary, IN", "Springfield", "IN")
+
+
+def test_parse_analysis_keeps_several_values_per_field():
+    text = ("Jane Example. Phones: (217) 555-0142, (217) 555-0199. Addresses: 12 Elm St, Springfield IL; "
+            "40 Oak Ave, Peoria IL. Relatives: John Example, Mary Example, Sam Example, Ann Example.")
+    out = {"is_same_person": True, "confidence": 0.9, "fields": [
+        {"field": "phone", "quote": "(217) 555-0142"},
+        {"field": "phone", "quote": "(217) 555-0199"},
+        {"field": "phone", "quote": "555-0142"},  # part of a value we already have
+        {"field": "address", "quote": "12 Elm St, Springfield IL"},
+        {"field": "address", "quote": "40 Oak Ave, Peoria IL"},
+        {"field": "relatives", "quote": "John Example"},
+        {"field": "relatives", "quote": "Mary Example"},
+        {"field": "relatives", "quote": "Sam Example"},
+        {"field": "relatives", "quote": "Ann Example"},  # over the limit of 3
+        {"field": "name", "quote": "Jane Example"},
+        {"field": "name", "quote": "Jane Example"},
+    ]}
+    fields = s1.parse_analysis(out, text, known_broker=True)
+    counts = {f: sum(x.field == f for x in fields) for f in ("phone", "address", "relatives", "name")}
+    assert counts == {"phone": 2, "address": 2, "relatives": 3, "name": 1}

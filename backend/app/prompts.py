@@ -34,6 +34,8 @@ Rules:
 - is_people_search_site is true only for a people-search, background-check or public
   records listing. It is false for social profiles, news stories and company pages.
 - Only include a field if the page shows it for this person.
+- List each value as its own entry: every street address, phone number, email address
+  and relative the page shows for this person, at most 3 of each.
 - address means a street address with a house number. A city or state alone is not an address.
 - Quotes must be copied exactly from the page.
 - If unsure, set is_same_person to false. Missing data is better than a wrong claim.

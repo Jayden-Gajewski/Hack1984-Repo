@@ -70,6 +70,20 @@ class FieldFinding(BaseModel):
     quote: str  # short quote copied from the page, so the UI can show the evidence
 
 
+RiskLevel = Literal["high", "medium", "low"]
+
+
+class FieldInsight(BaseModel):
+    """What one kind of information on a listing means for the person (set by explain.py)."""
+
+    field: FieldType
+    label: str  # "Home address"
+    found: list[str]  # the exact text the page shows, one entry per value
+    why_it_matters: str
+    misuse: list[str]  # what someone could do with it
+    protect: str  # one concrete thing the person can do about it
+
+
 class Lead(BaseModel):
     """A likely source for one exposure. Never call it "who leaked it"."""
 
@@ -94,6 +108,11 @@ class Exposure(BaseModel):
     public_by_evidence_url: str | None = None  # Wayback snapshot link when source is "wayback"
     opt_out_url: str | None = None
     leads: list[Lead] = []  # set by Stage 5, strongest first
+    # Set by explain.py after Stage 2: a plain-English write-up of what this listing shows.
+    summary: str = ""
+    risk: RiskLevel | None = None
+    risk_reason: str = ""
+    insights: list[FieldInsight] = []
 
 
 class ScanResponse(BaseModel):
