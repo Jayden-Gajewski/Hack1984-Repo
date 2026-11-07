@@ -21,6 +21,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 
 from app import db, outbound
 from app.clients import ollama
+from app.companies import add_company, all_companies
 from app.config import get_settings
 from app.data import load_json
 from app.models import (
@@ -30,6 +31,7 @@ from app.models import (
     AliasHit,
     AliasRequest,
     BreachEvent,
+    CompanyRequest,
     Draft,
     Exposure,
     LeadsResponse,
@@ -109,7 +111,7 @@ def _rank(exposures: list[Exposure]) -> tuple[list[Exposure], list[str]]:
 
 
 def _company_ids() -> set[str]:
-    return {c["id"] for c in load_json("companies.json")}
+    return {c["id"] for c in all_companies()}
 
 
 def _require_scan() -> ScanRequest:
@@ -157,7 +159,15 @@ async def brokers():
 
 @app.get("/api/companies")
 async def companies():
-    return load_json("companies.json")
+    """The checked-in company list, then any companies the user added."""
+    return all_companies()
+
+
+@app.post("/api/companies")
+async def add_company_route(req: CompanyRequest):
+    """Add any company to the account picker. A typed website is used as is; a name is matched
+    to its official website with one Exa company search (company name only, logged)."""
+    return await _call("Add company", add_company, req.name)
 
 
 @app.post("/api/scan", response_model=ScanResponse)

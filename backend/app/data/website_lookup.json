@@ -1,0 +1,11 @@
+{
+  "not_a_homepage": [
+    "wikipedia.org", "linkedin.com", "crunchbase.com", "bloomberg.com", "facebook.com",
+    "instagram.com", "x.com", "twitter.com", "youtube.com", "glassdoor.com", "indeed.com",
+    "zoominfo.com", "pitchbook.com", "reddit.com", "apple.com", "google.com", "amazon.com"
+  ],
+  "two_level_suffixes": [
+    "co.uk", "org.uk", "ac.uk", "gov.uk", "com.au", "net.au", "org.au", "co.nz", "co.jp",
+    "co.in", "com.br", "com.mx", "co.za", "com.sg", "com.hk", "co.kr", "com.tr"
+  ]
+}

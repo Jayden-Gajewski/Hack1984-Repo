@@ -66,6 +66,7 @@ def fake_internet(monkeypatch):
     monkeypatch.setattr(ollama, "_generate_slots", asyncio.Semaphore(2))
     data = {"companies.json": [SHOPCO], "breach_sources.json": [{"state": "CA", "name": "CA AG", "domain": "oag.ca.gov"}]}
     monkeypatch.setattr(s3, "load_json", lambda name: data[name])
+    monkeypatch.setattr(s3, "all_companies", lambda: data["companies.json"])
     outbound.clear_log()
     yield
     get_settings.cache_clear()

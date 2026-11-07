@@ -26,7 +26,7 @@ Everything shown on screen (page titles, field quotes, policy quotes, email subj
   - The date with its source label ("Wayback Machine, earliest snapshot", "published date", or "unknown"), linked to the snapshot when there is one.
   - The likely sources, each with its tier and reasons.
   - A "Draft opt-out" button.
-- **Accounts:** a checkbox list from `/api/companies` and a "Check breaches & policies" button.
+- **Accounts:** a type-to-search company picker and a "Check breaches & policies" button. It suggests from `/api/companies` and can add any other company through `POST /api/companies`, which matches a name to its website with one logged search, or uses a typed website. Added companies show their website on the tag.
   - Show breach timelines and policy flags.
   - A sell/share flag shows its verbatim quote under the line "This wasn't a hack, they sold it."
 - **Draft modal:** where to send it (link or email), the subject, the body, and a copy button.

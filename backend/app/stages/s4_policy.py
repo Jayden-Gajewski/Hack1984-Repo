@@ -1,6 +1,6 @@
 """Stage 4: policy check. OWNER: Evidence.
 
-For each company the user picked (ids from data/companies.json):
+For each company the user picked (ids from app.companies: the checked-in list plus added ones):
 1. Policy URL: privacy_url from companies.json, else a Tavily search restricted to the
    company's domains (company name only).
 2. Tavily Extract with depth="advanced". The policy text stays here: it goes only to the
@@ -32,7 +32,7 @@ from typing import Any
 
 from app import prompts
 from app.clients import ollama, tavily
-from app.data import load_json
+from app.companies import all_companies
 from app.models import PolicyClause, PolicyResult
 
 BATCH_CHARS = 6_000
@@ -290,7 +290,7 @@ async def _check(company: dict[str, Any], errors: list[str]) -> PolicyResult:
 
 async def check_policies(company_ids: list[str]) -> tuple[list[PolicyResult], list[str]]:
     """Return (one PolicyResult per company, errors)."""
-    companies = [c for c in load_json("companies.json") if c["id"] in company_ids]
+    companies = [c for c in all_companies() if c["id"] in company_ids]
     errors: list[str] = []
     results = await asyncio.gather(*(_check(c, errors) for c in companies))
     return list(results), list(dict.fromkeys(errors))

@@ -149,6 +149,10 @@ export interface Company {
   name: string;
   domains: string[];
   privacy_url: string | null;
+  // The checked-in list is "list". Companies the user typed are custom: "typed" (a website),
+  // "search" (found with one Exa company search) or "guessed" (the search failed; name + .com).
+  custom?: boolean;
+  domain_source?: "list" | "typed" | "search" | "guessed";
 }
 
 export interface Status {
@@ -207,6 +211,8 @@ export const api = {
   status: () => request<Status>("GET", "/api/status"),
   brokers: () => request<Broker[]>("GET", "/api/brokers"),
   companies: () => request<Company[]>("GET", "/api/companies"),
+  // Any company: a name ("Tinder") is matched to its website with one logged search; a website is used as typed.
+  addCompany: (name: string) => request<Company>("POST", "/api/companies", { name }),
   scan: (body: ScanRequest) => request<ScanResponse>("POST", "/api/scan", body),
   latestScan: () => request<ScanResponse>("GET", "/api/scans/latest"),
   accounts: (companies: string[]) => request<AccountsResponse>("POST", "/api/accounts", { companies }),

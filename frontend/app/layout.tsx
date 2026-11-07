@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Hack1984",
+  title: "Dossier",
   description:
     "Find where your personal data is exposed, and see exactly what left your laptop.",
 };

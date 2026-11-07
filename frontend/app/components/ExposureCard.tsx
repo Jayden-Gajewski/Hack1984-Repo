@@ -1,5 +1,6 @@
 import type { Exposure, RemovalStatus } from "@/lib/api";
 import { DATE_SOURCE_LABEL, REMOVAL_LABEL, TIER_HELP, TIER_LABEL, safeHref } from "@/lib/display";
+import TierClaim from "./TierClaim";
 
 const FOUND_VIA_LABEL = { tavily: "Tavily search", exa: "Exa search" } as const;
 
@@ -21,29 +22,26 @@ export default function ExposureCard({ exposure, onDraft, removal }: Props) {
   return (
     <article className="card">
       <div className="card-head">
-        <strong>{exposure.broker}</strong>
+        <h3>{exposure.broker}</h3>
         {removal && <span className={`status ${removal}`}>{REMOVAL_LABEL[removal]}</span>}
-        {top && (
-          <span className={`badge ${top.tier}`} title={TIER_HELP[top.tier]}>
-            {TIER_LABEL[top.tier]} · likely source: {top.company}
-          </span>
-        )}
       </div>
 
-      <div className="chips">
-        {exposure.fields.length === 0 && <span className="muted">Lists your name</span>}
+      {top && <TierClaim tier={top.tier} company={top.company} />}
+
+      <ul className="chips" aria-label="Exposed fields">
+        {exposure.fields.length === 0 && <li className="muted">Lists your name</li>}
         {exposure.fields.map((f, i) => (
-          <span key={`${f.field}-${i}`} className="chip" title={f.quote}>
+          <li key={`${f.field}-${i}`} className="chip" title={f.quote}>
             {f.field}
-          </span>
+          </li>
         ))}
-      </div>
+      </ul>
 
-      <p className="muted">
-        Public by: {exposure.public_by ?? "unknown"}
+      <p className="date-line">
+        Public by <strong>{exposure.public_by ?? "unknown"}</strong>
         {exposure.public_by && (
           <>
-            {" ("}
+            . Source:{" "}
             {evidenceHref ? (
               <a href={evidenceHref} target="_blank" rel="noopener noreferrer">
                 {sourceLabel}
@@ -51,13 +49,12 @@ export default function ExposureCard({ exposure, onDraft, removal }: Props) {
             ) : (
               sourceLabel
             )}
-            {")"}
           </>
         )}
       </p>
 
       {exposure.text_source === "snippet" && (
-        <p className="muted">From search snippet; page blocked extraction.</p>
+        <p className="muted small">From search snippet; page blocked extraction.</p>
       )}
 
       <details className="detail">
@@ -72,29 +69,29 @@ export default function ExposureCard({ exposure, onDraft, removal }: Props) {
           </ul>
         )}
         <p className="muted">
-          {exposure.title && <>{exposure.title} · </>}
+          {exposure.title && <>{exposure.title}. </>}
           Found with {exposure.found_via ? FOUND_VIA_LABEL[exposure.found_via] : "search"}, read from{" "}
-          {exposure.text_source === "extract" ? "the page itself" : "the search snippet"}. Checked
-          on this laptop by the local LLM.
+          {exposure.text_source === "extract" ? "the page itself" : "the search snippet"}. Checked on this
+          laptop by the local LLM.
         </p>
         {exposure.leads.length > 0 && (
-          <div>
-            <strong>Likely sources</strong>
+          <>
+            <h4>Likely sources</h4>
             <ul className="quotes">
               {exposure.leads.map((lead) => (
                 <li key={lead.company}>
-                  <span className={`badge ${lead.tier}`} title={TIER_HELP[lead.tier]}>
+                  <span className={`pill ${lead.tier}`} title={TIER_HELP[lead.tier]}>
                     {TIER_LABEL[lead.tier]}
-                  </span>{" "}
-                  {lead.company}: {lead.reasons.join(" ")}
+                  </span>
+                  <strong>{lead.company}</strong>: {lead.reasons.join(" ")}
                 </li>
               ))}
             </ul>
-          </div>
+          </>
         )}
       </details>
 
-      <p className="row">
+      <div className="actions">
         {onDraft && (
           <button type="button" className="secondary" onClick={() => onDraft(exposure.id)}>
             Draft opt-out
@@ -110,7 +107,7 @@ export default function ExposureCard({ exposure, onDraft, removal }: Props) {
             Opt-out page
           </a>
         )}
-      </p>
+      </div>
     </article>
   );
 }

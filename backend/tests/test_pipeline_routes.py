@@ -33,7 +33,7 @@ def test_demo_flow_ranks_shopco_as_proven(client, monkeypatch):
     monkeypatch.setattr(main.s2_dating, "date_exposures", date)
     monkeypatch.setattr(main.s3_breaches, "breach_timelines", breaches)
     monkeypatch.setattr(main.s4_policy, "check_policies", policies)
-    monkeypatch.setattr(main, "load_json", lambda name: [SHOPCO])
+    monkeypatch.setattr(main, "all_companies", lambda: [SHOPCO])
 
     assert client.post("/api/scan", json=PERSON).status_code == 200
     accounts = client.post("/api/accounts", json={"companies": ["shopco"]}).json()
