@@ -24,7 +24,7 @@ FastAPI app in `app/`. Read the privacy rules in the root `CLAUDE.md` first.
 - Every prompt asks for JSON in a fixed shape that is spelled out in the prompt. Call Ollama with `format: "json"` and `temperature: 0`.
 - Parse defensively: invalid JSON gives `{}`, and a missing key means no or empty. Never crash on model output.
 - Truncate page text (about 12k chars) and chunk long policies. Small local models lose the thread on long inputs.
-- Use a semaphore of about 2 for concurrent Ollama calls.
+- Run one Ollama call at a time (`_generate_slots` in `clients/ollama.py`). On an 8 GB laptop a second concurrent call pushes the machine into swap.
 - Prompts should be conservative. A false "this broker has your SSN" is worse than missing a field.
 
 ## API routes (`main.py`)
@@ -32,7 +32,7 @@ FastAPI app in `app/`. Read the privacy rules in the root `CLAUDE.md` first.
 | Method | Path | Body | Returns |
 |---|---|---|---|
 | GET | `/api/status` | | key presence, Ollama up, model pulled, Postgres up |
-| POST | `/api/scan` | `{name, city, state, consent}` | `{scan_id, exposures, errors}` (Stages 1 and 2); saved to Postgres |
+| POST | `/api/scan` | `{name, city, state, consent, refresh?}` | `{scan_id, exposures, errors, saved_at}` (Stages 1 and 2); saved to Postgres. A person scanned before gets their newest saved scan back (`saved_at` set, nothing searched) unless `refresh` is true |
 | GET | `/api/scans/latest` | | the last saved scan ("load last scan" fallback) |
 | GET | `/api/brokers` | | the broker list |
 | GET | `/api/companies` | | account list for the picker |

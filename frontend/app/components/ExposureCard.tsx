@@ -1,5 +1,5 @@
 import type { Exposure, RemovalStatus } from "@/lib/api";
-import { DATE_SOURCE_LABEL, REMOVAL_LABEL, TIER_HELP, TIER_LABEL, safeHref } from "@/lib/display";
+import { DATE_SOURCE_LABEL, REMOVAL_LABEL, TIER_HELP, TIER_LABEL, exposureKind, safeHref } from "@/lib/display";
 
 const FOUND_VIA_LABEL = { tavily: "Tavily search", exa: "Exa search" } as const;
 
@@ -17,11 +17,13 @@ export default function ExposureCard({ exposure, onDraft, removal }: Props) {
   const optOutHref = safeHref(exposure.opt_out_url);
   const evidenceHref = safeHref(exposure.public_by_evidence_url);
   const sourceLabel = DATE_SOURCE_LABEL[exposure.public_by_source];
+  const kind = exposureKind(exposure.source_kind);
 
   return (
     <article className="card">
       <div className="card-head">
         <strong>{exposure.broker}</strong>
+        <span className="muted">{kind.label}</span>
         {removal && <span className={`status ${removal}`}>{REMOVAL_LABEL[removal]}</span>}
         {top && (
           <span className={`badge ${top.tier}`} title={TIER_HELP[top.tier]}>
@@ -97,17 +99,17 @@ export default function ExposureCard({ exposure, onDraft, removal }: Props) {
       <p className="row">
         {onDraft && (
           <button type="button" className="secondary" onClick={() => onDraft(exposure.id)}>
-            Draft opt-out
+            {kind.draft}
           </button>
         )}
         {listingHref && (
           <a href={listingHref} target="_blank" rel="noopener noreferrer">
-            View listing
+            {kind.view}
           </a>
         )}
         {optOutHref && (
           <a href={optOutHref} target="_blank" rel="noopener noreferrer">
-            Opt-out page
+            {kind.page}
           </a>
         )}
       </p>

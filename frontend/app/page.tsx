@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { api, type Draft, type RemovalStatus, type ScanResponse } from "@/lib/api";
+import { api, type Draft, type RemovalStatus, type ScanRequest, type ScanResponse } from "@/lib/api";
 import AccountsPanel from "./components/AccountsPanel";
 import AliasPanel from "./components/AliasPanel";
 import DraftModal from "./components/DraftModal";
@@ -22,11 +22,27 @@ export default function Home() {
   const [removals, setRemovals] = useState<Record<string, RemovalStatus>>({});
   const [rescanning, setRescanning] = useState(false);
   const [notes, setNotes] = useState<string[]>([]);
+  const [lastRequest, setLastRequest] = useState<ScanRequest | null>(null);
+  const [freshScanning, setFreshScanning] = useState(false);
 
-  function showScan(scan: ScanResponse) {
+  function showScan(scan: ScanResponse, request?: ScanRequest) {
     setResult(scan);
     setRemovals({});
     setNotes([]);
+    setLastRequest(request ?? null);
+  }
+
+  // A saved scan came back instead of a new search: run a fresh one for the same person.
+  async function scanAgain() {
+    if (!lastRequest) return;
+    setFreshScanning(true);
+    try {
+      showScan(await api.scan({ ...lastRequest, refresh: true }), lastRequest);
+    } catch (err) {
+      setNotes([message(err)]);
+    } finally {
+      setFreshScanning(false);
+    }
   }
 
   // Demo fallback if the venue Wi-Fi fails: reload the last saved scan from local Postgres.
@@ -104,6 +120,19 @@ export default function Home() {
                 </button>
               )}
             </div>
+            {result.saved_at && (
+              <p className="row">
+                <span className="muted">
+                  Loaded your saved scan from {new Date(result.saved_at).toLocaleString()} (local database).
+                  Nothing was searched.
+                </span>
+                {lastRequest && (
+                  <button type="button" className="secondary" onClick={scanAgain} disabled={freshScanning}>
+                    {freshScanning ? "Scanning… (the local LLM can take a few minutes)" : "Scan again"}
+                  </button>
+                )}
+              </p>
+            )}
             {[...result.errors, ...notes].map((err, i) => (
               <p key={i} className="muted">
                 {err}

@@ -3,6 +3,8 @@
 Full spec: backend/app/stages/CLAUDE.md. What this does:
 1. Discover candidate pages, using name + city/state only:
    - Tavily search restricted to the broker domains in data/brokers.json.
+   - Tavily search restricted to the public-profile sites in data/public_profiles.json
+     (sports results and similar pages that show a name with a school or team).
    - Exa search for the person plus "people search profile" (finds sites we don't list).
    - Exa search for sites like one known-broker hit (company-only query: the broker's
      domain, never the page URL); the new domains it returns get a Tavily search
@@ -10,11 +12,14 @@ Full spec: backend/app/stages/CLAUDE.md. What this does:
 2. Drop candidates whose URL, title and snippet don't mention the last name, and keep at
    most MAX_CANDIDATES (known brokers first): each one costs a local LLM call.
 3. Tavily Extract the rest. Blocked or thin pages fall back to the search snippet
-   (text_source="snippet").
-4. The local LLM decides whether the page is this person and which fields it shows. Only
+   (text_source="snippet"). Extracted pages are cut down to the text around the surname
+   (focus_text) before the LLM reads them: menus and other people's listings only slow it down.
+   The model loads (ollama.warm_up) while the searches run.
+4. The local LLM decides whether the page is this person and which fields it shows
+   (prompts.LISTING_FIELDS for brokers, prompts.PROFILE_FIELDS for public profiles). Only
    answers with confidence >= 0.5 and quotes that really appear in the text are kept.
    Pages on unknown domains must also be people-search listings.
-5. Fill broker, broker_id and opt_out_url from data/brokers.json.
+5. Fill broker, broker_id, source_kind and opt_out_url from the site lists.
 
 Before searching anything, it checks that there's a search key and that the local LLM is
 ready, so a scan never spends API credits on pages it can't analyze.
@@ -38,6 +43,9 @@ MIN_CONFIDENCE = 0.5
 MIN_EXTRACT_CHARS = 500  # extracted text shorter than this is almost always a block page
 MAX_QUOTE_CHARS = 200
 MAX_NEW_DOMAINS = 10
+FOCUS_WINDOW = 600  # chars kept on each side of a surname mention
+FOCUS_MAX_CHARS = 4_000  # the LLM reads ~4x faster than with a full 12k-char page
+MAX_ANSWER_TOKENS = 500  # longest valid answer (8 fields, 200-char quotes) is ~400 tokens
 _NAME_SUFFIXES = {"jr", "sr", "ii", "iii", "iv"}
 _ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}")
 
@@ -73,6 +81,20 @@ def broker_for(url: str, brokers: list[dict[str, Any]]) -> dict[str, Any] | None
     return None
 
 
+def known_site(
+    url: str, brokers: list[dict[str, Any]], profiles: list[dict[str, Any]]
+) -> tuple[dict[str, Any] | None, str]:
+    """(site entry, source kind) for a URL. Unlisted domains count as brokers: the only
+    unlisted pages that survive are ones the LLM says are people-search listings."""
+    broker = broker_for(url, brokers)
+    if broker is not None:
+        return broker, "broker"
+    profile = broker_for(url, profiles)
+    if profile is not None:
+        return profile, "public_profile"
+    return None, "broker"
+
+
 def last_name(full_name: str) -> str:
     tokens = [t.strip(".,").lower() for t in full_name.split()]
     tokens = [t for t in tokens if t and t not in _NAME_SUFFIXES]
@@ -92,6 +114,35 @@ def mentions(candidate: Candidate, surname: str) -> bool:
     return has_word(f"{parts.path} {parts.query} {candidate.title} {candidate.snippet}", surname)
 
 
+def focus_text(text: str, surname: str) -> str:
+    """The parts of a page within FOCUS_WINDOW chars of the surname, merged and joined with
+    " … ", at most FOCUS_MAX_CHARS. Earlier mentions win (that's where the listing's header
+    and main details usually are). A page that never names the surname is just cut short."""
+    if len(text) <= FOCUS_MAX_CHARS:
+        return text
+    spans: list[list[int]] = []
+    if surname:
+        pattern = rf"(?<![a-z0-9]){re.escape(surname.lower())}(?![a-z0-9])"
+        for match in re.finditer(pattern, text.lower()):
+            start, end = max(0, match.start() - FOCUS_WINDOW), match.end() + FOCUS_WINDOW
+            if spans and start <= spans[-1][1]:
+                spans[-1][1] = max(spans[-1][1], end)
+            else:
+                spans.append([start, end])
+    if not spans:
+        return text[:FOCUS_MAX_CHARS]
+    parts: list[str] = []
+    used = 0
+    for start, end in spans:
+        piece = text[start:end]
+        room = FOCUS_MAX_CHARS - used
+        if room <= 0:
+            break
+        parts.append(piece[:room])
+        used += len(parts[-1])
+    return " … ".join(parts)
+
+
 def iso_date(value: Any) -> str | None:
     """'2023-05-01T00:00:00.000Z' -> '2023-05-01'. Anything else is unknown, never a guess."""
     if isinstance(value, str) and _ISO_DATE_RE.match(value):
@@ -108,14 +159,19 @@ def _truthy(value: Any) -> bool:
 
 
 def parse_analysis(
-    out: dict[str, Any], source_text: str, known_broker: bool, surname: str = ""
+    out: dict[str, Any],
+    source_text: str,
+    known_broker: bool,
+    surname: str = "",
+    allowed_fields: tuple[str, ...] = prompts.LISTING_FIELDS,
 ) -> list[FieldFinding] | None:
     """Validate the local LLM's answer. Returns the grounded fields if the page is this
     person, or None if it isn't (or the answer can't be trusted).
 
     Page text is untrusted and small models drift, so: booleans and confidence are
-    checked, fields are limited to prompts.LISTING_FIELDS, and every quote must appear
-    in the page text.
+    checked, fields are limited to allowed_fields, and every quote must appear
+    in the page text. known_broker means the site is in one of our lists (brokers or
+    public profiles), so it doesn't also have to be a people-search listing.
     """
     if not _truthy(out.get("is_same_person")):
         return None
@@ -138,7 +194,7 @@ def parse_analysis(
         if not isinstance(item, dict):
             continue
         field, quote = item.get("field"), item.get("quote")
-        if field not in prompts.LISTING_FIELDS or field in seen or not isinstance(quote, str):
+        if field not in allowed_fields or field in seen or not isinstance(quote, str):
             continue
         quote = " ".join(quote.split())[:MAX_QUOTE_CHARS]
         if not quote or _squash(quote) not in haystack:
@@ -184,7 +240,10 @@ def _from_exa(result: dict[str, Any]) -> Candidate | None:
 
 
 async def _discover(
-    req: ScanRequest, brokers: list[dict[str, Any]], errors: list[str]
+    req: ScanRequest,
+    brokers: list[dict[str, Any]],
+    profiles: list[dict[str, Any]],
+    errors: list[str],
 ) -> list[Candidate]:
     query = f'"{req.name}" {req.city} {req.state}'
     found: dict[str, Candidate] = {}
@@ -193,12 +252,20 @@ async def _discover(
         if candidate is not None:
             found.setdefault(normalize_url(candidate.url), candidate)
 
-    tavily_res, exa_res = await asyncio.gather(
+    # Public-profile sites get their own search, so broker pages can't crowd them out of
+    # one shared result list.
+    tavily_res, profile_res, exa_res = await asyncio.gather(
         tavily.search(
             query,
             purpose="Look for your listings on known people-search sites",
             include_domains=[b["domain"] for b in brokers],
             max_results=20,
+        ),
+        tavily.search(
+            query,
+            purpose="Look for public profiles of you, such as sports results pages",
+            include_domains=[p["domain"] for p in profiles],
+            max_results=10,
         ),
         exa.search(
             f"{req.name} {req.city} {req.state} people search profile",
@@ -212,6 +279,11 @@ async def _discover(
     else:
         for result in tavily_res.get("results", []):
             add(_from_tavily(result))
+    if isinstance(profile_res, Exception):
+        errors.append(f"Tavily search for public profiles failed: {profile_res}")
+    else:
+        for result in profile_res.get("results", []):
+            add(_from_tavily(result))
     if isinstance(exa_res, Exception):
         errors.append(f"Exa search failed: {exa_res}")
     else:
@@ -224,17 +296,22 @@ async def _discover(
         None,
     )
     if seed is not None:
-        await _discover_similar(seed, query, brokers, add, errors)
+        await _discover_similar(seed, query, brokers + profiles, add, errors)
+
+    def rank(c: Candidate) -> int:  # known brokers first, then public profiles, then the rest
+        site, kind = known_site(c.url, brokers, profiles)
+        return 2 if site is None else 1 if kind == "public_profile" else 0
 
     candidates = [c for c in found.values() if mentions(c, surname)]
-    candidates.sort(key=lambda c: broker_for(c.url, brokers) is None)  # known brokers first
+    candidates.sort(key=rank)
     return candidates[:MAX_CANDIDATES]
 
 
 async def _discover_similar(
     seed: Candidate, query: str, brokers: list[dict[str, Any]], add, errors: list[str]
 ) -> None:
-    """Find broker sites we don't list yet, then search them for this person."""
+    """Find broker sites we don't list yet, then search them for this person. `brokers` is
+    every site we already list (brokers and public profiles), so none of them count as new."""
     seed_broker = broker_for(seed.url, brokers)
     try:
         # Company-only query: the seed's domain, never its URL (which has the person's name).
@@ -285,6 +362,13 @@ async def _extract(candidates: list[Candidate], errors: list[str]) -> dict[str, 
     return texts
 
 
+def _fields_for(
+    candidate: Candidate, brokers: list[dict[str, Any]], profiles: list[dict[str, Any]]
+) -> tuple[str, ...]:
+    _, kind = known_site(candidate.url, brokers, profiles)
+    return prompts.PROFILE_FIELDS if kind == "public_profile" else prompts.LISTING_FIELDS
+
+
 async def _preflight() -> list[str]:
     """Problems that would make the whole scan pointless. Checked before any search."""
     settings = get_settings()
@@ -312,26 +396,34 @@ async def find_exposures(req: ScanRequest) -> tuple[list[Exposure], list[str]]:
         return [], errors
 
     brokers = load_json("brokers.json")
-    candidates = await _discover(req, brokers, errors)
+    profiles = load_json("public_profiles.json")
+    warming = asyncio.create_task(ollama.warm_up())  # load the model during the searches
+    try:
+        candidates = await _discover(req, brokers, profiles, errors)
+        texts = await _extract(candidates, errors) if candidates else {}
+    finally:
+        await warming
     if not candidates:
         return [], errors
 
-    texts = await _extract(candidates, errors)
     surname = last_name(req.name)
     jobs: list[tuple[Candidate, str, str]] = []
     for candidate in candidates:
         extracted = texts.get(normalize_url(candidate.url), "")
         if len(extracted) >= MIN_EXTRACT_CHARS and has_word(extracted, surname):
-            jobs.append((candidate, extracted, "extract"))
+            jobs.append((candidate, focus_text(extracted, surname), "extract"))
         elif candidate.snippet.strip():
             jobs.append((candidate, candidate.snippet, "snippet"))
 
     answers = await asyncio.gather(
         *(
             ollama.ask_json(
-                prompts.field_extraction_prompt(req.name, req.city, req.state, text),
+                prompts.field_extraction_prompt(
+                    req.name, req.city, req.state, text, fields=_fields_for(c, brokers, profiles)
+                ),
                 system=prompts.FIELD_EXTRACTION_SYSTEM,
                 purpose=f"Check on this laptop whether the {host_of(c.url)} page is you, and what it shows",
+                max_tokens=MAX_ANSWER_TOKENS,
             )
             for c, text, _ in jobs
         )
@@ -343,22 +435,29 @@ async def find_exposures(req: ScanRequest) -> tuple[list[Exposure], list[str]]:
         if not answer:
             unanswered += 1
             continue
-        broker = broker_for(candidate.url, brokers)
-        fields = parse_analysis(answer, text, known_broker=broker is not None, surname=surname)
+        site, kind = known_site(candidate.url, brokers, profiles)
+        fields = parse_analysis(
+            answer,
+            text,
+            known_broker=site is not None,
+            surname=surname,
+            allowed_fields=_fields_for(candidate, brokers, profiles),
+        )
         if fields is None:
             continue
         exposures.append(
             Exposure(
                 id=exposure_id(candidate.url),
-                broker=broker["name"] if broker else host_of(candidate.url),
-                broker_id=broker["id"] if broker else None,
+                broker=site["name"] if site else host_of(candidate.url),
+                broker_id=site["id"] if site else None,
+                source_kind=kind,
                 url=candidate.url,
                 title=candidate.title,
                 found_via=candidate.via,
                 text_source=text_source,
                 fields=fields,
                 published_date=candidate.published_date,
-                opt_out_url=broker.get("opt_out_url") if broker else None,
+                opt_out_url=site.get("opt_out_url") if site else None,
             )
         )
     if unanswered:

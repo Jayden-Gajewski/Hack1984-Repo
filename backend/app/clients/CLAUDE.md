@@ -27,6 +27,6 @@ Use REST, not vendor SDKs, so the outbound log shows the exact payload. Raise a 
 
 ## Ollama (`ollama.py`), local only
 
-- `POST {OLLAMA_URL}/api/generate` with `model`, `prompt`, `system`, `format: "json"`, `stream: false` and `options: {temperature: 0, num_ctx: 8192}`.
+- `POST {OLLAMA_URL}/api/generate` with `model`, `prompt`, `system`, `format: "json"`, `stream: false` and `options: {temperature: 0, num_ctx: 6144}` (one call at a time; see `NUM_CTX` in `ollama.py`).
 - `GET {OLLAMA_URL}/api/tags` tells you whether Ollama is running and the model is pulled.
 - Always pass `local=True` to `outbound.request`. `config.py` refuses to start if `OLLAMA_URL` isn't localhost. Don't remove that check.

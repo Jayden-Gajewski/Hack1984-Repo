@@ -59,6 +59,28 @@ def save_scan(scan_id: str, request: dict[str, Any], response: dict[str, Any]) -
         )
 
 
+def find_scan(name: str, city: str, state: str) -> tuple[str, dict[str, Any]] | None:
+    """(saved-at ISO timestamp, response) for the newest saved scan of this person, or None.
+    Matches name and city ignoring case and extra spaces, and the state code exactly."""
+    with connect() as conn:
+        row = conn.execute(
+            """
+            select created_at, response from scans
+            where lower(regexp_replace(trim(request->>'name'), '\\s+', ' ', 'g')) = %s
+              and lower(regexp_replace(trim(request->>'city'), '\\s+', ' ', 'g')) = %s
+              and upper(request->>'state') = %s
+            order by created_at desc
+            limit 1
+            """,
+            (_squash(name), _squash(city), state.upper()),
+        ).fetchone()
+    return (row[0].isoformat(), row[1]) if row else None
+
+
+def _squash(text: str) -> str:
+    return " ".join(text.split()).lower()
+
+
 def latest_scan() -> tuple[dict[str, Any], dict[str, Any]] | None:
     """Return (request, response) for the most recent saved scan, or None if there isn't one."""
     with connect() as conn:

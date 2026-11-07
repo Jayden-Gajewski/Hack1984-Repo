@@ -1,7 +1,7 @@
 // Display helpers: the wording rules from frontend/CLAUDE.md in one place, plus safe links.
 // Say "likely source", never "who leaked it". Every date shows its source.
 
-import type { DateSource, Tier } from "./api";
+import type { DateSource, SourceKind, Tier } from "./api";
 
 export const TIER_LABEL: Record<Tier, string> = {
   proven: "Proven",
@@ -21,6 +21,22 @@ export const DATE_SOURCE_LABEL: Record<DateSource, string> = {
   published_date: "published date",
   unknown: "unknown",
 };
+
+// How each kind of exposure is described on its card. Saved scans from before public
+// profiles existed have no source_kind; treat those as brokers.
+export const EXPOSURE_KIND = {
+  broker: { label: "Data broker", view: "View listing", draft: "Draft opt-out", page: "Opt-out page" },
+  public_profile: {
+    label: "Public profile",
+    view: "View profile",
+    draft: "Draft removal request",
+    page: "Removal page",
+  },
+} as const satisfies Record<SourceKind, { label: string; view: string; draft: string; page: string }>;
+
+export function exposureKind(kind: SourceKind | null | undefined) {
+  return EXPOSURE_KIND[kind ?? "broker"] ?? EXPOSURE_KIND.broker;
+}
 
 /** Links from scraped data only become clickable if they're plain http(s) URLs. */
 export function safeHref(url: string | null | undefined): string | undefined {

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { Draft } from "@/lib/api";
-import { safeHref, safeMailto } from "@/lib/display";
+import { exposureKind, safeHref, safeMailto } from "@/lib/display";
 
 interface Props {
   draft: Draft | null;
@@ -52,7 +52,7 @@ export default function DraftModal({ draft, loading, error, onClose }: Props) {
               {mailHref && <a href={mailHref}>{draft.send_to_email}</a>}
               {pageHref && (
                 <a href={pageHref} target="_blank" rel="noopener noreferrer">
-                  {draft.kind === "broker" ? "Opt-out page" : "Privacy page"}
+                  {draft.kind === "company" ? "Privacy page" : exposureKind(draft.kind).page}
                 </a>
               )}
               {!mailHref && !pageHref && <span className="muted">not found; use the listing or company site</span>}
