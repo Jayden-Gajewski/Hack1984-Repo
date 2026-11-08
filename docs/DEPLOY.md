@@ -25,11 +25,15 @@ https-only. Without `SITE_URL` the backend behaves exactly like the local app.
    deploy. Check `https://<your-service>.onrender.com/api/status`: it should show
    `"database": true` and `"public": true`.
 4. **Frontend.** In Vercel, choose Add New > Project and import this repo. Set Root Directory to
-   `frontend`, and add two environment variables:
-   - `BACKEND_URL` = `https://<your-service>.onrender.com`
+   `frontend` (Vercel then finds Next.js and its build settings on its own), and add three
+   environment variables:
+   - `BACKEND_URL` = `https://<your-service>.onrender.com`. The build stops if it's missing.
    - `SITE_URL` = the address from step 1
+   - `NEXT_TELEMETRY_DISABLED` = `1`, so Next.js doesn't report the build to Vercel's telemetry.
 
-   Deploy. If you change `BACKEND_URL` later, redeploy: Next.js reads it at build time.
+   Deploy. If you change `BACKEND_URL` later, redeploy: Next.js reads it at build time. Leave
+   Vercel's Web Analytics and Speed Insights off: Dossier has no analytics, and the outbound log
+   can't show what they send.
 5. **Sign up first.** The first account on a new database becomes the admin (Account page:
    accounts, roles, reset codes). Create yours before you share the link.
 
@@ -54,6 +58,11 @@ https-only. Without `SITE_URL` the backend behaves exactly like the local app.
   minute. A paid instance stays awake.
 - Run one instance only. Each account's current scan lives in that process's memory (after a
   restart the app loads the saved scan again).
+- **Vercel waits 2 minutes for the backend**, for any request, and that can't be raised. A scan
+  that takes longer shows "The server didn't answer in time", but it keeps running on the backend
+  and is saved: scanning the same person again joins it, or loads it once it's done, without
+  spending another search. A sleeping free Render instance can use up most of those 2 minutes
+  waking, so open the site (or `/api/status`) a minute before a demo.
 - Logins work on the `SITE_URL` address only. Vercel preview deployments have other addresses, so
   the backend refuses their changes.
 - This changes some of the project rules in `CLAUDE.md` (hosted database and accounts, a hosted

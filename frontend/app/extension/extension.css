@@ -67,14 +67,10 @@
 .ext-stage { display: flex; justify-content: flex-end; padding: 0 var(--space-3); }
 .ext-popup {
   width: min(100%, 380px);
-  max-height: 470px;
   overflow: hidden;
   border: 1px solid var(--border-strong);
   border-top: 0;
   border-radius: 0 0 var(--radius) var(--radius);
-  /* The popup is long: show its verdict and risks, then let it fade out. */
-  mask-image: linear-gradient(#000 70%, transparent);
-  -webkit-mask-image: linear-gradient(#000 70%, transparent);
   transform-origin: top right;
   animation: ext-drop var(--dur-slow) var(--ease-out) 500ms both; /* once the window (.hero-visual) has risen */
 }
@@ -150,7 +146,6 @@
 }
 @media (max-width: 560px) {
   .ext-shows { grid-template-columns: minmax(0, 1fr); gap: var(--space-8); }
-  .ext-popup { max-height: 380px; }
   /* The signed-out note wraps here: keep room for it so nothing below jumps when the check returns. */
   .ext-get-note { min-height: calc(2 * var(--leading-sm)); }
 }

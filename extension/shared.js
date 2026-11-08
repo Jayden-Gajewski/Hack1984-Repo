@@ -124,6 +124,62 @@ export async function cachedResult(origin) {
   return (await chrome.storage.session.get(key))[key] ?? null;
 }
 
+/**
+ * Where else Dossier saw each tracker company: the other sites with a result in session storage,
+ * which are the sites you opened since the browser started (while "Check every site I visit" was
+ * on, or whose popup you opened). Read here and shown in the popup; it's never sent anywhere.
+ * Resolves to {byCompany, byTracker}: Maps from a company or tracker name to a Set of sites.
+ */
+export async function sightings(origin) {
+  const here = siteKey(origin);
+  const byCompany = new Map();
+  const byTracker = new Map();
+  const add = (map, name, site) => {
+    if (typeof name !== "string") return;
+    if (!map.has(name)) map.set(name, new Set());
+    map.get(name).add(site);
+  };
+  for (const [key, result] of Object.entries(await chrome.storage.session.get(null))) {
+    if (!key.startsWith("site:") || key === here || !Array.isArray(result?.trackers)) continue;
+    const site = key.slice("site:".length);
+    for (const tracker of result.trackers) {
+      add(byCompany, tracker?.company, site);
+      add(byTracker, tracker?.name, site);
+    }
+  }
+  return { byCompany, byTracker };
+}
+
+/**
+ * The sites with a result in session storage, newest check first, for the popup's Sites view.
+ * Read here and shown in the popup; it's never sent anywhere. Resolves to [{site, result}].
+ */
+export async function visitedSites() {
+  return Object.entries(await chrome.storage.session.get(null))
+    .filter(([key, result]) => key.startsWith("site:") && result && typeof result === "object")
+    .map(([key, result]) => ({ site: key.slice("site:".length), result }))
+    .sort((a, b) => String(b.result.checked_at ?? "").localeCompare(String(a.result.checked_at ?? "")));
+}
+
+/**
+ * "Forget the sites I've visited": every site result and page report in session storage, then the
+ * backend's results and its log entries for those sites. Resolves to how many sites this browser
+ * held and what the backend did: "cleared", "offline" or "failed" (with a detail).
+ */
+export async function forgetSites() {
+  const keys = Object.keys(await chrome.storage.session.get(null)).filter((key) => /^(site|tab):/.test(key));
+  await chrome.storage.session.remove(keys);
+  const sites = keys.filter((key) => key.startsWith("site:")).length;
+  let res;
+  try {
+    res = await fetch(`${BACKEND}/api/site-policy`, { method: "DELETE" });
+  } catch {
+    return { sites, backend: "offline" };
+  }
+  if (!res.ok) return { sites, backend: "failed", detail: `The backend answered HTTP ${res.status}.` };
+  return { sites, backend: "cleared" }; // not the backend's own counts: they'd overwrite this browser's
+}
+
 // Only real concerns get a badge. Finding nothing isn't proof a site is safe, so it shows no
 // green "OK", just the tooltip.
 const BADGES = {

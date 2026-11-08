@@ -1,14 +1,14 @@
 # Frontend (UI & demo)
 
-Next.js (App Router) with React and TypeScript, at `http://localhost:3000`. Call the backend through the `api` object in `lib/api.ts`, which uses relative `/api/...` URLs; `next.config.ts` proxies them to FastAPI on `:8000` (routes are listed in `backend/CLAUDE.md`). The types in `lib/api.ts` mirror `backend/app/models.py`, so change them together. No other UI frameworks or component libraries.
+Next.js (App Router) with React and TypeScript, at `http://localhost:3000` on a laptop and on Vercel for the public site (`docs/DEPLOY.md`). Call the backend through the `api` object in `lib/api.ts`, which uses relative `/api/...` URLs; `next.config.ts` proxies them to FastAPI (`BACKEND_URL`: `:8000` locally, the Render backend's https address on Vercel) (routes are listed in `backend/CLAUDE.md`). The types in `lib/api.ts` mirror `backend/app/models.py`, so change them together. No other UI frameworks or component libraries.
 
-## Nothing leaves the laptop
+## Nothing leaves without a log entry
 
-The outbound log claims to show everything that left the laptop, so it has to be true.
+The outbound log claims to show every request Dossier sent, so it has to be true, on a laptop and on Vercel.
 
-- **No external calls from Next.js.** Route handlers, server components and server actions only call the FastAPI backend. Don't add Next.js API routes that call Exa, Tavily or any other service.
+- **No external calls from Next.js.** Route handlers, server components and server actions only call the FastAPI backend. Don't add Next.js API routes that call Exa, Tavily, Gemini or any other service.
 - **No web fonts from third parties.** Use a system font stack, or `next/font/local` with files checked into the repo. Never use `next/font/google`, a Google Fonts `<link>` or `@import`, even if a design skill suggests it.
-- **No third-party CDNs, analytics or telemetry.** No `@vercel/analytics`, no tracking scripts, and run `npx next telemetry disable` once per laptop.
+- **No third-party CDNs, analytics or telemetry.** No `@vercel/analytics` or Speed Insights, no tracking scripts. Run `npx next telemetry disable` once per laptop, and set `NEXT_TELEMETRY_DISABLED=1` on Vercel.
 - **No remote images.** Don't render broker logos or favicons from external URLs; that leaks the scan to those sites. Use text or local assets.
 - **Demo from `npm run demo`.** It's a production build, so it skips the dev server's version check against npm.
 - Most interactive UI is client-side. Mark components that poll or hold state with `"use client"`.
@@ -38,7 +38,7 @@ Everything shown on screen (page titles, field quotes, policy quotes, email subj
   - Name suggestions come from `GET /api/companies` only. Never wire this form to `POST /api/companies`, which searches.
 - **Outbound log panel:** always visible as a sidebar, polling `/api/outbound-log` every 1 to 2 seconds.
   - Each row: service, purpose, method + URL, status and time. Expand a row to see the exact body sent (keys are already redacted by the backend).
-  - Show counts per service, and include a toggle for local Ollama calls. They're hidden by default and labeled "stayed on this machine".
+  - Show counts per service. Gemini calls are outbound like the rest (service `gemini`), with the page text they carried. The "stayed on this machine" toggle only appears if the backend ever logs a `local` call again; nothing does since the switch from Ollama.
 
 - **Threat monitor (`/app/monitor`):** a separate section, linked from the app bar.
   - A monitor panel up top: a radar scope (one dot per open threat, coloured by severity), one plain sentence about what's going on, and a live scan feed while it scans.
@@ -63,4 +63,4 @@ Everything shown on screen (page titles, field quotes, policy quotes, email subj
 
 ## Demo
 
-The demo is the 3-minute script in the root `CLAUDE.md`. It ends on the outbound log, so that panel should look good full-screen. Make sure each step works without a page reload, and have loading states (scans take a while with a local LLM). Keep a fallback in case the venue Wi-Fi fails: the Scan tab opens on the account's last saved scan from local Postgres (`GET /api/scans/latest`), labeled "Nothing was searched", with no click needed. Cards are sorted most urgent first (risk, then evidence tier).
+The demo is the 3-minute script in the root `CLAUDE.md`. It ends on the outbound log, so that panel should look good full-screen. Make sure each step works without a page reload, and have loading states (a scan searches, then sends each page to Gemini, so it takes a while; on Vercel a request is cut off after 2 minutes, but the scan keeps going and scanning again loads it). Keep a fallback in case the venue Wi-Fi fails: the Scan tab opens on the account's last saved scan from Postgres (`GET /api/scans/latest`), labeled "Nothing was searched", with no click needed. Cards are sorted most urgent first (risk, then evidence tier).

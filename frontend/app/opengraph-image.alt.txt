@@ -1,1 +1,1 @@
-Dossier: "Find out where your data is exposed. Then take it down." Beside it, a sample outbound log of four requests to Tavily, Exa and the Wayback Machine, and one local Ollama call marked as staying on the laptop.
+Dossier: "Find out where your data is exposed. Then take it down." Beside it, a sample outbound log of five requests: searches to Tavily and Exa, a Tavily page extract, a Wayback Machine lookup, and a Google AI call carrying page text.

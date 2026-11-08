@@ -465,7 +465,7 @@ async def _preflight() -> list[str]:
         )
     if not gemini.ready():
         problems.append(
-            "Gemini isn't set up, so nothing was searched. Add GEMINI_API_KEY to .env at the repo root, then try again."
+            "The AI model isn't set up, so nothing was searched. Add its API key to .env at the repo root, then try again."
         )
     return problems
 
@@ -504,7 +504,7 @@ async def find_exposures(req: ScanRequest) -> tuple[list[Exposure], list[str]]:
                     req.name, req.city, req.state, text, fields=_fields_for(c, brokers, profiles)
                 ),
                 system=prompts.FIELD_EXTRACTION_SYSTEM,
-                purpose=f"Ask Gemini whether the {host_of(c.url)} page is you, and what it shows",
+                purpose=f"Ask the AI whether the {host_of(c.url)} page is you, and what it shows",
             )
             for c, text, _ in jobs
         )
@@ -543,6 +543,6 @@ async def find_exposures(req: ScanRequest) -> tuple[list[Exposure], list[str]]:
         )
     if unanswered:
         errors.append(
-            f"Gemini didn't answer for {unanswered} of {len(jobs)} pages, so they weren't checked."
+            f"The AI didn't answer for {unanswered} of {len(jobs)} pages, so they weren't checked."
         )
     return merge_by_site(exposures), errors

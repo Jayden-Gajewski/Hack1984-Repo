@@ -147,8 +147,8 @@ export default function FilmPlayer() {
         site after site. Where did they get it? Dossier: Find it, by scanning people-search sites for your name and
         city. Trace it, by ranking the likely source with the evidence behind it: a breach notice, a privacy policy
         and an email alias all point to one sample company. Take it down, by drafting opt-out requests and re-scanning
-        until the listings are removed. All without handing your data to yet another company: the AI runs on your
-        laptop, every request is logged, and searches use your name and city only.
+        until the listings are removed. Every request is logged, including what the AI reads, and searches use your name and city
+        only.
       </p>
     </div>
   );

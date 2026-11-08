@@ -95,7 +95,7 @@ def test_explain_reports_a_silent_llm(monkeypatch):
         return {}
 
     monkeypatch.setattr(analysis.gemini, "ask_json", ask_json)
-    with pytest.raises(RuntimeError, match="Gemini didn't answer"):
+    with pytest.raises(RuntimeError, match="The AI didn't answer"):
         asyncio.run(analysis.explain(FACTS, level="high", level_reasons=REASONS, involvement="unconfirmed", involvement_reason="x"))
 
 

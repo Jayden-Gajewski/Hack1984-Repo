@@ -22,7 +22,7 @@ export default function StatusLine() {
     );
 
   const llmOk = status.ollama_running; // GEMINI_API_KEY is set (the field is named from before Gemini)
-  const llm = llmOk ? `Gemini ready (${status.ollama_model})` : "Gemini not set up (add GEMINI_API_KEY to .env)";
+  const llm = llmOk ? "AI ready" : "AI not set up (add its API key to .env)";
   const missing = Object.entries(status.keys)
     .filter(([, set]) => !set)
     .map(([name]) => name);

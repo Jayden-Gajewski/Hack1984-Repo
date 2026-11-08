@@ -359,7 +359,7 @@ function AliasRow({ alias: a, isNew, onChange }: RowProps) {
 
           <div className="row alias-actions">
             <button type="button" onClick={investigate} disabled={investigating} aria-busy={investigating || undefined}>
-              <SwapLabel on={investigating} idle="Investigate" active={`Asking Gemini… ${elapsed} s`} />
+              <SwapLabel on={investigating} idle="Investigate" active={`Asking the AI… ${elapsed} s`} />
             </button>
             <button type="button" className="secondary" onClick={setStatus} disabled={saving !== null} aria-busy={saving === "status" || undefined}>
               <SwapLabel on={saving === "status"} idle={off ? "Turn on" : "Turn off"} active="Saving…" />
@@ -367,7 +367,7 @@ function AliasRow({ alias: a, isNew, onChange }: RowProps) {
           </div>
           {investigating && (
             <p className="muted small" role="status">
-              Gemini gets the sender domains and subjects, never your alias address. It usually answers in seconds.
+              The AI gets the sender domains and subjects, never your alias address. It usually answers in seconds.
             </p>
           )}
 
@@ -425,7 +425,7 @@ function InvestigationResult({ result }: { result: AliasInvestigation }) {
         <>
           <h4>{ALIAS_CATEGORY_LABEL[result.category]}</h4>
           <p>{result.explanation}</p>
-          <p className="muted small">Explained by Gemini. Checked against the facts above.</p>
+          <p className="muted small">Explained by AI. Checked against the facts above.</p>
         </>
       )}
       {result.errors.map((e) => (

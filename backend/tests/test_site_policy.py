@@ -11,7 +11,7 @@ import pytest
 from app import outbound, site_policy
 from app.clients import gemini, website
 from app.companies import registrable
-from app.models import PolicyClause, SitePolicyRequest
+from app.models import AdSellers, BrokerMatch, PolicyClause, SitePolicyRequest
 from app.stages import s4_policy as s4
 
 ORIGIN = "https://www.shopco.example"
@@ -422,7 +422,7 @@ def test_trackers_and_form_fields_are_judged_without_any_request(monkeypatch):
     ]  # the site's own cdn.shopco.example isn't a tracker
     risks = {r.title: r for r in res.risks}
     assert risks["It loads a session-recording tool"].evidence == ["static.hotjar.com"]
-    assert risks["It loads a session-recording tool"].level == "high"
+    assert risks["It loads a session-recording tool"].level == "medium"  # what it can do, not what it did
     assert "It sends your visit to ad companies" in risks
     assert risks["It asks for your Social Security number"].evidence == ["Social Security number field"]
     assert outbound.get_log() == []  # nothing was fetched for any of it
@@ -631,6 +631,145 @@ def test_overlong_links_and_hosts_are_dropped_not_fatal():
         opt_out_url="https://shopco.example/" + "b" * 3000, third_party_hosts=["a" * 300 + ".example", "cdn.example.com"],
     )
     assert (req.policy_urls, req.opt_out_url, req.third_party_hosts) == ([POLICY_URL], None, ["cdn.example.com"])
+
+
+# ---------- how Dossier knows, promises that don't add up, and forgetting ----------
+
+# A policy that promises not to sell and says nothing about selling otherwise.
+PROMISE_POLICY = "\n".join([
+    "ShopCo Privacy Policy", FILLER, FILLER,
+    "Information we collect",
+    "We collect personal information such as your name and email address when you order.",
+    "We share your information with service providers who help us run the store.",
+    "We disclose personal information to our payment processor to complete your order.",
+    "We do not sell your personal information to anyone, for money or anything else.",
+])
+
+
+def test_every_risk_says_how_dossier_knows(monkeypatch):
+    _use(monkeypatch)
+    res = _check(
+        page_text=website.html_to_text(POLICY_HTML), policy_urls=[POLICY_URL], opt_out_url=f"{ORIGIN}/do-not-sell",
+        third_party_hosts=["static.hotjar.com", "connect.facebook.net", "rlcdn.com", "platform.twitter.com"],
+        asks_for=["email", "ssn"], insecure_fields=["ssn"],
+    )
+    without_policy = site_policy.page_risks(
+        "no_policy", res.trackers, ["card"], [], BrokerMatch(name="PeopleFinder"),
+        AdSellers(status="done", url="https://shopco.example/ads.txt", count=3, companies=["Google"]),
+    )
+    risks = res.risks + without_policy
+    assert len({r.title for r in risks}) >= 12  # policy risks, page risks and the no-policy branch
+    assert all(r.how for r in risks), [r.title for r in risks if not r.how]
+
+
+def test_a_promise_not_to_sell_is_weighed_against_the_ad_tech_on_the_page(monkeypatch):
+    _use(monkeypatch)
+    promise = lambda res: [r for r in res.risks if r.title.startswith("It says it doesn't sell")]  # noqa: E731
+    res = _check(page_text=PROMISE_POLICY, policy_urls=[POLICY_URL], third_party_hosts=["static.criteo.net", "rlcdn.com"])
+    assert res.no_sale_quote == "We do not sell your personal information to anyone, for money or anything else."
+    [risk] = promise(res)
+    assert risk.title == "It says it doesn't sell your data, but ad companies and data brokers see this visit"
+    assert (risk.level, risk.quote) == ("medium", res.no_sale_quote)
+    assert risk.evidence == ["rlcdn.com", "static.criteo.net"]  # data brokers first, like the tracker list
+    assert "LiveRamp and Criteo" in risk.detail and "can't see what those tags send" in risk.detail
+    assert "leak" not in res.model_dump_json().lower()
+    # Analytics alone isn't ad tech, and a policy that also says it sells has no promise to weigh.
+    analytics = _check(page_text=PROMISE_POLICY, policy_urls=[POLICY_URL], third_party_hosts=["www.google-analytics.com"])
+    sells_too = _check(
+        page_text=website.html_to_text(POLICY_HTML), policy_urls=[POLICY_URL], third_party_hosts=["connect.facebook.net"]
+    )
+    assert sells_too.no_sale_quote and promise(analytics) == promise(sells_too) == []
+
+
+def test_forgetting_drops_every_site_and_only_the_extensions_log_entries(client, monkeypatch):
+    _use(monkeypatch, lambda r: httpx.Response(200, json={}) if r.url.host == "api.exa.ai" else fake_web(r))
+
+    async def run():
+        await outbound.request(
+            "exa", "POST", "https://api.exa.ai/search", purpose="Stage 1: find listings", json_body={"query": "Jane Example"}
+        )
+        await site_policy.check_site(_req(policy_urls=[POLICY_URL], deep=True))  # the policy, ads.txt and Gemini
+        await site_policy._cache["shopco.example"].task
+
+    asyncio.run(run())
+    assert {e.service for e in outbound.get_log()} == {"exa", "website", "gemini"}
+    # The extension's entries name the site, so all of them carry the prefix forgetting looks for.
+    assert all(e.purpose.startswith(site_policy.LOG_PREFIX) for e in outbound.get_log() if e.service != "exa")
+
+    from_page = client.delete("/api/site-policy", headers={"Origin": "https://evil.example"})
+    assert from_page.status_code == 403 and "shopco.example" in site_policy._cache
+
+    res = client.delete("/api/site-policy", headers={"Origin": "chrome-extension://abcdef"})
+    assert res.status_code == 200
+    assert res.json()["sites"] == 1 and res.json()["log_entries"] >= 3
+    assert not site_policy._cache
+    assert [e.service for e in outbound.get_log()] == ["exa"]  # a scan's own requests stay in the log
+
+
+# ---------- denials, headings and how strict the levels are ----------
+
+# Built the way large sites' policies are: curly apostrophes, a denial that names data brokers, the
+# HTML source wrapped mid-sentence, account linking the user asks for, and a heading whose section
+# holds the real sentence.
+WRAPPED_POLICY_HTML = f"""<html><body><main><h1>ShopCo Privacy Policy</h1><p>{FILLER}</p>
+<h2>We use personal data to run ShopCo.</h2>
+<p>Any data we collect is used primarily to provide our Services. We don’t sell your personal data to third
+        parties, including data brokers.</p>
+<h2>Information We Collect</h2>
+<p>We collect personal information such as your email address when you create an account.</p>
+<h3>Information Collected from Other Sources</h3>
+<p>We may receive information about you from advertising partners and combine it with
+        information you give us, using a hash of your email address.</p>
+<p>We don’t buy information about you from data brokers.</p>
+<h2>Linked Services</h2>
+<p>If you link your ShopCo account with a third-party service, ShopCo will share the information you
+        authorize with that third-party service.</p>
+<p>We disclose personal information to our payment processor to complete your order.</p>
+</main></body></html>"""
+
+
+def test_source_line_breaks_are_spaces_like_in_a_browser():
+    text = website.html_to_text("<p>We don’t sell your data to third\n    parties.</p><pre>keep\nthese</pre>")
+    assert text.splitlines() == ["We don’t sell your data to third parties.", "keep", "these"]
+
+
+def test_a_denial_is_never_cited_as_evidence_of_what_it_denies(monkeypatch):
+    _use(monkeypatch)
+    res = _check(policy_urls=[POLICY_URL], page_text=website.html_to_text(WRAPPED_POLICY_HTML))
+    denial = "We don’t sell your personal data to third parties, including data brokers."
+    assert res.status == "ok" and res.no_sale_quote == denial
+    assert res.clauses == []  # not the denial, and not the account linking the user asks for
+    assert not any(r.quote == denial for r in res.risks)
+    assert res.risk == "medium"  # it does get data from advertisers; nothing it admits is high
+    # The LLM can pick the denial too: the same rule drops it.
+    picked = s4.parse_clauses({"clauses": [{"sentence": 1, "category": "data_broker"}]}, [denial], "shopco")
+    assert site_policy.not_legal_only(picked) == []
+    assert site_policy.not_legal_only([PolicyClause(category="data_broker", quote=denial, explanation="x")]) == []
+
+
+def test_a_heading_gives_way_to_the_sentence_under_it_and_denials_dont_count():
+    collected = site_policy.collected_data(website.html_to_text(WRAPPED_POLICY_HTML), "shopco")
+    from_others = next(c for c in collected if c.category == "from_others")
+    assert from_others.quote.startswith("We may receive information about you from advertising partners")
+    assert "data brokers" not in from_others.quote  # "We don’t buy ... from data brokers" is a denial
+    risk = next(r for r in site_policy.risks_for(collected, [], None) if r.title.startswith("It gets data"))
+    assert risk.level == "medium"  # partners, not brokers
+
+
+def test_high_is_kept_for_what_the_company_admits():
+    trackers = site_policy.match_trackers(["static.hotjar.com", "rlcdn.com", "connect.facebook.net"], "shopco.example")
+    ads = AdSellers(status="done", url="https://shopco.example/ads.txt", count=40, companies=["Google"])
+    page = site_policy.page_risks("ok", trackers, ["email"], [], None, ads)
+    assert {r.level for r in page} <= {"medium", "low"}  # tags it loads say what they can do, not what they did
+    health = site_policy.collected_data("Information we collect\nYour health information and medical history.")
+    ad_clause = PolicyClause(category="advertising", quote="We share your data with advertising partners.", explanation="x")
+    sale_clause = PolicyClause(category="sale", quote="We sell your personal information.", explanation="x")
+    level = lambda clauses: next(  # noqa: E731
+        r.level for r in site_policy.risks_for(health, clauses, None) if r.title == "It collects sensitive data"
+    )
+    assert (level([ad_clause]), level([sale_clause])) == ("medium", "high")
+    opt_out = site_policy.risks_for([], [], "https://shopco.example/do-not-sell")
+    assert [r.level for r in opt_out] == ["low"]  # offering an opt-out isn't itself a risk
 
 
 # ---------- the download on the website ----------

@@ -333,3 +333,16 @@ def clear_log(user_id: str | None = None) -> None:
         kept = [e for e in entries if user_id is not None and e.user_id != user_id]
         entries.clear()
         entries.extend(kept)
+
+
+def drop_entries(purpose_prefix: str) -> int:
+    """Remove the entries whose purpose starts with purpose_prefix, from both logs, and return how
+    many. The browser extension's "Forget the sites I've visited" uses it: those entries name the
+    sites you opened. It only forgets the record here; what was sent was still sent."""
+    dropped = 0
+    for entries in (_log, _site_log):
+        keep = [e for e in entries if not e.purpose.startswith(purpose_prefix)]
+        dropped += len(entries) - len(keep)
+        entries.clear()
+        entries.extend(keep)
+    return dropped

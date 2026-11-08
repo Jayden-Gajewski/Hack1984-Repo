@@ -200,7 +200,7 @@ def test_scan_sends_only_name_and_city_to_search_and_page_text_only_to_gemini(cl
                 assert "Example" not in entry.body["query"]  # company-only: no name, no page URL
             else:
                 assert "Jane Example" in entry.body["query"]
-    assert sum(e.purpose.startswith("Ask Gemini whether") for e in calls) == 5  # one per candidate
+    assert sum(e.purpose.startswith("Ask the AI whether") for e in calls) == 5  # one per candidate
     for entry in calls:  # the key is redacted in the log, and never in the URL
         assert entry.headers["x-goog-api-key"] == "REDACTED" and "test-gemini-key" not in entry.url
 
@@ -223,7 +223,7 @@ def test_scan_stops_before_searching_when_nothing_is_set_up(client, monkeypatch)
 
     assert body["exposures"] == []
     assert any("No search API keys" in e for e in body["errors"])
-    assert any("Gemini isn't set up" in e for e in body["errors"])
+    assert any("AI model isn't set up" in e for e in body["errors"])
     assert not outbound.get_log()  # nothing was sent anywhere
 
 

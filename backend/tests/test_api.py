@@ -159,3 +159,115 @@ def test_scan_rejects_digits_and_bad_state(client, person):
 
 def test_requests_for_other_hosts_are_refused(client):
     assert client.get("/api/status", headers={"Host": "attacker.example"}).status_code == 400
+
+
+# ---------- A scan outlives its request ----------
+# Vercel stops waiting for the backend after 120 seconds and a browser tab can close mid-scan.
+# Either cancels the request; the scan must still finish and be saved, and asking again for the
+# same person must join it instead of paying for the searches twice.
+
+def _slow_scan(monkeypatch, started, release, saves):
+    import asyncio
+
+    exposure = Exposure(id="e1", broker="ExampleBroker", url="https://people.example/jane")
+
+    async def find(req):
+        started.append(req.name)
+        await release.wait()
+        return [exposure], []
+
+    async def date(items):
+        return items, []
+
+    monkeypatch.setattr(main.s1_exposures, "find_exposures", find)
+    monkeypatch.setattr(main.s2_dating, "date_exposures", date)
+    monkeypatch.setattr(main.db, "save_scan", lambda *args: saves.append(args))
+    monkeypatch.setattr(main.db, "find_scan", lambda *args: None)
+    monkeypatch.setattr(main, "_sessions", {})
+    monkeypatch.setattr(main, "_running_scans", {})
+
+
+def _as_account(coro_fn):
+    """Run coro_fn() signed in as the test account, the way require_session sets it."""
+    from app import auth
+    from tests.conftest import TEST_USER
+
+    async def wrapped():
+        token = auth.CURRENT_USER.set(TEST_USER)
+        try:
+            return await coro_fn()
+        finally:
+            auth.CURRENT_USER.reset(token)
+
+    return wrapped()
+
+
+def test_a_dropped_scan_request_still_finishes_and_saves(monkeypatch):
+    import asyncio
+
+    from app.models import ScanRequest
+
+    started, saves = [], []
+
+    async def run():
+        release = asyncio.Event()
+        _slow_scan(monkeypatch, started, release, saves)
+        request = asyncio.create_task(main.scan(ScanRequest(**PERSON)))
+        while not started:
+            await asyncio.sleep(0)
+        request.cancel()  # Vercel gave up, or the tab closed
+        with pytest.raises(asyncio.CancelledError):
+            await request
+        release.set()
+        while main._running_scans:
+            await asyncio.sleep(0)
+
+    asyncio.run(_as_account(run))
+    assert len(saves) == 1
+    assert saves[0][1]["name"] == "Jane Example"
+    assert _current().exposures[0].id == "e1"
+
+
+def test_asking_again_joins_the_running_scan(monkeypatch):
+    import asyncio
+
+    from app.models import ScanRequest
+
+    started, saves = [], []
+
+    async def run():
+        release = asyncio.Event()
+        _slow_scan(monkeypatch, started, release, saves)
+        first = asyncio.create_task(main.scan(ScanRequest(**PERSON)))
+        while not started:
+            await asyncio.sleep(0)
+        again = asyncio.create_task(main.scan(ScanRequest(**{**PERSON, "name": "jane example", "refresh": True})))
+        await asyncio.sleep(0)
+        release.set()
+        return await asyncio.gather(first, again)
+
+    one, two = asyncio.run(_as_account(run))
+    assert started == ["Jane Example"]  # one search, not two
+    assert len(saves) == 1
+    assert one.scan_id == two.scan_id
+    assert main._running_scans == {}
+
+
+def test_a_new_scan_runs_after_the_last_one_finished(monkeypatch):
+    import asyncio
+
+    from app.models import ScanRequest
+
+    started, saves = [], []
+
+    async def run():
+        release = asyncio.Event()
+        _slow_scan(monkeypatch, started, release, saves)
+        release.set()
+        first = await main.scan(ScanRequest(**PERSON))
+        second = await main.scan(ScanRequest(**{**PERSON, "refresh": True}))
+        return first, second
+
+    first, second = asyncio.run(_as_account(run))
+    assert len(started) == 2
+    assert first.scan_id != second.scan_id

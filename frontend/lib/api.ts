@@ -508,7 +508,11 @@ function errorMessage(data: unknown, status: number): string {
     if (messages.length > 0) return messages.join(" ");
   }
   if (data === null && status >= 500) {
-    return "The backend didn't answer. Is it running? (cd backend && uvicorn app.main:app --reload)";
+    const local = typeof window === "undefined" || ["localhost", "127.0.0.1"].includes(window.location.hostname);
+    return local
+      ? "The backend didn't answer. Is it running? (cd backend && uvicorn app.main:app --reload)"
+      : // The public site: the backend was asleep or slow, or Vercel stopped waiting after 2 minutes.
+        "The server didn't answer in time. Try again in a minute: a scan that was cut off keeps running, and scanning again loads it.";
   }
   return `Request failed (${status}).`;
 }

@@ -432,7 +432,8 @@ class SiteRisk(BaseModel):
     title: str  # "It may sell your personal information"
     detail: str
     quote: str | None = None  # verbatim evidence from the policy; null when the evidence is the page itself
-    evidence: list[str] = []  # what was seen on the page instead: hostnames it loaded, fields it asks for
+    evidence: list[str] = []  # what was seen on the page: hostnames it loaded, fields it asks for
+    how: str = ""  # how Dossier knows, in a sentence or two: the popup's "How Dossier knows" line
 
 
 class TrackerFound(BaseModel):
