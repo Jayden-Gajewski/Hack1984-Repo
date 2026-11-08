@@ -10,6 +10,7 @@ import {
   safeHref,
 } from "@/lib/display";
 import CompanyPicker from "./CompanyPicker";
+import SwapLabel from "./SwapLabel";
 
 interface Props {
   onChecked: () => void; // refresh the likely sources on the cards
@@ -72,8 +73,8 @@ export default function AccountsPanel({ onChecked, onDraft, canDraft }: Props) {
         <p className="muted">Add the companies you have accounts with. We search with the company name only.</p>
         <CompanyPicker companies={companies} selected={[...picked]} onAdd={add} onRemove={remove} onCreate={create} />
         <div className="row mt">
-          <button type="button" onClick={check} disabled={picked.size === 0 || loading}>
-            {loading ? "Checking…" : "Check breaches & policies"}
+          <button type="button" onClick={check} disabled={picked.size === 0 || loading} aria-busy={loading || undefined}>
+            <SwapLabel on={loading} idle="Check breaches & policies" active="Checking…" />
           </button>
           <span className="muted small" role="status">
             {loading

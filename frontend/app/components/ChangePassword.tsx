@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { api } from "@/lib/api";
+import SwapLabel from "./SwapLabel";
 
 // The signed-in user changes their own password. The backend ends their other sessions; this one
 // stays signed in.
@@ -52,8 +53,8 @@ export default function ChangePassword() {
           New password again
           <input name="confirm" type="password" autoComplete="new-password" required minLength={8} maxLength={256} />
         </label>
-        <button type="submit" disabled={busy}>
-          {busy ? "Saving…" : "Change password"}
+        <button type="submit" disabled={busy} aria-busy={busy || undefined}>
+          <SwapLabel on={busy} idle="Change password" active="Saving…" />
         </button>
       </form>
       {error && (

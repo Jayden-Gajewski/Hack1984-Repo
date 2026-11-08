@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { api, type MonitorConfig, type MonitoredEmail } from "@/lib/api";
 import { localTime, timeAgo } from "@/lib/display";
+import SwapLabel from "./SwapLabel";
 
 interface Props {
   emails: MonitoredEmail[];
@@ -100,8 +101,8 @@ export default function MonitoredEmails({ emails, config, onChanged }: Props) {
               placeholder="you@example.com"
             />
           </label>
-          <button type="submit" disabled={busy === "add" || !address.trim()}>
-            {busy === "add" ? "Adding…" : config.smtp ? "Add and send code" : "Add"}
+          <button type="submit" disabled={busy === "add" || !address.trim()} aria-busy={busy === "add" || undefined}>
+            <SwapLabel on={busy === "add"} idle={config.smtp ? "Add and send code" : "Add"} active="Adding…" />
           </button>
         </form>
         <div aria-live="polite">
@@ -157,8 +158,9 @@ export default function MonitoredEmails({ emails, config, onChanged }: Props) {
                         type="submit"
                         className="secondary"
                         disabled={!config.smtp || (codes[e.id] ?? "").length !== 6 || busy === `verify-${e.id}`}
+                        aria-busy={busy === `verify-${e.id}` || undefined}
                       >
-                        {busy === `verify-${e.id}` ? "Checking…" : "Verify"}
+                        <SwapLabel on={busy === `verify-${e.id}`} idle="Verify" active="Checking…" />
                       </button>
                       <button
                         type="button"

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api, type Status } from "@/lib/api";
+import Skeleton from "./Skeleton";
 
 // Tells a teammate what's missing from their setup before they hit Scan, one indicator per part.
 export default function StatusLine() {
@@ -13,7 +14,12 @@ export default function StatusLine() {
   }, []);
 
   if (error) return <p className="error">{error}</p>;
-  if (!status) return <p className="status-line">Checking setup…</p>;
+  if (!status)
+    return (
+      <div className="status-line">
+        <Skeleton label="Checking setup" shape="line" rows={1} />
+      </div>
+    );
 
   const llmOk = status.ollama_running && status.model_pulled;
   const llm = !status.ollama_running

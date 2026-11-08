@@ -2,6 +2,7 @@
 
 import { useId, useState, type FormEvent } from "react";
 import type { Company, TrackedCompanyInput } from "@/lib/api";
+import SwapLabel from "./SwapLabel";
 
 interface Props {
   title: string;
@@ -101,8 +102,8 @@ export default function CompanyForm({ title, initial, suggestions, submitLabel, 
         </p>
       )}
       <div className="row">
-        <button type="submit" disabled={saving}>
-          {saving ? "Saving…" : submitLabel}
+        <button type="submit" disabled={saving} aria-busy={saving || undefined}>
+          <SwapLabel on={saving} idle={submitLabel} active="Saving…" />
         </button>
         {onCancel && (
           <button type="button" className="secondary" onClick={onCancel} disabled={saving}>

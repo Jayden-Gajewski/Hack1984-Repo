@@ -11,6 +11,7 @@ import {
   localDayISO,
   todayISO,
 } from "@/lib/display";
+import SwapLabel from "./SwapLabel";
 
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
@@ -176,8 +177,8 @@ export default function FootprintRequest({ request, onSaved }: Props) {
               <textarea value={body} onChange={(e) => setBody(e.target.value)} required rows={12} maxLength={20000} />
             </label>
             <div className="row">
-              <button type="submit" disabled={saving}>
-                {saving ? "Saving…" : "Save text"}
+              <button type="submit" disabled={saving} aria-busy={saving || undefined}>
+                <SwapLabel on={saving} idle="Save text" active="Saving…" />
               </button>
               <button type="button" className="secondary" onClick={() => setEditing(false)} disabled={saving}>
                 Cancel
@@ -238,8 +239,8 @@ export default function FootprintRequest({ request, onSaved }: Props) {
           <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={2000} required={justNote} />
         </label>
         <div className="fp-wide row">
-          <button type="submit" disabled={saving}>
-            {saving ? "Saving…" : "Save update"}
+          <button type="submit" disabled={saving} aria-busy={saving || undefined}>
+            <SwapLabel on={saving} idle="Save update" active="Saving…" />
           </button>
           {status === "sent" && <span className="muted small">Only mark it sent once you&apos;ve sent it yourself.</span>}
         </div>

@@ -3,6 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import type { Draft } from "@/lib/api";
 import { exposureKind, safeHref, safeMailto } from "@/lib/display";
+import { Check } from "./icons";
+import Skeleton from "./Skeleton";
+import SwapLabel from "./SwapLabel";
 
 interface Props {
   draft: Draft | null;
@@ -45,7 +48,8 @@ export default function DraftModal({ draft, loading, error, onClose }: Props) {
   }, [onClose]);
 
   useEffect(() => {
-    if (copy === "idle") return;
+    // "Copied" reverts so the button can be used again; a failure stays up with its instructions.
+    if (copy !== "copied") return;
     const t = setTimeout(() => setCopy("idle"), 2000);
     return () => clearTimeout(t);
   }, [copy]);
@@ -80,7 +84,7 @@ export default function DraftModal({ draft, loading, error, onClose }: Props) {
             Close
           </button>
         </div>
-        <div role="status">{loading && <p className="muted mt">Finding where to send it…</p>}</div>
+        {loading && <Skeleton label="Finding where to send it" shape="line" rows={4} />}
         {error && (
           <p className="error" role="alert">
             {error}
@@ -109,7 +113,7 @@ export default function DraftModal({ draft, loading, error, onClose }: Props) {
             <pre className="letter">{draft.body}</pre>
             <div className="row">
               <button type="button" onClick={copyRequest}>
-                {copy === "copied" ? "Copied" : "Copy request"}
+                <SwapLabel on={copy === "copied"} idle="Copy request" active="Copied" icon={<Check />} />
               </button>
               <span className="muted small" role="status">
                 {copy === "failed" && "Couldn't reach the clipboard. Select the text above and copy it."}

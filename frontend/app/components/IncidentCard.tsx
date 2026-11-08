@@ -16,6 +16,7 @@ import {
   safeHref,
 } from "@/lib/display";
 import CompanyMark from "./CompanyMark";
+import SwapLabel from "./SwapLabel";
 
 interface Props {
   incident: Incident;
@@ -299,8 +300,8 @@ export default function IncidentCard(props: Props) {
             <p className="muted small">A short explanation written by the local AI from the evidence above.</p>
           )}
           <div className="row mt">
-            <button type="button" className="secondary" onClick={analyze} disabled={analyzing || !llm.ready}>
-              {analyzing ? "Explaining…" : analysis ? "Explain again" : "Explain this breach"}
+            <button type="button" className="secondary" onClick={analyze} disabled={analyzing || !llm.ready} aria-busy={analyzing || undefined}>
+              <SwapLabel on={analyzing} idle={analysis ? "Explain again" : "Explain this breach"} active="Explaining…" />
             </button>
             {!analyzing && (
               <span className="muted small">

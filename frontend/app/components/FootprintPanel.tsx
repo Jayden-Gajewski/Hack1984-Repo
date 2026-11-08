@@ -8,6 +8,7 @@ import FootprintCompany from "./FootprintCompany";
 import { StatusPill } from "./FootprintRequest";
 import { Chevron } from "./icons";
 import "../footprint.css";
+import Skeleton from "./Skeleton";
 
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
@@ -121,11 +122,7 @@ export default function FootprintPanel() {
             )}
           </p>
         )}
-        {companies === null && !error && (
-          <p className="muted mt" role="status">
-            Loading your footprint…
-          </p>
-        )}
+        {companies === null && !error && <Skeleton label="Loading your footprint" rows={3} />}
       </div>
 
       {open ? (

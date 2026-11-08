@@ -10,10 +10,10 @@ import ExposureCard from "../components/ExposureCard";
 import FootprintPanel from "../components/FootprintPanel";
 import OutboundLog from "../components/OutboundLog";
 import ScanForm from "../components/ScanForm";
-import StarGlobe from "../components/StarGlobe";
 import StatusLine from "../components/StatusLine";
 import { RISK_LABEL } from "@/lib/display";
 import Tabs, { type Tab } from "../components/Tabs";
+import SwapLabel from "../components/SwapLabel";
 
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
@@ -168,8 +168,8 @@ export default function ScannerPage() {
                   : "Exposures"}
             </h2>
             {result && count > 0 && (
-              <button type="button" className="secondary" onClick={rescan} disabled={rescanning || scanning}>
-                {rescanning ? "Re-checking…" : "Re-scan listings"}
+              <button type="button" className="secondary" onClick={rescan} disabled={rescanning || scanning} aria-busy={rescanning || undefined}>
+                <SwapLabel on={rescanning} idle="Re-scan listings" active="Re-checking…" />
               </button>
             )}
           </div>
@@ -180,9 +180,14 @@ export default function ScannerPage() {
                 Nothing was searched.
               </span>
               {lastRequest && (
-                <button type="button" className="secondary" onClick={scanAgain} disabled={freshScanning || scanning}>
-                  {freshScanning ? "Scanning… (the local LLM can take a few minutes)" : "Scan again"}
+                <button type="button" className="secondary" onClick={scanAgain} disabled={freshScanning || scanning} aria-busy={freshScanning || undefined}>
+                  <SwapLabel on={freshScanning} idle="Scan again" active="Scanning…" />
                 </button>
+              )}
+              {freshScanning && (
+                <span className="muted small" role="status">
+                  The local LLM can take a few minutes.
+                </span>
               )}
             </div>
           )}
@@ -207,11 +212,6 @@ export default function ScannerPage() {
               None of the broker sites we checked list this name in this city. That covers the sites we
               search, not the whole web.
             </p>
-          )}
-          {(!result || count === 0) && (
-            <div className="exposure-art">
-              <StarGlobe />
-            </div>
           )}
           {result &&
             [...result.errors, ...notes].map((err, i) => (

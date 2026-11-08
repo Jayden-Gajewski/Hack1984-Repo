@@ -18,6 +18,8 @@ import MonitoredEmails from "../../components/MonitoredEmails";
 import OutboundLog from "../../components/OutboundLog";
 import RadarScope from "../../components/RadarScope";
 import Tabs, { type Tab } from "../../components/Tabs";
+import Skeleton from "../../components/Skeleton";
+import SwapLabel from "../../components/SwapLabel";
 
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
@@ -221,7 +223,9 @@ export default function MonitorPage() {
     : "";
 
   // One plain sentence that says what's going on.
-  let headline = "Loading…";
+  // Before the first load returns, the panel and lists show skeletons instead of text.
+  const firstLoad = board === null && !loadError;
+  let headline = loadError ? "Couldn't load the monitor" : "";
   let detail = "";
   if (running) {
     headline = "Scanning for threats…";
@@ -269,7 +273,8 @@ export default function MonitorPage() {
               }
             />
             <div className="monitor-status">
-              <p className="monitor-headline" aria-live="polite">
+              {firstLoad && <Skeleton label="Loading the monitor" shape="line" rows={2} />}
+              <p className="monitor-headline" aria-live="polite" hidden={firstLoad}>
                 {headline}
               </p>
               {detail && <p className="muted">{detail}</p>}
@@ -312,8 +317,8 @@ export default function MonitorPage() {
                 </div>
               ) : (
                 <div className="monitor-actions">
-                  <button type="button" onClick={() => startScan({ include_news: includeNews })} disabled={running || !board}>
-                    {running ? `Scanning… ${elapsed} s` : "Scan now"}
+                  <button type="button" onClick={() => startScan({ include_news: includeNews })} disabled={running || !board} aria-busy={running || undefined}>
+                    <SwapLabel on={running} idle="Scan now" active={`Scanning… ${elapsed} s`} />
                   </button>
                   {newsReady && (
                     <label className="check">
@@ -356,6 +361,7 @@ export default function MonitorPage() {
           <Tabs tabs={TABS} active={tab} onChange={changeTab} label="Threat monitor sections" />
 
           <div className="tabpanel" role="tabpanel" id="panel-threats" aria-labelledby="tab-threats" hidden={tab !== "threats"}>
+            {firstLoad && <Skeleton label="Loading threats" rows={3} />}
             {board && !nothingMonitored && incidents.length > 0 && (
               <section className="section" aria-labelledby="threats-h">
                 <div className="section-head">
@@ -417,6 +423,7 @@ export default function MonitorPage() {
           </div>
 
           <div className="tabpanel" role="tabpanel" id="panel-watch" aria-labelledby="tab-watch" hidden={tab !== "watch"}>
+            {firstLoad && <Skeleton label="Loading what we watch" rows={3} />}
             {board && (
               <>
                 <MonitoredCompanies
@@ -441,6 +448,7 @@ export default function MonitorPage() {
           </div>
 
           <div className="tabpanel" role="tabpanel" id="panel-history" aria-labelledby="tab-history" hidden={tab !== "history"}>
+            {firstLoad && <Skeleton label="Loading history" rows={3} />}
             {board && (
               <MonitorActivity
                 schedule={board.schedule}

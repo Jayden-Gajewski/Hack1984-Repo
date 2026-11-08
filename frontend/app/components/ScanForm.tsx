@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api, type ScanRequest, type ScanResponse } from "@/lib/api";
+import SwapLabel from "./SwapLabel";
 
 interface Props {
   onResult: (result: ScanResponse, request: ScanRequest) => void;
@@ -81,8 +82,8 @@ export default function ScanForm({ onResult, onBusyChange }: Props) {
           <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
           <span>I&apos;m scanning myself (or a teammate who agreed to it).</span>
         </label>
-        <button type="submit" disabled={!consent || loading}>
-          {loading ? "Scanning…" : "Scan"}
+        <button type="submit" disabled={!consent || loading} aria-busy={loading || undefined}>
+          <SwapLabel on={loading} idle="Scan" active="Scanning…" />
         </button>
       </div>
       <p className="muted">We search with your name and city only. Never your phone number or email.</p>

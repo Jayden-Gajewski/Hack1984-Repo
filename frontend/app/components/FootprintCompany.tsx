@@ -23,6 +23,7 @@ import {
 import CompanyForm from "./FootprintCompanyForm";
 import FootprintRequest from "./FootprintRequest";
 import { Chevron } from "./icons";
+import SwapLabel from "./SwapLabel";
 
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
@@ -116,8 +117,8 @@ export default function FootprintCompany({ company, suggestions, onSaved, onRemo
               {confirmRemove ? (
                 <span className="fp-confirm">
                   Remove {company.name} and all its requests?
-                  <button type="button" className="secondary fp-danger" onClick={remove} disabled={removing}>
-                    {removing ? "Removing…" : "Remove company"}
+                  <button type="button" className="secondary fp-danger" onClick={remove} disabled={removing} aria-busy={removing || undefined}>
+                    <SwapLabel on={removing} idle="Remove company" active="Removing…" />
                   </button>
                   <button type="button" className="quiet" onClick={() => setConfirmRemove(false)} autoFocus>
                     Keep it
@@ -178,11 +179,11 @@ export default function FootprintCompany({ company, suggestions, onSaved, onRemo
               ))}
             </select>
           </label>
-          <button type="button" onClick={() => draft("access")} disabled={drafting !== null}>
-            {drafting === "access" ? "Drafting…" : "Draft a request for my data"}
+          <button type="button" onClick={() => draft("access")} disabled={drafting !== null} aria-busy={drafting === "access" || undefined}>
+            <SwapLabel on={drafting === "access"} idle="Draft a request for my data" active="Drafting…" />
           </button>
-          <button type="button" className="secondary" onClick={() => draft("deletion")} disabled={drafting !== null}>
-            {drafting === "deletion" ? "Drafting…" : "Draft a deletion request"}
+          <button type="button" className="secondary" onClick={() => draft("deletion")} disabled={drafting !== null} aria-busy={drafting === "deletion" || undefined}>
+            <SwapLabel on={drafting === "deletion"} idle="Draft a deletion request" active="Drafting…" />
           </button>
         </div>
         <p className="muted small mt">
@@ -328,8 +329,8 @@ function PrivacySettings({ company, onSaved }: { company: TrackedCompany; onSave
           <input type="text" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} maxLength={500} />
         </label>
         <div className="fp-wide row">
-          <button type="submit" className="secondary" disabled={saving}>
-            {saving ? "Saving…" : editingIndex === null ? "Record setting" : "Save setting"}
+          <button type="submit" className="secondary" disabled={saving} aria-busy={saving || undefined}>
+            <SwapLabel on={saving} idle={editingIndex === null ? "Record setting" : "Save setting"} active="Saving…" />
           </button>
           {editingIndex !== null && (
             <button type="button" className="quiet" onClick={cancel} disabled={saving}>

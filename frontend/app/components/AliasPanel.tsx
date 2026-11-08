@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api, type Alias, type AliasHit, type Company } from "@/lib/api";
 import TierClaim from "./TierClaim";
+import SwapLabel from "./SwapLabel";
 
 interface Props {
   onChecked: () => void; // refresh the likely sources on the cards
@@ -69,8 +70,8 @@ export default function AliasPanel({ onChecked }: Props) {
               </option>
             ))}
           </select>
-          <button type="button" className="secondary" onClick={create} disabled={!company || busy !== null}>
-            {busy === "create" ? "Creating…" : "New alias for this company"}
+          <button type="button" className="secondary" onClick={create} disabled={!company || busy !== null} aria-busy={busy === "create" || undefined}>
+            <SwapLabel on={busy === "create"} idle="New alias for this company" active="Creating…" />
           </button>
         </div>
 
@@ -88,8 +89,8 @@ export default function AliasPanel({ onChecked }: Props) {
         )}
 
         <div className={aliases.length > 0 ? "row" : "row mt"}>
-          <button type="button" onClick={checkInbox} disabled={busy !== null}>
-            {busy === "inbox" ? "Checking…" : "Check inbox (mock)"}
+          <button type="button" onClick={checkInbox} disabled={busy !== null} aria-busy={busy === "inbox" || undefined}>
+            <SwapLabel on={busy === "inbox"} idle="Check inbox (mock)" active="Checking…" />
           </button>
           <span className="muted small">Runs on this laptop. Nothing is searched.</span>
         </div>

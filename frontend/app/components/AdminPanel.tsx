@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api, type ResetCode, type Role, type User } from "@/lib/api";
+import Skeleton from "./Skeleton";
 
 // Admins only: every account on this laptop, its role, a one-time password reset code for someone
 // who forgot theirs, and removing an account (with its saved scans and footprint). The backend
@@ -80,7 +81,7 @@ export default function AdminPanel({ me }: { me: User }) {
           </button>
         </div>
       )}
-      {users === null && !error && <p className="muted">Loading accounts…</p>}
+      {users === null && !error && <Skeleton label="Loading accounts" rows={3} />}
       <ul className="account-list">
         {users?.map((u) => {
           const self = u.id === me.id;

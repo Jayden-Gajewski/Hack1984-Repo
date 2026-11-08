@@ -6,6 +6,7 @@ import { useState, type FormEvent } from "react";
 import { api } from "@/lib/api";
 import Logo from "./Logo";
 import { Lock } from "./icons";
+import SwapLabel from "./SwapLabel";
 
 type Mode = "login" | "signup" | "reset";
 
@@ -129,8 +130,8 @@ export default function AuthForm({ mode, next }: { mode: Mode; next?: string }) 
                 {error}
               </p>
             )}
-            <button type="submit" className="btn btn-primary btn-block" disabled={busy}>
-              {busy ? copy.busy : copy.submit}
+            <button type="submit" className="btn btn-primary btn-block" disabled={busy} aria-busy={busy || undefined}>
+              <SwapLabel on={busy} idle={copy.submit} active={copy.busy} />
             </button>
           </form>
           <p className="auth-local">
