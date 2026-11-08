@@ -483,6 +483,7 @@
   .film-play:hover { background: color-mix(in srgb, var(--text) 88%, var(--bg)); }
 }
 
+/* Once the film has started, the bar stays on it, so it can always be paused and scrubbed. */
 .film-controls {
   position: absolute;
   inset: auto 0 0 0;
@@ -492,12 +493,11 @@
   padding: var(--space-8) var(--space-4) var(--space-3);
   /* A legibility scrim over the video, not decoration. */
   background: linear-gradient(to top, color-mix(in srgb, var(--bg) 72%, transparent), transparent);
-  opacity: 0;
+  @starting-style { opacity: 0; }
   transition: opacity var(--dur-fast) ease;
 }
 .film-controls[hidden] { display: none; }
-.film-frame:hover .film-controls, .film-frame:focus-within .film-controls { opacity: 1; }
-@media (hover: none) { .film-controls { opacity: 1; } }
+.film-video:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -2px; }
 .film-icon-btn {
   display: grid;
   place-items: center;
@@ -516,23 +516,63 @@
 @media (hover: hover) and (pointer: fine) {
   .film-icon-btn:hover { background: color-mix(in srgb, var(--text) 26%, transparent); }
 }
-.film-expand { margin-left: auto; }
-.film-time { color: var(--text); font-size: var(--text-sm); line-height: var(--leading-sm); font-variant-numeric: tabular-nums; }
-.film-progress { position: absolute; inset: auto 0 0 0; height: var(--space-1); background: color-mix(in srgb, var(--text) 10%, transparent); }
-.film-progress span {
-  display: block;
-  height: 100%;
-  background: var(--accent-ink);
-  transform: scaleX(0);
-  transform-origin: left;
+.film-time { flex: none; color: var(--text); font-size: var(--text-sm); line-height: var(--leading-sm); font-variant-numeric: tabular-nums; }
+
+/* The timeline: a native range input, so arrow keys, screen readers and touch all work. The hit
+   area is the control's full height; the track drawn inside it is thin. The played part is filled
+   from --progress (0 to 1), which FilmPlayer sets as the film plays and as it's dragged. */
+.film-scrub {
+  --progress: 0;
+  --track: color-mix(in srgb, var(--text) 22%, transparent);
+  flex: 1;
+  min-width: 0;
+  height: var(--control);
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
 }
-.film-caption { margin-top: var(--space-4); color: var(--muted); font-size: var(--text-sm); line-height: var(--leading-sm); }
+.film-scrub::-webkit-slider-runnable-track {
+  height: var(--space-1);
+  border-radius: var(--space-1);
+  background: linear-gradient(to right, var(--accent-ink) calc(var(--progress) * 100%), var(--track) 0);
+}
+.film-scrub::-moz-range-track { height: var(--space-1); border-radius: var(--space-1); background: var(--track); }
+.film-scrub::-moz-range-progress { height: var(--space-1); border-radius: var(--space-1); background: var(--accent-ink); }
+.film-scrub::-webkit-slider-thumb {
+  width: 14px;
+  height: 14px;
+  margin-top: -5px; /* centres the thumb on the 4px track */
+  border: 0;
+  border-radius: 50%;
+  background: var(--text);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--bg) 60%, transparent);
+  transition: transform var(--dur-fast) var(--ease-out);
+  -webkit-appearance: none;
+}
+.film-scrub::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--text);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--bg) 60%, transparent);
+}
+.film-scrub:focus-visible { outline: none; }
+.film-scrub:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px var(--accent-ink); }
+.film-scrub:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 3px var(--accent-ink); }
+.film-scrub:active::-webkit-slider-thumb { transform: scale(1.2); }
 
 @media (max-width: 560px) {
   .film { padding-top: var(--space-20); }
   .film-stage { margin-top: var(--space-8); }
   .film-play { left: var(--space-3); bottom: var(--space-3); height: var(--control); padding: 0 var(--space-4); font-size: var(--text-sm); line-height: var(--leading-sm); }
   .film-play-time { display: none; }
+  .film-controls { gap: var(--space-2); padding: var(--space-6) var(--space-2) var(--space-2); }
+  .film-icon-btn { width: var(--space-8); height: var(--space-8); }
+  .film-scrub { height: var(--space-8); }
+  .film-time { font-size: var(--text-xs); line-height: var(--leading-xs); }
 }
 
 /* ---------- Log in and sign up ---------- */

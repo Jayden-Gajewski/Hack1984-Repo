@@ -167,7 +167,6 @@ export default async function Landing() {
             <div>
               <FilmPlayer />
             </div>
-            <p className="film-caption">Sample data: Jordan Avery and every site in the film are fictional. No sound.</p>
           </div>
         </section>
 
