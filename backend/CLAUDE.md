@@ -52,6 +52,16 @@ FastAPI app in `app/`. Read the privacy rules in the root `CLAUDE.md` first.
 | POST | `/api/monitor/incidents/{id}/actions/{action}` | `{done}` | mark a step done or not |
 | POST | `/api/monitor/incidents/{id}/analyze` | | local-LLM explanation, checked against the evidence |
 | POST | `/api/monitor/seen`, `/schedule` | | mark alerts seen / save the local schedule |
+| GET/POST | `/api/footprint` | `TrackedCompanyInput` | the signed-in account's tracked companies, each with its requests and their history / track a new one |
+| PUT/DELETE | `/api/footprint/{company_id}` | `TrackedCompanyInput` | edit a company, including the privacy settings the user recorded / remove it with its requests |
+| POST | `/api/footprint/{company_id}/requests` | `{kind, law}` | a new draft request from the local template in `app/footprint.py` |
+| PATCH/DELETE | `/api/footprint/requests/{request_id}` | `{subject, body}` | edit the text (only until it's marked sent) / remove the request |
+| POST | `/api/footprint/requests/{request_id}/updates` | `{status, happened_on?, note?}` | record a step; `footprint.NEXT` decides which statuses can follow |
+| DELETE | `/api/footprint/requests/{request_id}/updates/last` | | undo the last recorded step (409 if there's none) |
+
+**Sign-in gate.** `require_session` in `main.py` answers 401 for every `/api/*` route except `OPEN_ROUTES` (status, brokers, auth) unless the request carries a valid session cookie, and 403 for any change whose `Origin` isn't this laptop. It sets `auth.current_user()`, which `db.py` uses to keep saved scans per account. New routes are gated automatically; tests get a signed-in client from `conftest.py`.
+
+Footprint routes (feature 3) need a session cookie (401 otherwise), only read or change the signed-in account's rows (404 for anyone else's), and never call `outbound.request`: drafts are local templates, and Dossier doesn't send requests or change company settings. "Response received" and "Completed" can only follow "Sent", the text locks once a request is marked sent, and step dates can't be in the future or before the last recorded step (409/422).
 
 Reject `/api/scan` with HTTP 400 when `consent` is false. Routes that act on the current scan (`/api/optout`, `/api/rescan`) return 409 until a scan has run or been loaded. FastAPI doesn't serve the frontend: it's a separate Next.js app that proxies `/api/*` here.
 
@@ -60,6 +70,9 @@ Reject `/api/scan` with HTTP 400 when `consent` is false. Routes that act on the
 - Saved scans only: a `scans` table with the request (name, city, state) and the response as `jsonb`.
 - Plain SQL through sync `psycopg`, called with `asyncio.to_thread`. (psycopg's async mode doesn't work with the default event loop on Windows.) No ORM and no migrations: edit the `create table if not exists` schema, and reset with `docker compose down -v` if you must.
 - If Postgres is down, the app still runs. Scans just aren't saved, and the scan response says so.
+- Saved scans have a `user_id`: each account only finds and loads its own. Scans saved before accounts existed have none and aren't shown to anyone signed in.
+- Digital footprint (feature 3): `footprint_companies` (per `user_id`, privacy settings as `jsonb`), `footprint_requests` and `footprint_events` (the user's recorded steps, with the date they entered). Deleting a user or a company cascades to everything under it.
+- `connect()` swaps a `localhost` host for `127.0.0.1`: docker-compose publishes Postgres on IPv4 only, and on Windows libpq's `::1` attempt cost the full 3-second connect timeout on every query.
 - Use parameterized queries only (`%s` placeholders); never build SQL with f-strings. Scraped page text is stored only as far as a feature needs it.
 
 ## Testing

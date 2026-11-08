@@ -18,6 +18,15 @@ export function Check() {
   );
 }
 
+// A small chevron for "open" (right) and "back" (left) affordances.
+export function Chevron({ direction = "right" }: { direction?: "left" | "right" }) {
+  return (
+    <svg className="icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden>
+      <path d={direction === "right" ? "m6 3.5 4.5 4.5L6 12.5" : "m10 3.5L5.5 8l4.5 4.5"} />
+    </svg>
+  );
+}
+
 export function Lock() {
   return (
     <svg className="icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden>

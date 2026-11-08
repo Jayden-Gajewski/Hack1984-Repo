@@ -7,10 +7,12 @@ Every date carries a source label. A missing date is null with source "unknown",
 """
 
 import re
+from datetime import date
 from typing import Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app import footprint
 from app.outbound import assert_minimal_query
 
 # One vocabulary for listing fields (Stage 1) and breach data types (Stage 3), so Stage 5
@@ -510,3 +512,111 @@ class MonitorDashboard(BaseModel):
     refresh: RefreshStatus
     config: MonitorConfig
     scan_loaded: bool  # an exposure scan is loaded, so related listings can be shown
+# ---------- Digital footprint: companies you track and your data requests to them ----------
+# Local Postgres only, scoped to the signed-in account. None of it is sent to Exa, Tavily or
+# Ollama, and Dossier never sends a request or changes a company's settings for the user.
+
+RequestKind = Literal["access", "deletion"]
+RequestStatus = Literal["draft", "ready_to_send", "sent", "response_received", "completed", "unable_to_complete"]
+LawBasis = Literal["none", "gdpr", "ccpa"]  # named in a draft only when the user picks one
+ControlState = Literal["on", "off", "unknown"]
+
+
+def _not_in_future(v: date | None) -> date | None:
+    if v and v > date.today():
+        raise ValueError("That date is in the future.")
+    return v
+
+
+class PrivacyControl(BaseModel):
+    """A privacy or data-sharing setting the user checked on the company's own site, as they
+    recorded it. Dossier can't read or change the setting."""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    name: str = Field(min_length=1, max_length=120)
+    state: ControlState = "unknown"
+    checked_on: date | None = None  # the day the user checked; null means they didn't record one
+    note: str = Field(default="", max_length=500)
+
+    @field_validator("checked_on")
+    @classmethod
+    def _checked_on(cls, v: date | None) -> date | None:
+        return _not_in_future(v)
+
+
+class TrackedCompanyInput(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    name: str = Field(min_length=1, max_length=120)
+    website: str = Field(default="", max_length=300)
+    account_label: str = Field(default="", max_length=200)  # how they know the user: email, username, account number
+    notes: str = Field(default="", max_length=4000)
+    controls: list[PrivacyControl] = Field(default_factory=list, max_length=40)
+
+    @field_validator("website")
+    @classmethod
+    def _website(cls, v: str) -> str:
+        return footprint.normalize_website(v)
+
+
+class RequestCreate(BaseModel):
+    kind: RequestKind
+    law: LawBasis = "none"
+
+
+class RequestTextUpdate(BaseModel):
+    """Edits to a request's text. Only allowed until the user marks it sent."""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    subject: str = Field(min_length=1, max_length=200)
+    body: str = Field(min_length=1, max_length=20000)
+
+
+class RequestUpdate(BaseModel):
+    """One step the user records: a new status, or the same status with a note."""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    status: RequestStatus
+    happened_on: date | None = None  # the day it happened; defaults to today
+    note: str = Field(default="", max_length=2000)
+
+    @field_validator("happened_on")
+    @classmethod
+    def _happened_on(cls, v: date | None) -> date | None:
+        return _not_in_future(v)
+
+
+class RequestEvent(BaseModel):
+    status: RequestStatus
+    happened_on: str  # YYYY-MM-DD, as the user recorded it
+    note: str = ""
+    recorded_at: str  # when Dossier saved this step
+
+
+class DataRequest(BaseModel):
+    id: str
+    kind: RequestKind
+    law: LawBasis
+    subject: str
+    body: str
+    status: RequestStatus
+    created_at: str
+    updated_at: str
+    history: list[RequestEvent] = Field(default_factory=list)  # oldest first
+    next_statuses: list[RequestStatus] = Field(default_factory=list)  # what the user can record next
+    editable: bool = True  # false once marked sent: the text stays as it was sent
+
+
+class TrackedCompany(BaseModel):
+    id: str
+    name: str
+    website: str = ""
+    account_label: str = ""
+    notes: str = ""
+    controls: list[PrivacyControl] = Field(default_factory=list)
+    created_at: str
+    updated_at: str
+    requests: list[DataRequest] = Field(default_factory=list)  # newest first

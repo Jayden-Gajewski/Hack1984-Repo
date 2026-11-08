@@ -375,6 +375,64 @@ export interface MonitorDashboard {
   scan_loaded: boolean;
 }
 
+// ---------- Digital footprint (backend: models.TrackedCompany and friends) ----------
+// The user's own records, in the local Postgres for the signed-in account. Never sent anywhere:
+// drafts are local templates, and Dossier doesn't send requests or change company settings.
+
+export type RequestKind = "access" | "deletion";
+export type RequestStatus =
+  | "draft"
+  | "ready_to_send"
+  | "sent"
+  | "response_received"
+  | "completed"
+  | "unable_to_complete";
+export type LawBasis = "none" | "gdpr" | "ccpa"; // a law is named in a draft only if the user picks one
+export type ControlState = "on" | "off" | "unknown";
+
+export interface PrivacyControl {
+  name: string;
+  state: ControlState;
+  checked_on: string | null; // YYYY-MM-DD the user checked; null means they didn't record one
+  note: string;
+}
+
+export interface TrackedCompanyInput {
+  name: string;
+  website: string;
+  account_label: string; // how the company knows the user: email, username or account number
+  notes: string;
+  controls: PrivacyControl[];
+}
+
+export interface RequestEvent {
+  status: RequestStatus;
+  happened_on: string; // YYYY-MM-DD, as the user recorded it
+  note: string;
+  recorded_at: string; // when Dossier saved this step
+}
+
+export interface DataRequest {
+  id: string;
+  kind: RequestKind;
+  law: LawBasis;
+  subject: string;
+  body: string;
+  status: RequestStatus;
+  created_at: string;
+  updated_at: string;
+  history: RequestEvent[]; // oldest first
+  next_statuses: RequestStatus[]; // what the user can record next
+  editable: boolean; // false once marked sent: the text stays as it was sent
+}
+
+export interface TrackedCompany extends TrackedCompanyInput {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  requests: DataRequest[]; // newest first
+}
+
 // ---------- Calls ----------
 
 // FastAPI errors look like {detail: "message"}, or {detail: [{msg}, ...]} for validation errors.
@@ -393,7 +451,11 @@ function errorMessage(data: unknown, status: number): string {
   return `Request failed (${status}).`;
 }
 
-async function request<T>(method: "GET" | "POST" | "DELETE", path: string, body?: unknown): Promise<T> {
+async function request<T>(
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
+  path: string,
+  body?: unknown,
+): Promise<T> {
   const res = await fetch(path, {
     method,
     headers: body === undefined ? undefined : { "Content-Type": "application/json" },
@@ -457,4 +519,21 @@ export const api = {
     setSchedule: (body: Pick<MonitorSchedule, "enabled" | "interval_hours" | "include_news">) =>
       request<MonitorSchedule>("POST", "/api/monitor/schedule", body),
   },
+  // Digital footprint. Ids are random UUIDs; everything personal goes in the request body.
+  footprint: () => request<TrackedCompany[]>("GET", "/api/footprint"),
+  trackCompany: (body: TrackedCompanyInput) => request<TrackedCompany>("POST", "/api/footprint", body),
+  editTrackedCompany: (id: string, body: TrackedCompanyInput) =>
+    request<TrackedCompany>("PUT", `/api/footprint/${encodeURIComponent(id)}`, body),
+  removeTrackedCompany: (id: string) =>
+    request<{ deleted: boolean }>("DELETE", `/api/footprint/${encodeURIComponent(id)}`),
+  draftDataRequest: (companyId: string, body: { kind: RequestKind; law: LawBasis }) =>
+    request<TrackedCompany>("POST", `/api/footprint/${encodeURIComponent(companyId)}/requests`, body),
+  editDataRequest: (requestId: string, body: { subject: string; body: string }) =>
+    request<TrackedCompany>("PATCH", `/api/footprint/requests/${encodeURIComponent(requestId)}`, body),
+  recordRequestUpdate: (requestId: string, body: { status: RequestStatus; happened_on: string; note: string }) =>
+    request<TrackedCompany>("POST", `/api/footprint/requests/${encodeURIComponent(requestId)}/updates`, body),
+  undoRequestUpdate: (requestId: string) =>
+    request<TrackedCompany>("DELETE", `/api/footprint/requests/${encodeURIComponent(requestId)}/updates/last`),
+  removeDataRequest: (requestId: string) =>
+    request<TrackedCompany>("DELETE", `/api/footprint/requests/${encodeURIComponent(requestId)}`),
 };

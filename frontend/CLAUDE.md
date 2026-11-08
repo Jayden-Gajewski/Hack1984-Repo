@@ -31,6 +31,11 @@ Everything shown on screen (page titles, field quotes, policy quotes, email subj
   - A sell/share flag shows its verbatim quote under the line "This wasn't a hack, they sold it."
 - **Draft modal:** where to send it (link or email), the subject, the body, and a copy button.
 - **Aliases:** a "new alias for…" button, the alias list, and a "Check inbox (mock)" button. Show hits as Proven.
+- **Footprint** (`FootprintPanel.tsx`, styles in `app/footprint.css`): companies the user tracks and their requests for a copy of their data or for deletion.
+  - Drafts are local templates with a copy button. Dossier never sends them: "Draft" and "Ready to send" read "Not sent" and wear a dashed outline; sent statuses are solid.
+  - The update form only offers the backend's `next_statuses`. Dates the user entered read "(you recorded)", dates Dossier set read "(saved)", and a missing one reads "unknown".
+  - A named privacy law is optional and comes with "isn't legal advice". Privacy settings are the user's own record: the app can't see or change them.
+  - Name suggestions come from `GET /api/companies` only. Never wire this form to `POST /api/companies`, which searches.
 - **Outbound log panel:** always visible as a sidebar, polling `/api/outbound-log` every 1 to 2 seconds.
   - Each row: service, purpose, method + URL, status and time. Expand a row to see the exact body sent (keys are already redacted by the backend).
   - Show counts per service, and include a toggle for local Ollama calls. They're hidden by default and labeled "stayed on this machine".
