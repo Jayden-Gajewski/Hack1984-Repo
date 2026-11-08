@@ -10,7 +10,7 @@ known, its privacy-policy URL. Any other company the user types is added here:
 
 Stages 3, 4, 6 and 7 rely on the domains: privacy policies and contacts are only searched on
 the company's own site, and alias mail is checked against them. Added companies are saved to
-backend/local/companies.json, which is gitignored: which accounts a user has stays on this laptop.
+backend/local/companies.json, which is gitignored: which accounts a user has stays on this laptop. On the public site they're saved per account in Postgres.
 """
 
 import json
@@ -20,7 +20,9 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
+from app import db
 from app.clients import exa
+from app.config import get_settings
 from app.data import load_json
 
 log = logging.getLogger(__name__)
@@ -78,6 +80,12 @@ def guess_domain(name: str) -> str:
 
 
 def _load_custom() -> list[dict[str, Any]]:
+    if get_settings().public:  # each account's own, in Postgres
+        try:
+            return db.custom_companies()
+        except Exception as exc:
+            log.warning("Couldn't read added companies: %s", exc)
+            return []
     try:
         return json.loads(LOCAL_FILE.read_text(encoding="utf-8"))
     except FileNotFoundError:
@@ -153,5 +161,8 @@ async def add_company(text: str) -> dict[str, Any]:
         "custom": True,
         "domain_source": source,
     }
-    _save_custom(items + [company])
+    if get_settings().public:
+        db.add_custom_company(company)
+    else:
+        _save_custom(items + [company])
     return company

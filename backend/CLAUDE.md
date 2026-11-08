@@ -15,7 +15,7 @@ FastAPI app in `app/`. Read the privacy rules in the root `CLAUDE.md` first.
 - **Partial failure is normal.** A broker blocks extraction, archive.org times out, a key is missing. Stages collect error strings and return them next to their results. One failed source must not fail the whole scan.
 - **`models.py` is the contract with the frontend.** Add fields; don't rename or remove them without telling the UI owner, who keeps the types in `frontend/lib/api.ts` in sync.
 - **Reference data goes in `app/data/*.json`, and user data in Postgres.** Don't hard-code broker lists or company domains in Python, and don't load reference data into the database.
-- **No CORS.** The browser reaches FastAPI only through the Next.js `/api` rewrite, so don't add `CORSMiddleware` or `allow_origins=["*"]`. The browser extension (`extension/`) calls `http://127.0.0.1:8000` directly. That works without CORS because the URL is in the extension's `host_permissions`.
+- **No CORS.** The browser reaches FastAPI only through the Next.js `/api` rewrite, so don't add `CORSMiddleware` or `allow_origins=["*"]`. The browser extension (`extension/`) calls `http://127.0.0.1:8000` directly. That works without CORS because the URL is in the extension's `host_permissions`. For aliases it calls the app on `localhost:3000` with the user's session cookie, and `require_session` accepts its `chrome-extension://` Origin on `GET`/`POST /api/aliases` only (`EXTENSION_SESSION_ROUTES`).
 - **Treat scraped content as untrusted.** It can contain prompt injection aimed at the local LLM. Validate LLM output against enums (e.g. `FIELD_TYPES`, tier names) and drop anything else.
 - **Stubs.** Each stage function raises `NotImplementedError` until its owner builds it. `main.py` turns that into an error string, or HTTP 501 for routes without an errors list, so the app runs end to end from day one. Keep each stub's name and signature when you fill it in.
 - **Reference data:** `from app.data import load_json`, then `load_json("brokers.json")`. Keys are snake_case; `tests/test_data.py` checks them.
@@ -42,7 +42,10 @@ FastAPI app in `app/`. Read the privacy rules in the root `CLAUDE.md` first.
 | GET | `/api/leads` | | exposures with ranked `leads` (Stage 5) |
 | POST | `/api/optout` | `{exposure_id}` or `{company}` | `Draft` (Stage 6) |
 | POST | `/api/rescan` | | removal status per listing (Stage 6) |
-| GET/POST | `/api/aliases` | `{company}` | aliases / new alias (Stage 7) |
+| GET/POST | `/api/aliases` | `{company}` or `{site, label?}` | this account's aliases (plus the demo ones) with status and mock-inbox counts / new alias for a company or a website, a fresh address each time (Stage 7) |
+| PATCH | `/api/aliases/{alias}` | `{status?, note?}` | disable or re-enable an alias, or change its note (404 if it isn't yours) |
+| GET | `/api/aliases/{alias}/messages` | | that alias's mail from the mock inbox, newest first, each `expected` or not and `blocked` if it came after the alias was disabled |
+| POST | `/api/aliases/{alias}/investigate` | | `AliasInvestigation`: rule facts, unexpected senders (named from `brokers.json`/`companies.json`), the Proven tier, and a local-LLM category and explanation checked by `s7_aliases.clean_explanation`. No model call when nothing is unexpected |
 | GET | `/api/inbox/check` | | `AliasHit[]` from the mock inbox (Stage 7) |
 | GET/DELETE | `/api/outbound-log` | `?include_local=` | log entries / clear |
 | POST | `/api/auth/signup`, `/login` | `{email, password}` | `User` `{email, id, role, created_at}` and a session cookie. The first account on this laptop is the admin. Login is throttled per email (429 after `auth.MAX_FAILURES` misses in `auth.FAILURE_WINDOW` s) |

@@ -145,7 +145,7 @@ export default function ScannerPage() {
       <div className="work">
         <header>
           <h1>Dossier</h1>
-          <p className="lede">Find where your personal data is exposed. Every request that leaves this laptop is logged.</p>
+          <p className="lede">Find where your personal data is exposed. Every request Dossier sends is logged.</p>
           <StatusLine />
         </header>
 
@@ -192,7 +192,7 @@ export default function ScannerPage() {
             </div>
           )}
           {showingSaved && result && !result.saved_at && (
-            <p className="muted">Your last saved scan, from this laptop. Nothing was searched; scan again above to refresh it.</p>
+            <p className="muted">Your last saved scan. Nothing was searched; scan again above to refresh it.</p>
           )}
           {result && count > 0 && !scanning && (
             <p className="row small muted">

@@ -27,7 +27,7 @@ export default function ExtensionDownload({ children }: { children?: ReactNode }
   const note = {
     checking: " ",
     in: "For Chrome and Edge. Unzip it, then follow the four steps below.",
-    out: "You'll sign in first. Your account stays on this computer.",
+    out: "You'll sign in first.",
   }[session];
 
   return (

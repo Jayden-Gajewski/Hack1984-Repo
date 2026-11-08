@@ -213,11 +213,35 @@
   }
 
   // Listen first, so "Check this page" works even if a report fails.
-  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (sender.id !== chrome.runtime.id) return; // only this extension's popup
     if (message?.type === "read-page") {
       sendResponse({ text: (docGet("body")?.innerText ?? "").slice(0, MAX_TEXT), url: here() });
+    } else if (message?.type === "fill-email") {
+      sendResponse({ filled: fillEmail(message.address) });
     }
   });
+
+  // "Fill in" from the popup, after the user clicked it: put their alias into the page's email
+  // field. Only an address shaped like an alias is written, and nothing is read back.
+  function fillEmail(address) {
+    if (typeof address !== "string" || !/^[a-z0-9]+\.[0-9a-f]{6}@[a-z0-9.-]+$/i.test(address)) return false;
+    const candidates = Array.from(all("input")).filter(
+      (field) =>
+        (field.type === "email" || ((field.type === "text" || field.type === "") && /e-?mail/i.test(describe(field)))) &&
+        !field.disabled &&
+        !field.readOnly &&
+        (!field.checkVisibility || field.checkVisibility()),
+    );
+    const field = candidates.find((f) => !f.value) ?? candidates[0];
+    if (!field) return false;
+    // The native setter, so pages built with React and similar notice the change.
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(field, address);
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+    field.dispatchEvent(new Event("change", { bubbles: true }));
+    field.focus();
+    return true;
+  }
 
   // Report now, once more after trackers and footers drawn by JavaScript have loaded, and again
   // when Back or Forward restores the page from the browser's cache.

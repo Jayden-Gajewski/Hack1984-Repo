@@ -1,7 +1,17 @@
 // Display helpers: the wording rules from frontend/CLAUDE.md in one place, plus safe links.
 // Say "likely source", never "who leaked it". Every date shows its source.
 
-import type { Confidence, DateSource, Involvement, MonitorEvent, Severity, SourceKind, Tier } from "./api";
+import type {
+  AliasCategory,
+  Confidence,
+  DateSource,
+  Involvement,
+  MonitorEvent,
+  SenderKind,
+  Severity,
+  SourceKind,
+  Tier,
+} from "./api";
 
 export const TIER_LABEL: Record<Tier, string> = {
   proven: "Proven",
@@ -217,3 +227,28 @@ export function websiteHost(url: string): string {
     return url;
   }
 }
+
+// ---------- Email aliases ----------
+
+// Gemini's guess about unexpected mail, worded as a guess.
+export const ALIAS_CATEGORY_LABEL: Record<AliasCategory, string> = {
+  legit: "From the company itself",
+  marketing: "Looks like marketing from another company",
+  data_sharing: "Looks like your address was passed on",
+  possible_phishing: "Could be phishing: don't click its links",
+  unknown: "Not clear what this is",
+};
+
+export const SENDER_KIND_LABEL: Record<SenderKind, string> = {
+  data_broker: "People-search site on our broker list",
+  known_company: "A different company on our list",
+  unknown: "Not on our lists",
+};
+
+// Where an alias's "made" date came from.
+export function aliasMadeSource(demo: boolean): string {
+  return demo ? "demo data" : "saved in this app";
+}
+
+export const BLOCKED_HELP =
+  "Arrived after you turned this alias off. This is a mock inbox, so nothing was really rejected.";

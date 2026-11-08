@@ -31,7 +31,7 @@ const COPY = {
   },
   reset: {
     title: "Reset your password",
-    sub: "Enter the one-time code an admin on this laptop gave you, then choose a new password.",
+    sub: "Enter the one-time code an admin gave you, then choose a new password.",
     submit: "Set new password",
     busy: "Saving…",
     switchText: "Remembered it?",
@@ -135,7 +135,7 @@ export default function AuthForm({ mode, next }: { mode: Mode; next?: string }) 
             </button>
           </form>
           <p className="auth-local">
-            <Lock /> Your account is saved in the database on this laptop. It isn&apos;t sent anywhere.
+            <Lock /> Your account is saved in Dossier&apos;s database. It isn&apos;t shared with anyone.
           </p>
         </div>
         <p className="auth-switch">

@@ -21,6 +21,11 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [user, setUser] = useState<User | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [monitor, setMonitor] = useState(false); // the public site has no Threat Monitor yet
+
+  useEffect(() => {
+    api.status().then((s) => setMonitor(!s.public), () => setMonitor(true));
+  }, []);
 
   useEffect(() => {
     api.me().then(setUser, async (err: unknown) => {
@@ -62,9 +67,11 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
           <Link href="/app" aria-current={pathname === "/app" ? "page" : undefined}>
             Exposure scan
           </Link>
-          <Link href="/app/monitor" aria-current={pathname.startsWith("/app/monitor") ? "page" : undefined}>
-            Threat monitor
-          </Link>
+          {monitor && (
+            <Link href="/app/monitor" aria-current={pathname.startsWith("/app/monitor") ? "page" : undefined}>
+              Threat monitor
+            </Link>
+          )}
           <Link href="/app/account" aria-current={pathname.startsWith("/app/account") ? "page" : undefined}>
             Account
           </Link>

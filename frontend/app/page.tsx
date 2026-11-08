@@ -76,7 +76,7 @@ const TIERS = [
 ];
 
 export default async function Landing() {
-  // Signed in on this laptop: the buttons go back to the app instead of to sign-up.
+  // Signed in: the buttons go back to the app instead of to sign-up.
   const signedIn = (await cookies()).has("h84_session");
   return (
     <div className="site">
@@ -128,7 +128,7 @@ export default async function Landing() {
               </a>
             </div>
             <p className="hero-note">
-              <Lock /> Every request that leaves your laptop is logged, with its exact contents.
+              <Lock /> Every request Dossier sends is logged, with its exact contents.
             </p>
           </div>
 
@@ -139,7 +139,7 @@ export default async function Landing() {
                 <Check />
               </span>
               <div>
-                <p className="mock-float-title">5 requests left this laptop</p>
+                <p className="mock-float-title">5 requests sent</p>
                 <p className="mock-float-sub">Searches got your name and city only.</p>
               </div>
             </div>
@@ -175,7 +175,7 @@ export default async function Landing() {
           <div className="wrap">
             <h2 className="sec-title">From your name to a sent opt-out</h2>
             <p className="sec-lede">
-              Seven steps, all started from your laptop. Each one shows you the evidence it found.
+              Seven steps. Each one shows you the evidence it found.
             </p>
             <div className="how-grid">
               {STEPS.map((g, gi) => (
@@ -201,7 +201,7 @@ export default async function Landing() {
         <section id="privacy" className="dark">
           <div className="wrap dark-grid">
             <div>
-              <h2 className="sec-title">Here&apos;s everything that left this laptop</h2>
+              <h2 className="sec-title">Here&apos;s everything Dossier sent</h2>
               <p className="sec-lede">
                 You shouldn&apos;t have to hand your data to another company to get it removed. Dossier sends
                 search services your name and city, nothing else, and shows you the receipt.
@@ -214,7 +214,7 @@ export default async function Landing() {
                   <Check /> Pages and privacy policies are read by Google&apos;s Gemini, and the log shows exactly what it was sent.
                 </li>
                 <li>
-                  <Check /> Your account and saved scans stay in a database on this laptop.
+                  <Check /> Your saved scans belong to your account. Nobody else can see them.
                 </li>
               </ul>
             </div>
@@ -260,8 +260,8 @@ export default async function Landing() {
             <h2 className="sec-title">Take your data back.</h2>
             <p className="sec-lede">
               {signedIn
-                ? "You're signed in on this laptop. Pick up where you left off."
-                : "Create an account on this laptop to run your first scan."}
+                ? "You're signed in. Pick up where you left off."
+                : "Create an account to run your first scan."}
             </p>
           </div>
           <div className="hero-ctas">
@@ -286,7 +286,7 @@ export default async function Landing() {
       <footer className="wrap foot">
         <div className="foot-brand">
           <Logo />
-          <p>Runs on your laptop. Every request that leaves it is logged.</p>
+          <p>Every request Dossier sends is logged.</p>
         </div>
         <nav className="foot-nav" aria-label="Footer">
           <a href="#how">How it works</a>

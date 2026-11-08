@@ -36,12 +36,17 @@ def _who(person: ScanRequest) -> str:
     return f"{person.name}, {person.city}, {person.state}"
 
 
+def _pages(exposure: Exposure) -> str:
+    return "\n".join([exposure.url, *exposure.other_urls])
+
+
 def broker_letter(exposure: Exposure, person: ScanRequest) -> tuple[str, str]:
     subject = "Please remove my personal information"
+    where = "The listings are here" if exposure.other_urls else "The listing is here"
     body = (
         f"Hello {exposure.broker},\n\n"
-        f"I'm asking you to remove my personal information from your website. The listing is here:\n"
-        f"{exposure.url}\n\n"
+        f"I'm asking you to remove my personal information from your website. {where}:\n"
+        f"{_pages(exposure)}\n\n"
         "Please:\n"
         "1. Delete this listing and any other records you hold about me.\n"
         "2. Stop selling or sharing my personal information.\n"
@@ -58,7 +63,7 @@ def profile_letter(exposure: Exposure, person: ScanRequest) -> tuple[str, str]:
     body = (
         f"Hello {exposure.broker},\n\n"
         "I'm asking you to remove my public profile from your website, or hide it from public view. "
-        f"The profile is here:\n{exposure.url}\n\n"
+        f"{'The pages are here' if exposure.other_urls else 'The profile is here'}:\n{_pages(exposure)}\n\n"
         "Please:\n"
         "1. Remove the profile, or make it private, so my name isn't shown with my school, team or results.\n"
         "2. Keep the page out of search engines (for example with a noindex tag) and ask them to drop it.\n"
@@ -192,10 +197,12 @@ async def rescan(exposures: list[Exposure], person: ScanRequest) -> tuple[list[R
     if not exposures:
         return [], []
     errors: list[str] = []
-    batches = [exposures[i : i + 20] for i in range(0, len(exposures), 20)]
+    # A merged card can cover several pages on one site; check them all.
+    urls = list(dict.fromkeys(u for e in exposures for u in [e.url, *e.other_urls]))
+    batches = [urls[i : i + 20] for i in range(0, len(urls), 20)]
     results = await asyncio.gather(
         *(
-            tavily.extract([e.url for e in batch], purpose=f"Re-check whether {len(batch)} of your listings are still up")
+            tavily.extract(batch, purpose=f"Re-check whether {len(batch)} of your listing pages are still up")
             for batch in batches
         ),
         return_exceptions=True,
@@ -209,7 +216,23 @@ async def rescan(exposures: list[Exposure], person: ScanRequest) -> tuple[list[R
             if item.get("url"):
                 texts[normalize_url(item["url"])] = item.get("raw_content") or ""
     items = [
-        RescanItem(exposure_id=e.id, url=e.url, status=removal_status(texts.get(normalize_url(e.url), ""), person))
+        RescanItem(
+            exposure_id=e.id,
+            url=e.url,
+            status=combined_status(
+                [removal_status(texts.get(normalize_url(u), ""), person) for u in [e.url, *e.other_urls]]
+            ),
+        )
         for e in exposures
     ]
     return items, errors
+
+
+def combined_status(statuses: list[str]) -> str:
+    """One status for a card's pages: still listed if any page still lists the person,
+    removed only if every page is confirmed removed, otherwise unconfirmed."""
+    if "still_listed" in statuses:
+        return "still_listed"
+    if statuses and all(s == "removed" for s in statuses):
+        return "removed"
+    return "unconfirmed"

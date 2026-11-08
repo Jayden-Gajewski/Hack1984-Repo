@@ -248,7 +248,7 @@ export default function OutboundLog() {
             </button>
           </div>
           {breakdown && <p className="muted small">{breakdown}</p>}
-          <p className="muted small mt">Every request that left this laptop, with exactly what was sent.</p>
+          <p className="muted small mt">Every request Dossier sent, with exactly what was in it.</p>
           <label className="check ledger-toggle">
             <input type="checkbox" checked={includeLocal} onChange={(e) => setIncludeLocal(e.target.checked)} />
             <span>Show calls that stayed on this machine</span>

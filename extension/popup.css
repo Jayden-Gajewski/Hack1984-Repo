@@ -1170,3 +1170,43 @@ details[open] > summary::after {
     border: 1px solid CanvasText;
   }
 }
+
+/* ---------- Private email for this site: a card at the end of This site ---------- */
+
+.alias-box {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+}
+
+.alias-box h2 {
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  font-weight: 600;
+}
+
+.alias-box .alias-address {
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.alias-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.alias-actions > * {
+  flex: 1;
+}
+
+@media (forced-colors: active) {
+  .alias-box {
+    border: 1px solid CanvasText;
+  }
+}

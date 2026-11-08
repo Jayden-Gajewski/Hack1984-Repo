@@ -33,8 +33,10 @@ from itertools import count
 from typing import Any
 
 import httpx
+import truststore
 from pydantic import BaseModel
 
+from app import auth
 from app.config import LOCAL_HOSTS
 
 MAX_LOG_ENTRIES = 500
@@ -86,6 +88,7 @@ class OutboundEntry(BaseModel):
     status: int | None = None
     ms: int | None = None
     error: str | None = None
+    user_id: str | None = None  # the account it was for; the public site shows each account its own
 
 
 _log: deque[OutboundEntry] = deque(maxlen=MAX_LOG_ENTRIES)
@@ -95,10 +98,17 @@ _client: httpx.AsyncClient | None = None
 _site_client: httpx.AsyncClient | None = None
 
 
+def _tls_context() -> ssl.SSLContext:
+    # Verify certificates against the OS trust store (Windows/macOS keychain) instead of
+    # certifi's bundle, so a locally trusted root (e.g. antivirus HTTPS scanning) works.
+    # Verification stays on: never pass verify=False.
+    return truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+
+
 def _get_client() -> httpx.AsyncClient:
     global _client
     if _client is None:
-        _client = httpx.AsyncClient(headers={"User-Agent": USER_AGENT})
+        _client = httpx.AsyncClient(headers={"User-Agent": USER_AGENT}, verify=_tls_context())
     return _client
 
 
@@ -206,6 +216,7 @@ async def request(
     body = copy.deepcopy(json_body)
     entry = OutboundEntry(
         id=next(_ids),
+        user_id=auth.current_user(),
         time=datetime.now(timezone.utc).isoformat(),
         service=service,
         purpose=purpose,
@@ -243,7 +254,7 @@ async def request(
 
 
 def _smtp_send(host: str, port: int, username: str, password: str, message: EmailMessage, timeout: float) -> None:
-    context = ssl.create_default_context()
+    context = _tls_context()
     if port == 465:
         server: smtplib.SMTP = smtplib.SMTP_SSL(host, port, timeout=timeout, context=context)
     else:
@@ -287,6 +298,7 @@ async def send_mail(
     message.set_content(text)
     entry = OutboundEntry(
         id=next(_ids),
+        user_id=auth.current_user(),
         time=datetime.now(timezone.utc).isoformat(),
         service="smtp",
         purpose=purpose,
@@ -309,14 +321,18 @@ async def send_mail(
         entry.ms = int((time.monotonic() - started) * 1000)
 
 
-def get_log(include_local: bool = True) -> list[OutboundEntry]:
+def get_log(include_local: bool = True, user_id: str | None = None) -> list[OutboundEntry]:
+    """Every entry, or only one account's when user_id is given (the public site)."""
     entries = sorted([*_log, *_site_log], key=lambda e: e.id)
-    return [e for e in entries if include_local or not e.local]
+    return [e for e in entries if (include_local or not e.local) and (user_id is None or e.user_id == user_id)]
 
 
-def clear_log() -> None:
-    _log.clear()
-    _site_log.clear()
+def clear_log(user_id: str | None = None) -> None:
+    """Clear every entry, or only one account's."""
+    for entries in (_log, _site_log):
+        kept = [e for e in entries if user_id is not None and e.user_id != user_id]
+        entries.clear()
+        entries.extend(kept)
 
 
 def drop_entries(purpose_prefix: str) -> int:

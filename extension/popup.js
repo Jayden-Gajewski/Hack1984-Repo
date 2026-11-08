@@ -15,6 +15,8 @@
 import {
   APP_URL,
   Offline,
+  SignedOut,
+  aliasRequest,
   cachedResult,
   checkPage,
   forgetSites,
@@ -110,6 +112,7 @@ const readBox = document.getElementById("read-policies");
 const forgetButton = document.getElementById("forget");
 const forgetResult = document.getElementById("forget-result");
 const siteList = document.getElementById("site-list");
+const aliasBox = document.getElementById("alias");
 const views = { main, sites: document.getElementById("sites"), settings: document.getElementById("settings") };
 const tabButtons = [...document.querySelectorAll(".tabbar button")];
 const mark = [...avatar.childNodes]; // the app's mark, shown until a site is known
@@ -205,7 +208,7 @@ function show(...nodes) {
   const open = new Set([...main.querySelectorAll("details[open][data-key]")].map((d) => d.dataset.key));
   const active = main.contains(document.activeElement) ? document.activeElement : null;
   const focusKey = active?.dataset.focusKey ?? active?.closest("details[data-key]")?.dataset.key ?? null;
-  main.replaceChildren(...nodes.flat().filter(Boolean));
+  main.replaceChildren(...nodes.flat().filter(Boolean), aliasBox);
   for (const details of main.querySelectorAll("details[data-key]")) {
     if (open.has(details.dataset.key)) details.open = true;
   }
@@ -781,6 +784,122 @@ function goTo(name) {
   if (name === "sites") renderSites();
 }
 
+// ---------- private email for this site ----------
+// Shown when the page asks for an email address. Only the site's hostname goes to the app on this
+// laptop; the alias is filled into the page only when you click "Fill in".
+
+
+function aliasShow(...nodes) {
+  aliasBox.replaceChildren(
+    h("h2", { id: "alias-title" }, "Private email for this site"),
+    ...nodes.flat().filter(Boolean),
+  );
+  aliasBox.hidden = false;
+}
+
+async function fillIn(address, note) {
+  let filled = false;
+  try {
+    const reply = await chrome.tabs.sendMessage(tabId, { type: "fill-email", address }, { frameId: 0 });
+    filled = reply?.filled === true;
+  } catch {
+    // content.js isn't on this page (reload it) or the tab is gone.
+  }
+  if (!filled) {
+    try {
+      await navigator.clipboard.writeText(address);
+      note.textContent = "Couldn't find the email field, so it's copied. Paste it in.";
+    } catch {
+      note.textContent = "Couldn't find the email field. Select the address above and copy it.";
+    }
+  } else {
+    note.textContent = "Filled in. Check it before you submit the form.";
+  }
+  announce(note.textContent);
+}
+
+function renderAlias(alias) {
+  const note = h("p", { class: "fine", role: "status" });
+  aliasShow(
+    h("p", { class: "alias-address" }, alias.alias),
+    h(
+      "p",
+      { class: "fine" },
+      `Made ${alias.created_at} for ${alias.site || alias.company}. If anyone but this site writes to it, Dossier can show where your address went.`,
+    ),
+    h(
+      "div",
+      { class: "alias-actions" },
+      h("button", { type: "button", class: "button button--primary", onclick: () => fillIn(alias.alias, note) }, "Fill in"),
+      h(
+        "button",
+        {
+          type: "button",
+          class: "button",
+          onclick: async () => {
+            try {
+              await navigator.clipboard.writeText(alias.alias);
+              note.textContent = "Copied.";
+            } catch {
+              note.textContent = "Couldn't copy. Select the address and copy it.";
+            }
+            announce(note.textContent);
+          },
+        },
+        "Copy",
+      ),
+    ),
+    note,
+  );
+}
+
+async function startAlias() {
+  if (!page?.asksFor?.includes("email") || !isCheckable(page.origin)) return;
+  const host = bareHost(page.origin);
+  try {
+    const existing = (await aliasRequest("GET")).find((a) => a.site === host && a.status === "active");
+    if (existing) {
+      renderAlias(existing);
+      return;
+    }
+    const error = h("p", { class: "fine", role: "status" });
+    const make = h(
+      "button",
+      {
+        type: "button",
+        class: "button button--primary",
+        onclick: async () => {
+          make.disabled = true;
+          make.textContent = "Making…";
+          try {
+            renderAlias(await aliasRequest("POST", { site: host, label: "made from the extension" }));
+            announce(`Made a private email for ${host}.`);
+          } catch (err) {
+            make.disabled = false;
+            make.textContent = `Make one for ${host}`;
+            error.textContent = err instanceof SignedOut ? "Sign in to Dossier in this browser, then try again." : err.message;
+          }
+        },
+      },
+      `Make one for ${host}`,
+    );
+    aliasShow(
+      h("p", {}, "This page asks for your email. Give it an address of its own instead."),
+      h("div", { class: "alias-actions" }, make),
+      h("p", { class: "fine" }, "Only the site's name is sent, to Dossier on this laptop."),
+      error,
+    );
+  } catch (err) {
+    if (err instanceof SignedOut) {
+      aliasShow(
+        h("p", {}, "This page asks for your email. Sign in to Dossier to give it a private address instead."),
+        h("a", { class: "button", href: "http://localhost:3000/login", target: "_blank", rel: "noopener noreferrer" }, "Sign in to Dossier ↗"),
+      );
+    }
+    // The app isn't running: say nothing here; the main check already explains what's off.
+  }
+}
+
 // ---------- flow ----------
 
 async function run(options) {
@@ -851,6 +970,7 @@ async function start() {
     return;
   }
   elsewhere = await sightings(page.origin);
+  void startAlias(); // independent of the policy check
   const cached = await cachedResult(page.origin);
   if (cached) render(cached);
   else renderLoading("Reading this site's privacy policy…");

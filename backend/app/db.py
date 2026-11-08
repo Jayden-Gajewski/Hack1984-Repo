@@ -105,6 +105,43 @@ create table if not exists footprint_events (
 -- Saved scans belong to the account that ran them. Rows saved before accounts existed have no
 -- owner, so nobody who is signed in sees them.
 alter table scans add column if not exists user_id uuid references users(id) on delete cascade;
+
+-- Email identity manager: aliases belong to an account and can be made per website.
+alter table aliases add column if not exists user_id uuid references users(id) on delete cascade;
+alter table aliases add column if not exists site  text not null default '';
+alter table aliases add column if not exists label text not null default '';
+-- Aliases made before accounts owned them go to the laptop's first admin.
+update aliases set user_id = (select id from users where role = 'admin' order by created_at, id limit 1)
+    where user_id is null;
+
+-- Each account's on/off switch and note per alias. Keyed by the address, so it also covers the
+-- demo aliases in data/mock_aliases.json, which aren't rows in the aliases table.
+create table if not exists alias_states (
+    user_id     uuid not null references users(id) on delete cascade,
+    alias       text not null,
+    status      text not null default 'active' check (status in ('active', 'disabled')),
+    disabled_at date,
+    note        text not null default '',
+    updated_at  timestamptz not null default now(),
+    primary key (user_id, alias)
+);
+
+-- Public site: companies an account added to its picker (this laptop keeps backend/local/companies.json).
+create table if not exists custom_companies (
+    user_id    uuid not null references users(id) on delete cascade,
+    id         text not null,
+    company    jsonb not null,
+    created_at timestamptz not null default now(),
+    primary key (user_id, id)
+);
+
+-- Public site: paid searches (Exa, Tavily, Gemini) per account per day, for the daily limits.
+create table if not exists usage_counts (
+    day     date not null,
+    user_id uuid not null references users(id) on delete cascade,
+    count   integer not null default 0,
+    primary key (day, user_id)
+);
 """
 
 
@@ -178,26 +215,99 @@ def latest_scan() -> tuple[dict[str, Any], dict[str, Any]] | None:
     return (row[0], row[1]) if row else None
 
 
-def save_alias(alias: str, company: str, company_domains: list[str]) -> str:
-    """Store a new alias. Returns its creation date (YYYY-MM-DD)."""
+def custom_companies() -> list[dict[str, Any]]:
+    """Companies this account added to its picker (public site), oldest first."""
+    with connect() as conn:
+        rows = conn.execute(
+            "select company from custom_companies where user_id = %s order by created_at", (_owner(),)
+        ).fetchall()
+    return [r[0] for r in rows]
+
+
+def add_custom_company(company: dict[str, Any]) -> None:
+    with connect() as conn:
+        conn.execute(
+            "insert into custom_companies (user_id, id, company) values (%s, %s, %s) on conflict do nothing",
+            (_owner(), company["id"], Jsonb(company)),
+        )
+
+
+def take_search(per_account: int, total: int) -> bool:
+    """Count one paid search for this account today. False, and nothing counted, when this
+    account or everyone together has used up today's limit."""
+    with connect() as conn, conn.transaction():
+        mine, everyone = conn.execute(
+            "select coalesce(sum(count) filter (where user_id = %s), 0), coalesce(sum(count), 0)"
+            " from usage_counts where day = current_date",
+            (_owner(),),
+        ).fetchone()
+        if mine >= per_account or everyone >= total:
+            return False
+        conn.execute(
+            "insert into usage_counts (day, user_id, count) values (current_date, %s, 1)"
+            " on conflict (day, user_id) do update set count = usage_counts.count + 1",
+            (_owner(),),
+        )
+    return True
+
+
+def save_alias(alias: str, company: str, company_domains: list[str], site: str = "", label: str = "") -> str:
+    """Store a new alias for the signed-in account. Returns its creation date (YYYY-MM-DD)."""
     with connect() as conn:
         row = conn.execute(
-            "insert into aliases (alias, company, company_domains) values (%s, %s, %s) returning created_at",
-            (alias, company, Jsonb(company_domains)),
+            "insert into aliases (alias, company, company_domains, site, label, user_id)"
+            " values (%s, %s, %s, %s, %s, %s) returning created_at",
+            (alias, company, Jsonb(company_domains), site, label, _owner()),
         ).fetchone()
     return row[0].date().isoformat()
 
 
 def list_aliases() -> list[dict[str, Any]]:
-    """Every saved alias, oldest first, as dicts shaped like models.Alias."""
+    """The signed-in account's saved aliases, oldest first, as dicts shaped like models.Alias."""
     with connect() as conn:
         rows = conn.execute(
-            "select alias, company, company_domains, created_at from aliases order by created_at"
+            "select alias, company, company_domains, created_at, site, label from aliases"
+            " where user_id is not distinct from %s order by created_at",
+            (_owner(),),
         ).fetchall()
     return [
-        {"alias": a, "company": c, "company_domains": d, "created_at": t.date().isoformat()}
-        for a, c, d, t in rows
+        {"alias": a, "company": c, "company_domains": d, "created_at": t.date().isoformat(), "site": s, "label": lb}
+        for a, c, d, t, s, lb in rows
     ]
+
+
+def alias_states() -> dict[str, dict[str, Any]]:
+    """The signed-in account's status and note per alias address (lowercase). Missing = active."""
+    with connect() as conn:
+        rows = conn.execute(
+            "select alias, status, disabled_at, note from alias_states where user_id = %s", (_owner(),)
+        ).fetchall()
+    return {
+        a.lower(): {"status": s, "disabled_at": d.isoformat() if d else None, "note": n}
+        for a, s, d, n in rows
+    }
+
+
+def set_alias_state(alias: str, status: str | None, note: str | None) -> dict[str, Any]:
+    """Change an alias's status and/or note for the signed-in account. Disabling stamps today's
+    date; re-enabling clears it. Returns the new state."""
+    with connect() as conn:
+        row = conn.execute(
+            "insert into alias_states (user_id, alias, status, disabled_at, note)"
+            " values (%s, %s, coalesce(%s, 'active'),"
+            "         case when %s = 'disabled' then current_date end, coalesce(%s, ''))"
+            " on conflict (user_id, alias) do update set"
+            "   status = coalesce(%s, alias_states.status),"
+            "   disabled_at = case"
+            "     when %s = 'disabled' and alias_states.status <> 'disabled' then current_date"
+            "     when %s = 'active' then null"
+            "     else alias_states.disabled_at end,"
+            "   note = coalesce(%s, alias_states.note),"
+            "   updated_at = now()"
+            " returning status, disabled_at, note",
+            (_owner(), alias.lower(), status, status, note, status, status, status, note),
+        ).fetchone()
+    return {"status": row[0], "disabled_at": row[1].isoformat() if row[1] else None, "note": row[2]}
 
 
 # ---------- Local accounts ----------

@@ -365,3 +365,42 @@ def test_select_candidates_skips_social_sites_and_caps_each_site():
     assert not any("linkedin" in u for u in picked)  # never a listing: no LLM call
     assert not any("other.example" in u for u in picked)  # doesn't mention the surname
     assert len(s1.select_candidates(found, "example", brokers, max_pages=2)) == 2
+
+
+# ---------- one card per site ----------
+
+
+def _card(url, fields, broker_id="peoplefinder", text_source="extract", published=None):
+    return s1.Exposure(
+        id=s1.exposure_id(url), broker="PeopleFinder", broker_id=broker_id, url=url,
+        text_source=text_source, published_date=published,
+        fields=[FieldFinding(field=f, quote=q) for f, q in fields],
+    )
+
+
+def test_merge_by_site_makes_one_card_per_site():
+    a = _card("https://peoplefinder.example/jane-example", [("name", "Jane Example"), ("age", "Age 34")],
+              published="2023-05-01")
+    b = _card("https://peoplefinder.example/jane-example/springfield-il",
+              [("name", "Jane Example"), ("age", "Age 34"), ("address", "12 Elm St, Springfield IL")],
+              published="2021-02-03")
+    other = _card("https://listings.example/jane", [("name", "Jane Example")], broker_id="listingsite")
+    merged = s1.merge_by_site([a, other, b])
+    assert [e.broker_id for e in merged] == ["peoplefinder", "listingsite"]
+    card = merged[0]
+    assert card.url == b.url  # the page that shows the most
+    assert card.id == b.id
+    assert card.other_urls == [a.url]
+    assert [(f.field, f.quote) for f in card.fields] == [
+        ("name", "Jane Example"), ("age", "Age 34"), ("address", "12 Elm St, Springfield IL"),
+    ]
+    assert card.published_date == "2021-02-03"  # earliest of the pages
+    assert merged[1].other_urls == []
+
+
+def test_merge_by_site_groups_unlisted_sites_by_host_and_keeps_distinct_values():
+    a = _card("https://www.newsite.example/p/1", [("address", "1 Oak Ave")], broker_id=None)
+    b = _card("https://newsite.example/p/2", [("address", "9 Pine Rd"), ("address", "1 oak  ave")], broker_id=None)
+    merged = s1.merge_by_site([a, b])
+    assert len(merged) == 1
+    assert sorted(" ".join(f.quote.lower().split()) for f in merged[0].fields) == ["1 oak ave", "9 pine rd"]

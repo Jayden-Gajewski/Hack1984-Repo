@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, type ResetCode, type Role, type User } from "@/lib/api";
 import Skeleton from "./Skeleton";
 
-// Admins only: every account on this laptop, its role, a one-time password reset code for someone
+// Admins only: every account, its role, a one-time password reset code for someone
 // who forgot theirs, and removing an account (with its saved scans and footprint). The backend
 // refuses to demote or remove the last admin.
 export default function AdminPanel({ me }: { me: User }) {
@@ -57,10 +57,10 @@ export default function AdminPanel({ me }: { me: User }) {
 
   return (
     <section className="section" aria-labelledby="accounts-h">
-      <h2 id="accounts-h">Accounts on this laptop</h2>
+      <h2 id="accounts-h">Accounts</h2>
       <p className="muted">
-        You&apos;re an admin. The first account made here is one; admins can promote others. Accounts never leave
-        this laptop.
+        You&apos;re an admin. The first account made here is one; admins can promote others. Accounts stay in Dossier&apos;s
+        database.
       </p>
       {error && (
         <p className="error" role="alert">

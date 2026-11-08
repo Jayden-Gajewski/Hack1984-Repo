@@ -90,7 +90,7 @@ export default function LogDemo() {
           Outbound log
         </span>
         <span className="demo-log-count">
-          <span>{sent} left this laptop</span>
+          <span>{sent} sent</span>
         </span>
       </div>
       <ol className="demo-log-rows">
