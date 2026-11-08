@@ -9,6 +9,10 @@ import "./extension.css";
 
 // The browser extension's page. Public; the download itself needs a signed-in account during the
 // beta. ShopCo, in the screenshot and the sample receipt, is a fictional store.
+//
+// The public site's download checks sites with that site and the user's own account, so nobody needs
+// the repo (backend/app/extension_package.py). On a laptop, the download uses Dossier on that laptop.
+const HOSTED = Boolean(process.env.SITE_URL || process.env.VERCEL);
 
 export const metadata: Metadata = {
   title: "Browser extension",
@@ -43,13 +47,21 @@ const SHOWS = [
   },
 ];
 
-const GUARANTEES = [
-  "It never reads what you type. Form fields are judged by their labels.",
-  "Trackers are matched by hostname. The rest of a tracker's address, where account IDs hide, is dropped.",
-  "Checking each site you visit contacts no site. Opening the popup reads that site's own policy and ads.txt, and logs each request.",
-  "Nothing goes to a search engine or a Dossier server. Opening the popup sends the policy's selling and sharing sentences to Google's AI, and that's logged too.",
-  "One button forgets the sites you've visited, in the extension and on the backend, and tells you what it can't recall.",
-];
+const GUARANTEES = HOSTED
+  ? [
+      "It never reads what you type. Form fields are judged by their labels.",
+      "Trackers are matched by hostname. The rest of a tracker's address, where account IDs hide, is dropped.",
+      "Dossier hears about a site when you open the popup on it. Checking every site you visit is off until you turn it on.",
+      "Opening the popup has Dossier read that site's own policy and ads.txt, and send the policy's selling and sharing sentences to Google's AI. Each request is logged in your account.",
+      "Nothing goes to a search engine. One button forgets the sites you've visited, in the extension and on Dossier's server, and tells you what it can't recall.",
+    ]
+  : [
+      "It never reads what you type. Form fields are judged by their labels.",
+      "Trackers are matched by hostname. The rest of a tracker's address, where account IDs hide, is dropped.",
+      "Checking each site you visit contacts no site. Opening the popup reads that site's own policy and ads.txt, and logs each request.",
+      "Nothing goes to a search engine or a Dossier server. Opening the popup sends the policy's selling and sharing sentences to Google's AI, and that's logged too.",
+      "One button forgets the sites you've visited, in the extension and on the backend, and tells you what it can't recall.",
+    ];
 
 const RECEIPT = [
   { service: "Website", local: false, method: "GET", url: "shopco.example/legal/privacy", note: "No cookies sent. Read straight from the site.", status: "200" },
@@ -95,7 +107,7 @@ export default function ExtensionPage() {
               </a>
             </ExtensionDownload>
             <p className="hero-note">
-              <Lock /> Free beta. It works while Dossier runs on this computer.
+              <Lock /> {HOSTED ? "Free beta. It checks sites with your Dossier account." : "Free beta. It works while Dossier runs on this computer."}
             </p>
           </div>
 
@@ -200,16 +212,31 @@ export default function ExtensionPage() {
                   </div>
                 </li>
               </ol>
-              <aside className="ext-req">
-                <h3>Keep Dossier running</h3>
-                <p>
-                  During the beta, the extension checks sites with the Dossier app on this computer. If it isn&apos;t
-                  running, the badge stays blank and the popup says so. Start it from the Dossier folder:
-                </p>
-                <pre>
-                  <code>{"cd backend\nuvicorn app.main:app"}</code>
-                </pre>
-              </aside>
+              {HOSTED ? (
+                <aside className="ext-req">
+                  <h3>Stay signed in</h3>
+                  <p>
+                    The extension checks sites with your Dossier account, so sign in to Dossier in the same browser.
+                    Signed out, the popup says so and checks nothing.
+                  </p>
+                  <p>
+                    It checks a site when you open the popup on it. For a badge on every page, turn on &ldquo;Check
+                    every site I visit&rdquo; in its Settings. That sends each site&apos;s address to Dossier, so
+                    it&apos;s off until you choose it.
+                  </p>
+                </aside>
+              ) : (
+                <aside className="ext-req">
+                  <h3>Keep Dossier running</h3>
+                  <p>
+                    During the beta, the extension checks sites with the Dossier app on this computer. If it isn&apos;t
+                    running, the badge stays blank and the popup says so. Start it from the Dossier folder:
+                  </p>
+                  <pre>
+                    <code>{"cd backend\nuvicorn app.main:app"}</code>
+                  </pre>
+                </aside>
+              )}
             </div>
           </div>
         </section>
@@ -234,7 +261,7 @@ export default function ExtensionPage() {
               <div className="demo-log-head">
                 <span className="demo-log-title">Opening the popup on shopco.example</span>
                 <span className="demo-log-count">
-                  <span>3 left this computer</span>
+                  <span>{HOSTED ? "3 sent by Dossier" : "3 left this computer"}</span>
                 </span>
               </div>
               <ol className="demo-log-rows">
@@ -268,7 +295,7 @@ export default function ExtensionPage() {
       <footer className="wrap foot">
         <div className="foot-brand">
           <Logo />
-          <p>Runs on your laptop. Every request that leaves it is logged.</p>
+          <p>{HOSTED ? "Every request Dossier sends for you is logged." : "Runs on your laptop. Every request that leaves it is logged."}</p>
         </div>
         <nav className="foot-nav" aria-label="Footer">
           <a href="#shows">What it shows</a>

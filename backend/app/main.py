@@ -209,15 +209,21 @@ OPEN_ROUTES = {
     "/api/auth/signup", "/api/auth/login", "/api/auth/logout", "/api/auth/me", "/api/auth/reset",
 }
 # The browser extension (extension/) calls only this route (POST to check a site, DELETE to forget
-# the sites checked). It has no session cookie (it talks to 127.0.0.1:8000, not the app) and sends
-# a chrome-extension:// Origin. The route never touches the database or the disk, only the
-# extension's own in-memory results, and it checks the Origin itself: it refuses any web page.
+# the sites checked), with a chrome-extension:// Origin. On this laptop it has no session cookie (it
+# talks to 127.0.0.1:8000, not the app), so the route is open to it. The route never touches the
+# database or the disk, only the extension's own in-memory results, and it checks the Origin
+# itself: it refuses any web page. On the public site the extension's downloaded copy calls the
+# site with its user's session instead (extension_package.py), so there the route needs one.
 EXTENSION_ROUTES = {"/api/site-policy"}
 # The extension's "private email for this site" lists and makes aliases through the app
-# (localhost:3000), with the user's own session cookie. A chrome-extension:// Origin may make
-# changes on these exact routes and methods only; a signed-in session is still required, and
-# every other change still has to come from a page on this laptop.
-EXTENSION_SESSION_ROUTES = {("GET", "/api/aliases"), ("POST", "/api/aliases")}
+# (localhost:3000, or the public site), with the user's own session cookie, and on the public site
+# it checks sites the same way. A chrome-extension:// Origin may make changes on these exact routes
+# and methods only; a signed-in session is still required, and every other change still has to
+# come from Dossier's own pages.
+EXTENSION_SESSION_ROUTES = {
+    ("GET", "/api/aliases"), ("POST", "/api/aliases"),
+    ("POST", "/api/site-policy"), ("DELETE", "/api/site-policy"),
+}
 
 
 def _extension_may_call(request: Request, origin: str | None) -> bool:
@@ -226,11 +232,9 @@ def _extension_may_call(request: Request, origin: str | None) -> bool:
     ) in EXTENSION_SESSION_ROUTES
 
 
-# Not on the public site yet: the Threat Monitor keeps one person's data, and the extension talks
-# to the Dossier app on its user's own computer.
+# Not on the public site yet: the Threat Monitor keeps one person's data.
 PUBLIC_OFF = {
     "/api/monitor": "The Threat Monitor isn't on the public site yet. It runs in the Dossier app on your own computer.",
-    "/api/site-policy": "The browser extension works with the Dossier app on your own computer.",
 }
 
 
@@ -252,11 +256,12 @@ def _allowed_origin(origin: str) -> bool:
 @app.middleware("http")
 async def require_session(request: Request, call_next):
     path = request.url.path
-    if get_settings().public:
+    public = get_settings().public
+    if public:
         off = next((msg for prefix, msg in PUBLIC_OFF.items() if path.startswith(prefix)), None)
         if off:
             return JSONResponse({"detail": off}, status_code=404)
-    if not path.startswith("/api/") or path in EXTENSION_ROUTES:
+    if not path.startswith("/api/") or (path in EXTENSION_ROUTES and not public):
         return await call_next(request)
     # Changes must come from Dossier's own pages, even if some other site's page got a browser
     # to send our cookie along.
@@ -517,8 +522,9 @@ async def inbox_check():
 @app.get("/api/extension.zip")
 async def extension_download():
     """The browser extension, zipped from extension/ for Chrome's "Load unpacked". Signed-in
-    accounts only during the beta (require_session covers this route)."""
-    data = await asyncio.to_thread(extension_package.zip_extension)
+    accounts only during the beta (require_session covers this route). The public site's copy
+    checks sites with that site and its user's own sign-in; this laptop's uses this laptop."""
+    data = await asyncio.to_thread(extension_package.zip_extension, get_settings().site_url)
     return Response(
         data,
         media_type="application/zip",
@@ -531,7 +537,8 @@ async def site_policy_check(req: SitePolicyRequest, origin: str | None = Header(
     """The browser extension (extension/): what the privacy policy of the site you're visiting
     says it collects and shares, and the risks. The policy is read straight from the site (or
     sent by the browser), checked by fixed rules and, from the popup, by Gemini. Which sites you
-    visit is never saved to disk."""
+    visit is never saved to disk. On the public site it needs the user's session, and each
+    account has its own results."""
     # Only the extension calls this route. A web page can't read the answer, but it could still
     # send page text to plant a fake verdict, so refuse anything that says it came from a page.
     if origin and not origin.startswith("chrome-extension://"):
@@ -546,11 +553,12 @@ async def site_policy_check(req: SitePolicyRequest, origin: str | None = Header(
 async def site_policy_forget(origin: str | None = Header(default=None)):
     """The extension's "Forget the sites I've visited": every site result held in memory, and the
     outbound log's entries for them (pages read from sites, and the Gemini calls, which name the
-    site). It can't recall what was already sent: the sites and Gemini still got those requests."""
+    site). It can't recall what was already sent: the sites and Gemini still got those requests.
+    On the public site, only the signed-in account's own results and entries."""
     if origin and not origin.startswith("chrome-extension://"):
         raise HTTPException(403, "Only the Dossier browser extension can use this route.")
     sites = site_policy.forget()
-    entries = outbound.drop_entries(site_policy.LOG_PREFIX)
+    entries = outbound.drop_entries(site_policy.LOG_PREFIX, user_id=_log_owner())
     return {"sites": sites, "log_entries": entries}
 
 

@@ -85,11 +85,11 @@
       <ul class="rows">
         <li class="row preference">
           <label class="toggle"><input type="checkbox" id="auto" /> Check every site I visit</label>
-          <p class="fine">Uses only what your browser already loaded. It contacts no site.</p>
+          <p class="fine" id="auto-note">Uses only what your browser already loaded. It contacts no site.</p>
         </li>
         <li class="row preference">
           <label class="toggle"><input type="checkbox" id="read-policies" /> Also read each site's policy automatically</label>
-          <p class="fine">
+          <p class="fine" id="read-policies-note">
             Reading a policy sends one request from this computer straight to the site, outside any VPN
             or proxy that's only in your browser, and the request says it's from Dossier. Opening this
             popup always reads it.
@@ -98,12 +98,12 @@
       </ul>
       <section class="card">
         <h2>How your data is handled</h2>
-        <p class="fine">
+        <p class="fine" id="handled-note">
           Policies are checked by fixed rules on this laptop. When you open this popup, the policy's
           selling and sharing sentences also go to Google's Gemini, with the site's name. Nothing goes
           to a search engine. Form fields are judged by their labels, not by what's in them.
         </p>
-        <p class="fine">Every request Dossier makes is listed in the outbound log in the Dossier app.</p>
+        <p class="fine" id="log-note">Every request Dossier makes is listed in the outbound log in the Dossier app.</p>
       </section>
     </section>
 

@@ -1,6 +1,6 @@
 // Dossier content script. It runs on every http(s) page, in the top frame only, and only reads the
-// page: it makes no network requests and changes nothing. It tells the extension, which asks the
-// Dossier backend on this laptop:
+// page: it makes no network requests and changes nothing. It tells the extension, which asks
+// Dossier (the backend on this laptop, or the public site for the copy downloaded from it):
 // - the page's privacy-policy links, and any "Do Not Sell or Share" link to the site's own pages;
 // - the hostnames, and only the hostnames, of other sites the page loaded scripts, images, frames
 //   or beacons from, so known trackers can be named. A tracker's full URL often carries an account
@@ -9,7 +9,7 @@
 //   the page says about each field: its type, autocomplete hint, name and label. It never reads
 //   what's in a field, whether typed by the user or filled in by the site.
 // The page's text is read only when the page is itself a privacy policy, or when the user chooses
-// "Check this page", and then it goes to the backend on this laptop only.
+// "Check this page", and then it goes to Dossier only.
 //
 // Pages are untrusted. A page can shadow document methods and form properties with elements named
 // "querySelectorAll" or "action", so those are always called through the browser's own prototypes.

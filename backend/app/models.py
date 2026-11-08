@@ -472,7 +472,8 @@ class SitePolicyResponse(BaseModel):
     risk: RiskLevel | None = None  # overall; null when the policy couldn't be read
     summary: str = ""
     opt_out_url: str | None = None
-    llm: Literal["off", "running", "done", "failed"] = "off"
+    # "limit": the public site skipped the Gemini pass because the account used up today's AI checks.
+    llm: Literal["off", "running", "done", "failed", "limit"] = "off"
     checked_at: str  # ISO time this laptop read the policy
     errors: list[str] = []
     # What the page itself does, seen in the browser: trackers it loaded and personal data it asks for.

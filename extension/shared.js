@@ -1,14 +1,24 @@
 // Shared by the service worker and the popup. The extension's only network calls are here, and
-// they go to the Dossier backend on this laptop. If you run the backend on another port, change
-// BACKEND and the host_permissions in manifest.json to match.
-export const BACKEND = "http://127.0.0.1:8000";
-// The Dossier app on this laptop, for "scan yourself" on a people-search site. Only opened as a
-// link, with nothing added to it.
-export const APP_URL = "http://localhost:3000/app";
+// they go to Dossier: the backend on this laptop, or, in the copy downloaded from the public site,
+// that site with the user's own session (config.js says which).
+import { APP_ORIGIN, BACKEND, HOSTED } from "./config.js";
+
+export { HOSTED };
+// The Dossier app, for "scan yourself" on a people-search site. Only opened as a link, with
+// nothing added to it.
+export const APP_URL = `${APP_ORIGIN}/app`;
+export const LOGIN_URL = `${APP_ORIGIN}/login`;
+// Who reads policies, in the popup's wording.
+export const WHERE = HOSTED ? "Dossier's server" : "this laptop";
+// Settings before the user changes them. On this laptop the automatic check sends nothing beyond
+// it. From the public site it would send every site you visit to Dossier's server, so it waits
+// until the user turns it on.
+export const DEFAULTS = { auto: !HOSTED, readPolicies: false };
 // Private emails are the signed-in account's own data, so they go through the app (which proxies
 // to the backend) with the user's session cookie. Only GET/POST /api/aliases accept the
-// extension's origin (backend/app/main.py EXTENSION_SESSION_ROUTES).
-const APP_ORIGIN = "http://localhost:3000";
+// extension's origin (backend/app/main.py EXTENSION_SESSION_ROUTES), and on the public site the
+// site checks too.
+const CREDENTIALS = HOSTED ? "include" : "same-origin";
 
 export class Offline extends Error {}
 export class SignedOut extends Error {}
@@ -24,7 +34,7 @@ export async function aliasRequest(method, body = undefined) {
       body: body ? JSON.stringify(body) : undefined,
     });
   } catch {
-    throw new Offline("The Dossier app isn't running.");
+    throw new Offline(HOSTED ? "Couldn't reach Dossier." : "The Dossier app isn't running.");
   }
   if (res.status === 401) throw new SignedOut("Sign in to Dossier in this browser.");
   if (!res.ok) {
@@ -76,12 +86,14 @@ export async function checkPage(page, { deep = false, refresh = false, pageText 
   try {
     res = await fetch(`${BACKEND}/api/site-policy`, {
       method: "POST",
+      credentials: CREDENTIALS,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
   } catch {
-    throw new Offline("The Dossier backend isn't running.");
+    throw new Offline(HOSTED ? "Couldn't reach Dossier." : "The Dossier backend isn't running.");
   }
+  if (res.status === 401) throw new SignedOut("Sign in to Dossier in this browser.");
   if (!res.ok) {
     let detail = `The backend answered HTTP ${res.status}.`;
     try {
@@ -164,7 +176,7 @@ export async function visitedSites() {
 /**
  * "Forget the sites I've visited": every site result and page report in session storage, then the
  * backend's results and its log entries for those sites. Resolves to how many sites this browser
- * held and what the backend did: "cleared", "offline" or "failed" (with a detail).
+ * held and what the backend did: "cleared", "offline", "signed_out" or "failed" (with a detail).
  */
 export async function forgetSites() {
   const keys = Object.keys(await chrome.storage.session.get(null)).filter((key) => /^(site|tab):/.test(key));
@@ -172,10 +184,11 @@ export async function forgetSites() {
   const sites = keys.filter((key) => key.startsWith("site:")).length;
   let res;
   try {
-    res = await fetch(`${BACKEND}/api/site-policy`, { method: "DELETE" });
+    res = await fetch(`${BACKEND}/api/site-policy`, { method: "DELETE", credentials: CREDENTIALS });
   } catch {
     return { sites, backend: "offline" };
   }
+  if (res.status === 401) return { sites, backend: "signed_out" };
   if (!res.ok) return { sites, backend: "failed", detail: `The backend answered HTTP ${res.status}.` };
   return { sites, backend: "cleared" }; // not the backend's own counts: they'd overwrite this browser's
 }
@@ -187,7 +200,7 @@ const BADGES = {
   medium: { text: "!", color: "#8a5300", words: "some privacy risk" },
 };
 
-/** state: a SitePolicyResponse, "checking", "offline" or null (no badge). */
+/** state: a SitePolicyResponse, "checking", "offline", "signed_out" or null (no badge). */
 export async function setBadge(tabId, state) {
   let text = "";
   let color = "#545c66";
@@ -196,7 +209,9 @@ export async function setBadge(tabId, state) {
     text = "…";
     title = "Dossier: reading this site's privacy policy…";
   } else if (state === "offline") {
-    title = "Dossier: start the backend on this laptop to check sites";
+    title = HOSTED ? "Dossier: couldn't reach Dossier to check this site" : "Dossier: start the backend on this laptop to check sites";
+  } else if (state === "signed_out") {
+    title = "Dossier: sign in to Dossier in this browser to check sites";
   } else if (state && typeof state === "object") {
     const badge = BADGES[state.risk];
     if (badge) {

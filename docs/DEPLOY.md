@@ -45,8 +45,15 @@ https-only. Without `SITE_URL` the backend behaves exactly like the local app.
   Gemini credits. Each account gets `SEARCHES_PER_DAY` (default 20) a day, and everyone together
   `SEARCHES_PER_DAY_TOTAL` (default 500). Set either on Render to change them. Loading a saved scan
   is free.
-- **Not there yet:** the Threat Monitor (it still keeps one person's data) and the browser
-  extension (it talks to the Dossier app on its user's own computer). Both keep working in the
+- **Browser extension:** the zip on `/extension` (signed in) is set up for the public site: it
+  calls `SITE_URL` with the user's session, so people need no repo or backend of their own. Each
+  account has its own results (in memory) and log entries, and the AI pass is capped at 100 a day
+  per account and 2,000 for everyone. Its "check every site I visit" starts off, because it would
+  send every site the user visits to the server. The zip is built from the repo's `extension/`
+  folder on each download, so `render.yaml` deploys from the repo root (Render hides files outside
+  a service's root directory). A service set up before this change: in Render, clear the
+  service's Root Directory (Settings > Build & Deploy) or sync the Blueprint, then redeploy.
+- **Not there yet:** the Threat Monitor (it still keeps one person's data). It keeps working in the
   local app.
 - **Sign-up is open.** Anyone can create an account and scan any name, which is the misuse risk
   people-search sites carry too. The consent checkbox stays, and the limits cap the cost. Keep an

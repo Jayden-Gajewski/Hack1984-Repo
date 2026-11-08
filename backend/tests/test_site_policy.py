@@ -775,15 +775,121 @@ def test_high_is_kept_for_what_the_company_admits():
 # ---------- the download on the website ----------
 
 
-def test_the_extension_download_is_for_signed_in_accounts(client):
+def _unzip(content: bytes) -> dict[str, str]:
     import io
     import zipfile
 
+    archive = zipfile.ZipFile(io.BytesIO(content))
+    return {name: archive.read(name).decode("utf-8", "replace") for name in archive.namelist()}
+
+
+def test_the_extension_download_is_for_signed_in_accounts(client):
     res = client.get("/api/extension.zip")
     assert res.status_code == 200 and res.headers["content-type"] == "application/zip"
-    names = zipfile.ZipFile(io.BytesIO(res.content)).namelist()
-    assert "dossier-privacy-check/manifest.json" in names
-    assert "dossier-privacy-check/content.js" in names
-    assert all(name.startswith("dossier-privacy-check/") for name in names)
+    files = _unzip(res.content)
+    assert "dossier-privacy-check/manifest.json" in files
+    assert "dossier-privacy-check/content.js" in files
+    assert all(name.startswith("dossier-privacy-check/") for name in files)
+    # This laptop's download uses this laptop, like the copy in the repo.
+    assert "HOSTED = false" in files["dossier-privacy-check/config.js"]
+    assert json.loads(files["dossier-privacy-check/manifest.json"])["host_permissions"] == [
+        "http://127.0.0.1:8000/*", "http://localhost:3000/*",
+    ]
     client.cookies.clear()
     assert client.get("/api/extension.zip").status_code == 401
+
+
+def test_a_server_without_the_extension_folder_refuses_rather_than_serving_an_empty_zip(monkeypatch, tmp_path):
+    from app import extension_package
+
+    monkeypatch.setattr(extension_package, "EXTENSION_DIR", tmp_path / "extension")
+    with pytest.raises(FileNotFoundError):
+        extension_package.zip_extension("https://dossier.example")
+
+
+# ---------- the public site: the downloaded extension, with each user's own account ----------
+
+SITE = "https://dossier.example"
+ME, OTHER = "00000000-0000-4000-8000-0000000000aa", "00000000-0000-4000-8000-0000000000bb"  # conftest's account
+EXTENSION = {"Origin": "chrome-extension://abcdef"}
+
+
+@pytest.fixture
+def public(client, monkeypatch):
+    """The signed-in test client, with the backend running as the public site and a second account."""
+    from app import db
+    from app.config import get_settings
+
+    _use(monkeypatch)
+    monkeypatch.setenv("SITE_URL", SITE)
+    get_settings.cache_clear()
+    monkeypatch.setattr(db, "session_user_id", lambda token: {"test-session": ME, "other-session": OTHER}.get(token))
+    yield client
+    get_settings.cache_clear()
+
+
+def test_the_public_sites_download_uses_the_public_site(public):
+    files = _unzip(public.get("/api/extension.zip").content)
+    config = files["dossier-privacy-check/config.js"]
+    assert "HOSTED = true" in config
+    assert f'BACKEND = "{SITE}"' in config and f'APP_ORIGIN = "{SITE}"' in config
+    manifest = json.loads(files["dossier-privacy-check/manifest.json"])
+    assert manifest["host_permissions"] == [f"{SITE}/*"]  # nothing on this computer, and no other site
+    assert manifest["permissions"] == ["storage", "activeTab"] and manifest["incognito"] == "not_allowed"
+
+
+def test_each_account_has_its_own_site_results_and_forgets_only_its_own(public):
+    body = {"origin": ORIGIN, "policy_urls": [POLICY_URL]}
+    assert public.post("/api/site-policy", json=body, headers=EXTENSION).json()["status"] == "ok"  # read for ME
+    assert [e.user_id for e in outbound.get_log() if e.service == "website"] == [ME]
+
+    public.cookies.set("h84_session", "other-session")
+    quick = {"origin": ORIGIN, "read_policy": False}
+    # The other account's automatic check doesn't reuse ME's result: which sites ME opened is ME's.
+    assert public.post("/api/site-policy", json=quick, headers=EXTENSION).json()["status"] == "not_read"
+    forgot = public.delete("/api/site-policy", headers=EXTENSION).json()
+    assert forgot == {"sites": 0, "log_entries": 0}  # it held nothing, and ME's entries stay
+
+    public.cookies.set("h84_session", "test-session")
+    assert public.post("/api/site-policy", json=quick, headers=EXTENSION).json()["status"] == "ok"
+    assert public.delete("/api/site-policy", headers=EXTENSION).json() == {"sites": 1, "log_entries": 1}
+    assert not site_policy._cache and not outbound.get_log()
+
+
+def test_the_ai_pass_has_a_daily_limit_per_account_on_the_public_site(monkeypatch):
+    from app import auth
+    from app.config import get_settings
+
+    monkeypatch.setattr(site_policy, "AI_CHECKS_PER_DAY", 2)
+    monkeypatch.setattr(site_policy, "AI_CHECKS_PER_DAY_TOTAL", 3)
+
+    def takes(account: str, n: int) -> list[bool]:
+        signed_in = auth.CURRENT_USER.set(account)
+        try:
+            return [site_policy.take_ai_check() for _ in range(n)]
+        finally:
+            auth.CURRENT_USER.reset(signed_in)
+
+    assert takes(ME, 5) == [True] * 5  # this laptop has no limit
+    site_policy.reset()
+    monkeypatch.setenv("SITE_URL", SITE)
+    get_settings.cache_clear()
+    assert takes(ME, 3) == [True, True, False]
+    site_policy.forget()  # forgetting the sites isn't a way around the limit
+    assert takes(ME, 1) == [False]
+    assert takes(OTHER, 2) == [True, False]  # everyone together has used up today's 3
+
+
+def test_an_account_past_its_limit_gets_the_rules_based_check(monkeypatch):
+    _use(monkeypatch)
+    monkeypatch.setattr(site_policy, "take_ai_check", lambda: False)
+
+    async def run():
+        first = await site_policy.check_site(_req(policy_urls=[POLICY_URL], deep=True))
+        await site_policy._cache["shopco.example"].task  # ads.txt is still read
+        return first
+
+    res = asyncio.run(run())
+    assert res.status == "ok" and res.llm == "limit"
+    assert [c.category for c in res.clauses] == ["sale", "affiliates"]  # the fixed rules still ran
+    assert not [e for e in outbound.get_log() if e.service == "gemini"]

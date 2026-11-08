@@ -21,7 +21,7 @@ These rules are the product. Do not break them, even temporarily, even to debug.
 - **Database:** PostgreSQL 16, plain SQL through `psycopg` in `backend/app/db.py`: accounts and sessions, saved scans, aliases, the footprint, and on the public site added companies and daily search counts. On a laptop it's the Docker container (`docker-compose.yml`); on the public site a hosted Postgres (Neon) with `sslmode=require`.
 - **LLM:** Google's Gemini API (`generateContent` with JSON output) in `clients/gemini.py`. `GEMINI_MODEL` picks the model (default `gemini-3.6-flash`, stable; `gemini-3.8-flash` is newer) and `GEMINI_PARALLEL` how many calls run at once (default 4). Without `GEMINI_API_KEY` the LLM steps are skipped and say so. The status API's `ollama_running` and `ollama_model` fields describe Gemini now; they keep their old names for the API contract.
 - **Frontend:** Next.js (App Router, React, TypeScript) in `frontend/`: port 3000 on a laptop, Vercel on the public site. It proxies `/api/*` to the backend (`BACKEND_URL`, default `http://localhost:8000`), so the browser only ever talks to the site it opened.
-- **Public site:** Vercel (frontend), Render (backend, `render.yaml`, one instance) and Neon (Postgres). Setting `SITE_URL` on the backend turns on public mode: each account's own scan and log, changes accepted only from `SITE_URL`'s origin, an https-only session cookie, daily search limits, and the Threat Monitor and extension route switched off. Vercel waits at most 120 seconds for any request; a scan keeps running past that and is saved. Steps: `docs/DEPLOY.md`.
+- **Public site:** Vercel (frontend), Render (backend, `render.yaml`, one instance) and Neon (Postgres). Setting `SITE_URL` on the backend turns on public mode: each account's own scan and log, changes accepted only from `SITE_URL`'s origin, an https-only session cookie, daily search limits, the Threat Monitor switched off, and the extension route open only to signed-in accounts. Vercel waits at most 120 seconds for any request; a scan keeps running past that and is saved. Steps: `docs/DEPLOY.md`.
 - **Config:** `.env` at the repo root: `EXA_API_KEY`, `TAVILY_API_KEY`, `GEMINI_API_KEY` (plus optional `GEMINI_MODEL`, `GEMINI_PARALLEL`, `SCAN_MAX_PAGES`), `ALIAS_DOMAIN`, `DATABASE_URL`; for the public site `SITE_URL`, `SEARCHES_PER_DAY`, `SEARCHES_PER_DAY_TOTAL`; for the threat monitor the optional `HIBP_API_KEY` and `SMTP_*`. Vercel needs `BACKEND_URL`, `SITE_URL` and `NEXT_TELEMETRY_DISABLED=1`. Without `SITE_URL`, `config.py` refuses a `DATABASE_URL` that isn't localhost; with it, a hosted one must use TLS. Commit `.env.example`, never `.env`.
 - **State:** each account's current scan in memory; accounts, saved scans, aliases and the footprint in Postgres; companies added to the picker in `backend/local/companies.json` on a laptop (Postgres on the public site); the threat monitor in `backend/local/monitor.json` (laptop only).
 
@@ -43,6 +43,7 @@ backend/
     auth.py          local accounts: scrypt password hashes, hashed session tokens, roles,
                      login throttling, admin-issued password reset codes
     site_policy.py   browser extension: privacy check for the site you're visiting
+    extension_package.py  the extension's zip; the public site's copy points at SITE_URL
     clients/         exa.py, tavily.py, wayback.py, gemini.py, hibp.py,
                      website.py (reads a policy straight from a site)
     stages/          s1_exposures.py ... s7_aliases.py
@@ -88,11 +89,10 @@ Details for each stage are in `backend/app/stages/CLAUDE.md`.
 ## Browser extension
 
 `extension/` checks every site you visit (`POST /api/site-policy`, `app/site_policy.py`). It shows what the privacy policy says the company collects and sells or shares, and what the page itself does: known trackers (`data/trackers.json`), the kinds of personal data its forms ask for, whether it's a people-search site, and its `ads.txt` ad sellers. It keeps the same rules:
-- The extension talks only to the backend on localhost (and to the app on localhost:3000 for the "private email for this site" alias, with the user's own session). From the page it sends only hostnames and fixed field-kind words, never what's typed or a full tracker URL.
+- The repo's copy talks only to the backend on localhost (and to the app on localhost:3000 for the "private email for this site" alias, with the user's own session). The copy downloaded from the public site is for people without the repo: `extension_package.py` rewrites its `config.js` and manifest so it talks only to `SITE_URL`, with the user's session, and its "check every site I visit" starts off. From the page it sends only hostnames and fixed field-kind words, never what's typed or a full tracker URL.
 - The automatic check on each visit contacts no site. When the popup opens, only the visited site is contacted, for its policy and its `ads.txt`. The backend fetches both straight from the site through `outbound.py`, and doesn't follow links or redirects to other sites. No search API is used.
 - Policies are checked by fixed rules in the backend. When the popup opens, the policy's selling and sharing sentences and the site's name also go to Gemini (logged as service `gemini`).
-- Results stay in memory, because the sites you visit are browsing history.
-- It works with the Dossier app running on the user's own computer. The public site switches its route off.
+- Results stay in memory, because the sites you visit are browsing history. On the public site each account has its own results and log entries, and the AI pass has a daily cap per account.
 
 Details and install steps are in `extension/README.md`.
 

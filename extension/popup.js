@@ -14,8 +14,12 @@
 // holds the browsing preferences.
 import {
   APP_URL,
+  DEFAULTS,
+  HOSTED,
+  LOGIN_URL,
   Offline,
   SignedOut,
+  WHERE,
   aliasRequest,
   cachedResult,
   checkPage,
@@ -284,29 +288,54 @@ function renderMessage(iconName, title, text, ...extra) {
   announce(title);
 }
 
+function tryAgainButton(primary = true) {
+  return h(
+    "button",
+    {
+      class: primary ? "button button--primary" : "button",
+      type: "button",
+      onclick: (event) => {
+        busy(event.currentTarget);
+        announce("Trying again…");
+        start();
+      },
+    },
+    "Try again",
+  );
+}
+
 function renderOffline() {
   siteSub.textContent = "Not checked";
+  if (HOSTED) {
+    renderMessage(
+      "power",
+      "Couldn't reach Dossier",
+      `The extension checks privacy policies with Dossier at ${bareHost(APP_URL)}, and it didn't answer. It can take up to a minute to wake up.`,
+      h("div", { class: "actions" }, tryAgainButton()),
+    );
+    return;
+  }
   renderMessage(
     "power",
     "Start Dossier on this laptop",
     "The extension checks privacy policies with the Dossier backend on your own computer, and it isn't running. Start it from the repo:",
     h("pre", { class: "code" }, "cd backend\nuvicorn app.main:app"),
+    h("div", { class: "actions" }, tryAgainButton()),
+  );
+}
+
+// The copy from the public site checks sites with the user's own Dossier account.
+function renderSignedOut() {
+  siteSub.textContent = "Not checked";
+  renderMessage(
+    "power",
+    "Sign in to Dossier",
+    `This extension checks sites with your Dossier account. Sign in at ${bareHost(APP_URL)} in this browser, then try again.`,
     h(
       "div",
       { class: "actions" },
-      h(
-        "button",
-        {
-          class: "button button--primary",
-          type: "button",
-          onclick: (event) => {
-            busy(event.currentTarget);
-            announce("Trying again…");
-            start();
-          },
-        },
-        "Try again",
-      ),
+      h("a", { class: "button button--primary", href: LOGIN_URL, target: "_blank", rel: "noopener noreferrer" }, "Sign in to Dossier ↗"),
+      tryAgainButton(false),
     ),
   );
 }
@@ -421,9 +450,10 @@ function details(result) {
         h("span", { class: "spinner", "aria-hidden": "true" }),
         "Gemini is reading the policy for more selling and sharing clauses…",
       ],
-      done: ["Checked by fixed rules on this laptop and by Gemini."],
+      done: [`Checked by fixed rules on ${WHERE} and by Gemini.`],
       failed: ["Gemini didn't answer, so this is the rules-based check."],
       off: ["Rules-based check. The Gemini check starts when you open this popup."],
+      limit: ["Rules-based check. Your account's Gemini checks for today are used up."],
     }[result.llm];
     lines.push(h("p", { class: `llm llm--${result.llm}` }, ...llm));
   }
@@ -436,7 +466,7 @@ function details(result) {
           : "";
     lines.push(h("p", { class: "source" }, "Policy: ", link(result.policy_url), `.${how}`));
   }
-  lines.push(h("p", { class: "source" }, `Checked at ${time(result.checked_at)} by this laptop.`));
+  lines.push(h("p", { class: "source" }, `Checked at ${time(result.checked_at)} by ${WHERE}.`));
   if (result.errors.length) {
     lines.push(
       h(
@@ -785,8 +815,8 @@ function goTo(name) {
 }
 
 // ---------- private email for this site ----------
-// Shown when the page asks for an email address. Only the site's hostname goes to the app on this
-// laptop; the alias is filled into the page only when you click "Fill in".
+// Shown when the page asks for an email address. Only the site's hostname goes to the Dossier app
+// (on this laptop, or the public site); the alias is filled into the page only when you click "Fill in".
 
 
 function aliasShow(...nodes) {
@@ -886,17 +916,17 @@ async function startAlias() {
     aliasShow(
       h("p", {}, "This page asks for your email. Give it an address of its own instead."),
       h("div", { class: "alias-actions" }, make),
-      h("p", { class: "fine" }, "Only the site's name is sent, to Dossier on this laptop."),
+      h("p", { class: "fine" }, HOSTED ? "Only the site's name is sent, to your Dossier account." : "Only the site's name is sent, to Dossier on this laptop."),
       error,
     );
   } catch (err) {
     if (err instanceof SignedOut) {
       aliasShow(
         h("p", {}, "This page asks for your email. Sign in to Dossier to give it a private address instead."),
-        h("a", { class: "button", href: "http://localhost:3000/login", target: "_blank", rel: "noopener noreferrer" }, "Sign in to Dossier ↗"),
+        h("a", { class: "button", href: LOGIN_URL, target: "_blank", rel: "noopener noreferrer" }, "Sign in to Dossier ↗"),
       );
     }
-    // The app isn't running: say nothing here; the main check already explains what's off.
+    // The app isn't running or can't be reached: say nothing here; the main check already explains.
   }
 }
 
@@ -919,6 +949,7 @@ async function run(options) {
     }
   } catch (error) {
     if (error instanceof Offline) renderOffline();
+    else if (error instanceof SignedOut) renderSignedOut();
     else renderMessage("alert", "Couldn't check this site", error.message);
   }
 }
@@ -990,12 +1021,21 @@ async function forget() {
   const here = sites
     ? `Cleared ${count(sites, "site", "sites")} from this browser.`
     : "This browser held no sites.";
-  const there = {
-    cleared: " The backend dropped its results and its log entries for them.",
-    // Its results live only in memory, so a backend that isn't running holds none.
-    offline: " The backend didn't answer. It keeps results only in memory, so if it isn't running it holds none.",
-    failed: ` The backend didn't clear its copy: ${detail}`,
-  }[backend];
+  const there = HOSTED
+    ? {
+        cleared: " Dossier's server dropped your account's results and its log entries for them.",
+        // It keeps them in memory for at most 6 hours.
+        offline: " Dossier's server didn't answer. It drops its results for your account within 6 hours anyway.",
+        signed_out: " You're signed out, so Dossier's server wasn't asked. It drops its results for your account within 6 hours anyway.",
+        failed: ` Dossier's server didn't clear its copy: ${detail}`,
+      }[backend]
+    : {
+        cleared: " The backend dropped its results and its log entries for them.",
+        // Its results live only in memory, so a backend that isn't running holds none.
+        offline: " The backend didn't answer. It keeps results only in memory, so if it isn't running it holds none.",
+        signed_out: " The backend wasn't asked: sign in to Dossier first.",
+        failed: ` The backend didn't clear its copy: ${detail}`,
+      }[backend];
   const outcome = `${here}${there} Requests already made can't be recalled.`;
   renderMessage(
     backend === "failed" ? "alert" : "check",
@@ -1014,7 +1054,33 @@ document.getElementById("open-app").href = APP_URL;
 for (const button of tabButtons) button.addEventListener("click", () => goTo(button.dataset.view));
 recheckButton.addEventListener("click", recheck);
 
-chrome.storage.local.get(["auto", "readPolicies"]).then(({ auto = true, readPolicies = false }) => {
+// The copy from the public site talks about Dossier's server, not this laptop (popup.html holds
+// the laptop's wording).
+if (HOSTED) {
+  const say = (id, text) => {
+    const node = document.getElementById(id);
+    if (node) node.textContent = text;
+  };
+  say(
+    "auto-note",
+    "Off at first: it sends each site's address, and the hostnames of the trackers it loaded, to Dossier's server. The server contacts no site and keeps nothing from it.",
+  );
+  say(
+    "read-policies-note",
+    "Dossier's server reads each site's policy straight from the site as you browse, so the site sees a request from Dossier, not from you. Needs the setting above. Opening this popup always reads it.",
+  );
+  say(
+    "handled-note",
+    "Policies are read and checked by fixed rules on Dossier's server, with your account. When you open this popup, the policy's selling and sharing sentences also go to Google's Gemini, with the site's name. Nothing goes to a search engine. Form fields are judged by their labels, not by what's in them.",
+  );
+  say("log-note", `Every request Dossier makes for you is listed in your account's outbound log at ${bareHost(APP_URL)}.`);
+  say(
+    "forget-note",
+    "Clears which sites you've opened from the extension and from Dossier's server, including your account's log of requests for them. It can't recall requests already made: each site saw its policy being read, and for each popup you opened, Gemini got the site's name and sentences from its policy.",
+  );
+}
+
+chrome.storage.local.get(["auto", "readPolicies"]).then(({ auto = DEFAULTS.auto, readPolicies = DEFAULTS.readPolicies }) => {
   autoBox.checked = auto;
   readBox.checked = readPolicies;
 });

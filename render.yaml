@@ -4,10 +4,15 @@ services:
     name: dossier-api
     runtime: python
     plan: free
-    rootDir: backend
-    buildCommand: pip install -r requirements.txt
+    # Deployed from the repo root, not backend/: the extension download (/api/extension.zip) is built
+    # from extension/ on each request, and Render hides files outside a service's root directory.
+    buildCommand: pip install -r backend/requirements.txt
     # One process on purpose: each account's current scan is kept in memory (saved scans are in Postgres).
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    startCommand: cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    buildFilter: # redeploy only when the backend or the extension changes
+      paths:
+        - backend/**
+        - extension/**
     healthCheckPath: /api/status
     envVars:
       - key: PYTHON_VERSION

@@ -2,7 +2,21 @@
 
 On every site you visit, it tells you what the site's privacy policy says the company collects, whether it sells or shares your data, and what the page itself does: which trackers it loads, what personal data its forms ask for, and whether it's a people-search site. It works even when a site has no privacy policy. Fixed rules run on this laptop; when you open the popup, the policy's selling and sharing sentences also go to Google's Gemini, with the site's name.
 
-## Install (Chrome or Edge)
+## Two copies: from the repo, or from the public site
+
+The extension finds Dossier through `config.js`:
+
+- **The copy in this repo** (and the download from the app on a laptop) checks sites with the backend on this laptop. Nothing leaves the laptop except the requests listed below.
+- **The copy downloaded from the public site** (`/extension`, signed in) is for people without the repo. `backend/app/extension_package.py` rewrites its `config.js` to point at the public site (`SITE_URL`) and its manifest's only host permission to that site. It checks sites with the user's own account: it sends their session cookie, the outbound log entries land in their account's log, and each account has its own results on the server, kept in memory only. Signed out, the popup asks them to sign in. **Check every site I visit** starts off in this copy, because it would send each site's address to Dossier's server; opening the popup still checks the site. The site fetches come from Dossier's server, not from the user's computer. The AI pass is capped at 100 a day per account (2,000 for everyone together, counted in the backend's memory); past that the popup shows the rules-based check.
+
+## Install from the public site (no repo needed)
+
+1. Sign in on the public site, open `/extension` and download the zip. Unzip it somewhere you'll keep it.
+2. Open `chrome://extensions` (or `edge://extensions`) and turn on **Developer mode**.
+3. Click **Load unpacked** and pick the `dossier-privacy-check` folder.
+4. Pin the extension, then reload any tabs that were already open. Stay signed in to the site in the same browser.
+
+## Install from the repo (Chrome or Edge)
 
 1. Start the backend: `cd backend`, then `uvicorn app.main:app --reload` (it must be on port 8000).
 2. Open `chrome://extensions` (or `edge://extensions`) and turn on **Developer mode**.
@@ -27,7 +41,7 @@ The LLM pass needs `GEMINI_API_KEY` in `.env`, as for the rest of the app. Witho
   - **Sites:** the sites you opened since the browser started, newest first, each with its risk and how many risks and trackers it had. **Forget the sites I've visited** is here.
 - **Check this page:** if the site blocks the backend, or its policy needs JavaScript, open the policy and click this. The extension reads the text already on your screen, so nothing is fetched.
 - **Settings:** the two switches below, and how your data is handled.
-- **Check every site I visit** (on by default): judges each page from what your browser already loaded (trackers, form fields, people-search sites) and **contacts no site**.
+- **Check every site I visit** (on by default in the repo's copy, off in the public site's): judges each page from what your browser already loaded (trackers, form fields, people-search sites) and **contacts no site**. In the public site's copy it sends the site's address, tracker hostnames and field kinds to Dossier's server, which keeps nothing from it.
 - **Also read each site's policy automatically** (off by default): reading a policy sends one request from this computer straight to the site. That request goes outside any VPN or proxy set up only in your browser, and it says it's from Dossier. Opening the popup always reads it.
 - **Forget the sites I've visited:** clears every site result and page report from the browser's session storage, and calls `DELETE /api/site-policy`, which drops the backend's results and every outbound log entry the extension caused (its purpose starts with `Browser extension: `). The popup then says what was and wasn't cleared: requests already made can't be recalled. Each site saw its policy read, and Gemini got the site's name and policy sentences for each popup you opened.
 
@@ -75,7 +89,7 @@ page (content.js) --links, hostnames, field kinds--> service worker --> backend 
 
 ## Privacy
 
-- The extension talks only to Dossier on this laptop: the backend on 127.0.0.1:8000, and the app on localhost:3000 for private emails (`host_permissions` in `manifest.json`). The backend refuses calls that come from a web page. The extension doesn't run in incognito windows.
+- The extension talks only to Dossier: in the repo's copy, the backend on 127.0.0.1:8000 and the app on localhost:3000 for private emails; in the public site's copy, that site only, with the user's session (`host_permissions` in `manifest.json`). The backend refuses calls that come from a web page. The extension doesn't run in incognito windows.
 - Results live in memory only: the backend's cache (6 hours, per hostname) and the browser's session storage, which is cleared when the browser closes. A policy's text is dropped once the Gemini pass is done. The page's trackers and form fields aren't kept by the backend at all. The sites you visit are browsing history, so nothing is written to disk or Postgres.
 - Every request to a site is a plain GET to the site you're already on, listed in the app's outbound log. No cookies are sent, and none a site sets are kept. Those fetches keep their own log, so browsing can't push a scan's requests out.
 - A request to a site comes from this computer's own connection, so it goes outside any VPN or proxy set up only in your browser, and it says it's from Dossier. That's why the automatic check never makes one unless you turn that on.
@@ -97,10 +111,11 @@ The outbound log lists every policy and ads.txt the extension fetched. With auto
 
 | File | What it does |
 |---|---|
-| `manifest.json` | Manifest V3: `storage` permission, the local backend as the only host permission, no incognito |
+| `manifest.json` | Manifest V3: `storage` permission, Dossier on this laptop as the only host permissions (the public site's copy: that site), no incognito |
+| `config.js` | Where Dossier is: this laptop, or, rewritten in the public site's download, that site |
 | `content.js` | Finds policy and opt-out links, tracker hostnames and form field kinds; reads the page text on request |
 | `background.js` | Runs the quick check on each visit and sets the badge |
-| `shared.js` | The only network code (`BACKEND`), plus the badge and session storage helpers |
+| `shared.js` | The only network code (addresses from `config.js`), plus the badge and session storage helpers |
 | `popup.html`, `popup.css`, `popup.js` | The popup. Scraped text is added as text nodes, never as HTML |
 | `icons/` | The Dossier folder-and-keyhole mark |
 

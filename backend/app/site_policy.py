@@ -26,7 +26,9 @@ The automatic check on each visit (`read_policy: false`) contacts no site at all
 the user already asked for, or judges only what the browser saw. Reading a policy is a request from
 this computer's own connection, so it happens when the user opens the popup.
 
-Results stay in memory, per hostname, for CACHE_SECONDS. Of a policy's text only its sale and sharing
+Results stay in memory, per hostname, for CACHE_SECONDS. On the public site (SITE_URL set) the extension
+calls with its user's session, and each account has its own results and its own log entries: which
+sites you opened is browsing history, so one account never sees, reuses or forgets another's. Of a policy's text only its sale and sharing
 sentences are kept, and only until the LLM pass. The page's trackers and form fields aren't kept at
 all: they're judged on each request. The sites you visit are browsing history, so nothing here is
 written to disk or Postgres, or named in the console log.
@@ -44,9 +46,10 @@ from functools import lru_cache
 from typing import Any
 from urllib.parse import urljoin, urlsplit
 
-from app import prompts
+from app import auth, prompts
 from app.clients import gemini, website
 from app.companies import registrable as _list_registrable
+from app.config import get_settings
 from app.data import load_json
 from app.models import (
     AdSellers,
@@ -174,6 +177,11 @@ SELLS_OR_SHARES = ("sale", "data_broker", "sharing", "advertising")
 # Every outbound log entry this module causes starts with this, so "Forget the sites I've visited"
 # can find them: they name the sites you opened.
 LOG_PREFIX = "Browser extension: "
+# Public site: how many Gemini passes each account may start a day, and everyone together. Reading a
+# policy by the fixed rules costs nothing, so only the AI pass is counted. Counted in this process's
+# memory: the public backend runs as one instance (render.yaml).
+AI_CHECKS_PER_DAY = 100
+AI_CHECKS_PER_DAY_TOTAL = 2_000
 
 # How Dossier knows, shown under each risk. Each names the kind of evidence and what wasn't read.
 HOW_POLICY = (
@@ -641,25 +649,66 @@ class _Site:
     task: asyncio.Task | None = None
 
 
-_cache: OrderedDict[str, _Site] = OrderedDict()
+_cache: OrderedDict[str, _Site] = OrderedDict()  # keyed by _key(site)
 _locks: dict[str, asyncio.Lock] = {}
+_ai_day = ""
+_ai_checks: Counter[str] = Counter()  # Gemini passes started today, per account (public site)
+
+
+def _owner() -> str:
+    """The cache key's prefix: the signed-in account on the public site. On this laptop the
+    extension calls without a session, and there's one user, so it's empty."""
+    user = auth.current_user()
+    return f"{user}/" if user else ""
+
+
+def _key(site: str) -> str:
+    return _owner() + site
+
+
+def _drop(key: str) -> None:
+    entry = _cache.pop(key, None)
+    if entry and entry.task and not entry.task.done():
+        entry.task.cancel()
+    _locks.pop(key, None)
 
 
 def reset() -> None:
-    """Forget every result (tests use this)."""
-    for entry in _cache.values():
-        if entry.task and not entry.task.done():
-            entry.task.cancel()
-    _cache.clear()
+    """Forget every result and today's AI-check counts (tests use this)."""
+    global _ai_day
+    for key in list(_cache):
+        _drop(key)
     _locks.clear()
+    _ai_checks.clear()
+    _ai_day = ""
 
 
 def forget() -> int:
-    """The popup's "Forget the sites I've visited": drop every result held here, and return how
-    many sites that was. main.py also drops the outbound log's entries for them (LOG_PREFIX)."""
-    count = len(_cache)
-    reset()
-    return count
+    """The popup's "Forget the sites I've visited": drop every result held for this account (on this
+    laptop, every result), and return how many sites that was. main.py also drops the outbound
+    log's entries for them (LOG_PREFIX). Today's AI-check count stays: forgetting isn't a way
+    around the daily limit."""
+    mine = [key for key in _cache if key.startswith(_owner())]
+    for key in mine:
+        _drop(key)
+    return len(mine)
+
+
+def take_ai_check() -> bool:
+    """Count one Gemini pass for this account today. Always True on this laptop; on the public site
+    False, with nothing counted, once the account or everyone together has used up today's."""
+    global _ai_day
+    if not get_settings().public:
+        return True
+    today = datetime.now(timezone.utc).date().isoformat()
+    if today != _ai_day:
+        _ai_day = today
+        _ai_checks.clear()
+    account = auth.current_user() or ""
+    if _ai_checks[account] >= AI_CHECKS_PER_DAY or sum(_ai_checks.values()) >= AI_CHECKS_PER_DAY_TOTAL:
+        return False
+    _ai_checks[account] += 1
+    return True
 
 
 def _hash(text: str) -> str:
@@ -677,8 +726,8 @@ def _page_links(req: SitePolicyRequest) -> list[str]:
     return list(dict.fromkeys(u for u in (website.public_https(u) for u in req.policy_urls) if u))[:MAX_LINKS]
 
 
-def _cached(site: str, req: SitePolicyRequest) -> _Site | None:
-    entry = _cache.get(site)
+def _cached(key: str, req: SitePolicyRequest) -> _Site | None:
+    entry = _cache.get(key)
     if entry is None or req.refresh or time.monotonic() - entry.created > CACHE_SECONDS:
         return None
     if req.page_text is not None:
@@ -777,7 +826,7 @@ async def _deep_pass(entry: _Site, read_ads: bool) -> None:
     Gemini pass."""
     if read_ads:
         await _ads_pass(entry)
-    if entry.status == "ok":
+    if entry.llm == "running":
         await _llm_pass(entry)
 
 
@@ -883,18 +932,19 @@ async def check_site(req: SitePolicyRequest) -> SitePolicyResponse:
     if req.page_text is not None and (not req.policy_urls or _host(req.policy_urls[0]) != host):
         raise CantCheck("The page text has to come from the site being checked.")
     site = host.removeprefix("www.")
+    key = _key(site)
     if not req.read_policy and req.page_text is None:
         # The automatic check on each visit contacts no site: it reuses a result the user already
         # asked for, or judges only what the browser saw on the page.
-        entry = _cache.get(site)
+        entry = _cache.get(key)
         if entry is None or time.monotonic() - entry.created > CACHE_SECONDS:
             domain = registrable(host)
             entry = _not_read(site=site, domain=domain, company=domain.split(".")[0], status="not_read")
         return _response(entry, req)
-    async with _locks.setdefault(site, asyncio.Lock()):  # two tabs on one site read its policy once
-        entry = _cached(site, req)
+    async with _locks.setdefault(key, asyncio.Lock()):  # two tabs on one site read its policy once
+        entry = _cached(key, req)
         if entry is None:
-            previous = _cache.get(site)
+            previous = _cache.get(key)
             entry = await _read_and_check(site, registrable(host), req)
             # A site's ads.txt doesn't change with the page, so a new result keeps what was read
             # (unless the user asked to re-check): the site gets one request, not one per result.
@@ -904,9 +954,9 @@ async def check_site(req: SitePolicyRequest) -> SitePolicyResponse:
             ):
                 entry.ads = previous.ads
             if entry.status == "ok" or req.page_text is None:  # a page that isn't a policy keeps the site's result
-                _cache[site] = entry
-                _cache.move_to_end(site)
-                while len(_cache) > MAX_SITES:
+                _cache[key] = entry
+                _cache.move_to_end(key)
+                while len(_cache) > MAX_SITES * (10 if get_settings().public else 1):  # shared by every account there
                     old, _ = _cache.popitem(last=False)
                     _locks.pop(old, None)
     if req.deep and not entry.deep_started:
@@ -915,7 +965,7 @@ async def check_site(req: SitePolicyRequest) -> SitePolicyResponse:
         if read_ads:
             entry.ads = AdSellers(status="running")
         if entry.status == "ok":
-            entry.llm = "running"
-        if read_ads or entry.status == "ok":
+            entry.llm = "running" if take_ai_check() else "limit"
+        if read_ads or entry.llm == "running":
             entry.task = asyncio.create_task(_deep_pass(entry, read_ads))
     return _response(entry, req)

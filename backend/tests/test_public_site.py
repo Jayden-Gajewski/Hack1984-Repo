@@ -122,12 +122,25 @@ def test_added_companies_belong_to_their_account_on_the_public_site(public, monk
     assert not [c for c in public.get("/api/companies").json() if c["custom"]]
 
 
-def test_threat_monitor_and_extension_route_stay_in_the_local_app(public):
+def test_threat_monitor_stays_in_the_local_app(public):
     res = public.get("/api/monitor")
     assert res.status_code == 404 and "Threat Monitor" in res.json()["detail"]
-    res = public.post("/api/site-policy", json={"url": "https://shop.example/"}, headers={"Origin": "chrome-extension://abc"})
-    assert res.status_code == 404 and "your own computer" in res.json()["detail"]
     assert public.get("/api/status").json()["public"] is True
+
+
+def test_the_extension_checks_sites_with_its_users_session_on_the_public_site(public):
+    # The automatic check (read_policy false) contacts no site, so nothing here touches the network.
+    body = {"origin": "https://www.shopco.example", "read_policy": False, "third_party_hosts": ["connect.facebook.net"]}
+    extension = {"Origin": "chrome-extension://abcdef"}
+    res = public.post("/api/site-policy", json=body, headers=extension)
+    assert res.status_code == 200 and res.json()["status"] == "not_read"
+    # Web pages are still refused, the public site's own pages included.
+    assert public.post("/api/site-policy", json=body, headers={"Origin": "https://evil.example"}).status_code == 403
+    assert public.post("/api/site-policy", json=body, headers={"Origin": SITE}).status_code == 403
+    # Signed out, it's refused: the extension's copy from the public site works with an account.
+    public.cookies.clear()
+    assert public.post("/api/site-policy", json=body, headers=extension).status_code == 401
+    assert public.delete("/api/site-policy", headers=extension).status_code == 401
 
 
 def test_site_url_must_be_https_and_a_hosted_database_needs_tls(monkeypatch):
