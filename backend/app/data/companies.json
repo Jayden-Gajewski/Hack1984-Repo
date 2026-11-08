@@ -8,5 +8,9 @@
   { "id": "doordash", "name": "DoorDash", "domains": ["doordash.com"], "privacy_url": "https://www.doordash.com/privacy/" },
   { "id": "canva", "name": "Canva", "domains": ["canva.com"], "privacy_url": "https://www.canva.com/policies/privacy-policy/" },
   { "id": "myfitnesspal", "name": "MyFitnessPal", "domains": ["myfitnesspal.com"], "privacy_url": "https://www.myfitnesspal.com/privacy-policy" },
-  { "id": "experian", "name": "Experian", "domains": ["experian.com"], "privacy_url": null }
+  { "id": "experian", "name": "Experian", "domains": ["experian.com"], "privacy_url": null },
+  { "id": "google", "name": "Google", "domains": ["google.com"], "privacy_url": "https://policies.google.com/privacy" },
+  { "id": "discord", "name": "Discord", "domains": ["discord.com"], "privacy_url": "https://discord.com/privacy" },
+  { "id": "spotify", "name": "Spotify", "domains": ["spotify.com"], "privacy_url": "https://www.spotify.com/us/legal/privacy-policy/" },
+  { "id": "instagram", "name": "Instagram", "domains": ["instagram.com"], "privacy_url": "https://privacycenter.instagram.com/policy" }
 ]

@@ -8,9 +8,15 @@ import {
   exposureKind,
   safeHref,
 } from "@/lib/display";
+import FieldIcon from "./FieldIcon";
 import TierClaim from "./TierClaim";
 
 const FOUND_VIA_LABEL = { tavily: "Tavily search", exa: "Exa search" } as const;
+
+// The write-up is a few sentences; one bullet each reads faster than a paragraph.
+function sentences(text: string): string[] {
+  return text.split(/(?<=[.!?])\s+(?=[A-Z])/).map((t) => t.trim()).filter(Boolean);
+}
 
 // Everything on this card comes from scraped pages. React escapes text, and links only render
 // for http(s) URLs. Never pass this data to dangerouslySetInnerHTML.
@@ -56,7 +62,13 @@ export default function ExposureCard({ exposure, onDraft, removal }: Props) {
         ))}
       </ul>
 
-      {exposure.summary && <p>{exposure.summary}</p>}
+      {exposure.summary && (
+        <ul className="summary-points">
+          {sentences(exposure.summary).map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ul>
+      )}
 
       <p className="date-line">
         Public by <strong>{exposure.public_by ?? "unknown"}</strong>
@@ -81,65 +93,80 @@ export default function ExposureCard({ exposure, onDraft, removal }: Props) {
       <details className="detail">
         <summary>Details</summary>
         {exposure.risk && (
-          <p>
-            <strong>{RISK_LABEL[exposure.risk]}.</strong> {exposure.risk_reason}
+          <p className={`risk-callout ${exposure.risk}`}>
+            <strong>{RISK_LABEL[exposure.risk]}</strong>
+            <span>{exposure.risk_reason}</span>
           </p>
         )}
-        {exposure.insights.map((insight) => (
-          <section key={insight.field} className="insight">
-            <h4>{insight.label}</h4>
-            <p className="muted">What the page shows:</p>
-            <ul className="quotes">
-              {insight.found.map((value, i) => (
-                <li key={i}>&ldquo;{value}&rdquo;</li>
-              ))}
-            </ul>
-            <p>
-              <strong>Why it matters:</strong> {insight.why_it_matters}
-            </p>
-            <p>
-              <strong>What someone could do with it:</strong>
-            </p>
-            <ul className="quotes">
-              {insight.misuse.map((use, i) => (
-                <li key={i}>{use}</li>
-              ))}
-            </ul>
-            <p>
-              <strong>Protect yourself:</strong> {insight.protect}
-            </p>
-          </section>
-        ))}
+
+        {exposure.insights.length > 0 && (
+          <div className="field-grid">
+            {exposure.insights.map((insight) => (
+              <section key={insight.field} className="field-box" aria-labelledby={`${exposure.id}-${insight.field}`}>
+                <header className="field-box-head">
+                  <span className="field-badge">
+                    <FieldIcon field={insight.field} />
+                  </span>
+                  <h4 id={`${exposure.id}-${insight.field}`}>{insight.label}</h4>
+                  <span className="field-count">{insight.found.length} found</span>
+                </header>
+                <ul className="field-values" aria-label="What the page shows">
+                  {insight.found.map((value, i) => (
+                    <li key={i}>{value}</li>
+                  ))}
+                </ul>
+                <p className="field-why">{insight.why_it_matters}</p>
+                <p className="field-lead">Someone could:</p>
+                <ul className="field-misuse">
+                  {insight.misuse.map((use, i) => (
+                    <li key={i}>{use}</li>
+                  ))}
+                </ul>
+                <p className="field-protect">
+                  <strong>Protect yourself</strong>
+                  <span>{insight.protect}</span>
+                </p>
+              </section>
+            ))}
+          </div>
+        )}
         {exposure.insights.length === 0 && exposure.fields.length > 0 && (
-          <ul className="quotes">
+          <ul className="field-values">
             {exposure.fields.map((f, i) => (
               <li key={`${f.field}-${i}`}>
-                <strong>{f.field}</strong>: &ldquo;{f.quote}&rdquo;
+                <strong>{f.field}</strong>: {f.quote}
               </li>
             ))}
           </ul>
         )}
-        <p className="muted">
-          {exposure.title && <>{exposure.title}. </>}
-          Found with {exposure.found_via ? FOUND_VIA_LABEL[exposure.found_via] : "search"}, read from{" "}
-          {exposure.text_source === "extract" ? "the page itself" : "the search snippet"}. Checked on this
-          laptop by the local LLM.
-        </p>
+
         {exposure.leads.length > 0 && (
-          <>
+          <section className="leads-box">
             <h4>Likely sources</h4>
-            <ul className="quotes">
+            <ul>
               {exposure.leads.map((lead) => (
                 <li key={lead.company}>
                   <span className={`pill ${lead.tier}`} title={TIER_HELP[lead.tier]}>
                     {TIER_LABEL[lead.tier]}
-                  </span>
-                  <strong>{lead.company}</strong>: {lead.reasons.join(" ")}
+                  </span>{" "}
+                  <strong>{lead.company}</strong>
+                  <ul className="lead-reasons">
+                    {lead.reasons.map((reason) => (
+                      <li key={reason}>{reason}</li>
+                    ))}
+                  </ul>
                 </li>
               ))}
             </ul>
-          </>
+          </section>
         )}
+
+        <ul className="found-how" aria-label="How this was found">
+          {exposure.title && <li>Page title: {exposure.title}</li>}
+          <li>Found with {exposure.found_via ? FOUND_VIA_LABEL[exposure.found_via] : "a search"}</li>
+          <li>Read from {exposure.text_source === "extract" ? "the page itself" : "the search snippet"}</li>
+          <li>Checked on this laptop by the local LLM</li>
+        </ul>
       </details>
 
       <div className="actions">

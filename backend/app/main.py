@@ -44,6 +44,9 @@ from app.models import (
     StatusResponse,
     User,
 )
+from app.monitor import routes as monitor_routes
+from app.monitor import scheduler as monitor_scheduler
+from app.monitor import service as monitor_service
 from app.outbound import OutboundEntry
 from app.stages import (
     s1_exposures,
@@ -129,7 +132,11 @@ async def lifespan(_: FastAPI):
         await asyncio.to_thread(db.init_schema)
     except Exception as exc:  # the app still runs without Postgres; scans just aren't saved
         log.warning("%s Scans won't be saved until it is. (%s)", DB_DOWN, exc)
+    # Threat monitor's scheduled checks: a loop in this process, so only while the backend runs.
+    scheduled = asyncio.create_task(monitor_scheduler.run())
     yield
+    scheduled.cancel()
+    await monitor_service.stop()
     await outbound.close()
 
 
@@ -137,6 +144,10 @@ app = FastAPI(title="Hack1984 API", lifespan=lifespan)
 # Only answer requests addressed to this machine, which blocks DNS-rebinding pages from
 # reading saved scans or the outbound log through the browser.
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=["localhost", "127.0.0.1"])
+# Threat monitor (/api/monitor/*, app/monitor/). It reads the loaded scan to show which
+# listings share data with a breach.
+app.include_router(monitor_routes.router)
+app.state.current_exposures = lambda: session.exposures
 
 
 @app.get("/api/status", response_model=StatusResponse)

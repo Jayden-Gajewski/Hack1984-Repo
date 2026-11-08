@@ -20,6 +20,11 @@
   --notice: #8a5300;
   --notice-bg: #f8ecd9;
   --focus: #23408e;
+  /* Threat monitor severity: how bad a breach is (never whether you're in it). */
+  --sev-critical: #b42318;
+  --sev-high: #b54708;
+  --sev-medium: #8a6d00;
+  --sev-low: #545c66;
 
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --mono: ui-monospace, "Cascadia Mono", "SF Mono", Consolas, monospace;
@@ -47,6 +52,10 @@
     --notice: #ffb547;
     --notice-bg: color-mix(in srgb, #ffb547 16%, #0f1b38);
     --focus: #8f83ff;
+    --sev-critical: #ff7a90;
+    --sev-high: #ff8f5c;
+    --sev-medium: #f2cf63;
+    --sev-low: #a3b0c8;
     color-scheme: dark;
   }
 }
@@ -71,6 +80,10 @@
   --notice: #ffb547;
   --notice-bg: color-mix(in srgb, #ffb547 16%, #0f1b38);
   --focus: #8f83ff;
+  --sev-critical: #ff7a90;
+  --sev-high: #ff8f5c;
+  --sev-medium: #f2cf63;
+  --sev-low: #a3b0c8;
   color-scheme: dark;
 }
 
@@ -159,7 +172,7 @@ form { display: grid; gap: 12px; }
 .fields { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1.4fr) 5.5rem; gap: 10px; align-items: end; }
 @media (max-width: 560px) { .fields { grid-template-columns: 1fr 5.5rem; } .fields label:first-child { grid-column: 1 / -1; } }
 label { display: grid; gap: 4px; font-size: 0.875rem; font-weight: 500; }
-input[type="text"], select {
+input[type="text"], input[type="email"], select {
   font: inherit;
   font-size: 1rem;
   padding: 9px 11px;
@@ -676,3 +689,288 @@ code, .mono { font-family: var(--mono); font-size: 0.875em; overflow-wrap: anywh
 
 /* Card header: broker, site type, risk and removal status grouped on the left. */
 .card-title { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+
+/* ---------- Exposure card details: one box per kind of data ---------- */
+
+.summary-points { display: grid; gap: 3px; max-width: 70ch; margin: 12px 0 0; padding-left: 1.1em; }
+.summary-points li::marker, .field-misuse li::marker, .found-how li::marker, .fact-list li::marker,
+.risk-points li::marker, .analysis-points li::marker, .lead-reasons li::marker { color: var(--muted); }
+
+.risk-callout { display: grid; gap: 2px; margin: 12px 0 0; padding: 10px 14px; border-radius: 8px; background: var(--sunken); }
+.risk-callout.high { background: var(--danger-bg); }
+.risk-callout.high strong { color: var(--danger); }
+.risk-callout.medium { background: var(--likely-bg); }
+.risk-callout.medium strong { color: var(--likely); }
+
+.field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+@media (max-width: 640px) { .field-grid { grid-template-columns: minmax(0, 1fr); } }
+.field-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--sunken) 50%, var(--surface));
+}
+.field-box-head { display: flex; align-items: center; gap: 10px; }
+.field-box-head h4 { flex: 1; margin: 0; font-size: 1rem; }
+.field-badge {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  color: var(--accent);
+}
+.field-icon { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.field-count { font-size: 0.8rem; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.field-values { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.field-values li {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  font-weight: 550;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.field-why { color: var(--muted); font-size: 0.925rem; }
+.field-lead { margin-top: 2px; font-size: 0.875rem; font-weight: 600; }
+.field-misuse { display: grid; gap: 2px; margin: 0; padding-left: 1.1em; font-size: 0.925rem; }
+/* Pushed to the bottom, so the protect rows line up across a row of boxes. */
+.field-protect { display: grid; gap: 1px; margin-top: auto; padding: 8px 10px; border-radius: 6px; background: var(--proven-bg); font-size: 0.9rem; }
+.field-protect strong { color: var(--proven); font-size: 0.85rem; }
+
+.leads-box { margin-top: 14px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; }
+.leads-box h4 { margin: 0 0 8px; }
+.leads-box > ul { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.lead-reasons { margin: 4px 0 0; padding-left: 1.1em; color: var(--muted); font-size: 0.925rem; }
+.found-how { display: grid; gap: 1px; margin: 12px 0 0; padding-left: 1.1em; color: var(--muted); font-size: 0.85rem; }
+
+/* ---------- Threat monitor (/app/monitor) ---------- */
+
+.dot.off { background: transparent; box-shadow: inset 0 0 0 1.5px var(--muted); }
+button.quiet.inline { padding: 0; font-size: inherit; vertical-align: baseline; text-decoration: underline; text-underline-offset: 0.18em; }
+button.quiet.inline:active:not(:disabled) { transform: none; }
+
+/* The monitor panel: a radar scope and one plain sentence about what's going on. */
+.monitor-panel {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 20px 28px;
+  align-items: center;
+  margin-top: 22px;
+  padding: 22px 24px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+@media (max-width: 640px) { .monitor-panel { grid-template-columns: minmax(0, 1fr); justify-items: start; padding: 18px; } }
+.monitor-status { display: grid; gap: 8px; align-content: center; min-width: 0; }
+.monitor-headline { font-size: 1.45rem; font-weight: 650; line-height: 1.2; letter-spacing: -0.01em; text-wrap: balance; }
+.monitor-actions { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; margin-top: 6px; }
+.monitor-actions .check { font-size: 0.925rem; }
+.tally { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 2px 0 0; padding: 0; list-style: none; font-weight: 600; font-variant-numeric: tabular-nums; }
+.tally li { display: inline-flex; align-items: center; gap: 7px; color: var(--tone); }
+.tally-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--tone); }
+
+.radar {
+  position: relative;
+  width: 184px;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 8%, var(--sunken)) 0%, var(--sunken) 72%);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+@media (max-width: 640px) { .radar { width: 150px; } }
+.radar svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+/* The sweep's bright edge leads; its trail fades behind it as it turns clockwise. */
+.radar-sweep {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg 285deg,
+    color-mix(in srgb, var(--accent) 10%, transparent) 318deg,
+    color-mix(in srgb, var(--accent) 42%, transparent) 359deg,
+    color-mix(in srgb, var(--accent) 85%, transparent) 360deg
+  );
+  opacity: 0.5;
+  transition: opacity 300ms ease;
+}
+.radar.scanning .radar-sweep { opacity: 1; }
+.radar-ring { fill: none; stroke: var(--border); stroke-width: 1; }
+.radar-cross { stroke: color-mix(in srgb, var(--border) 65%, transparent); stroke-width: 1; }
+.radar-core { fill: var(--accent); }
+.radar-dot { fill: var(--tone); }
+.radar-halo { fill: var(--tone); opacity: 0.22; }
+.radar-blip { transition: opacity 300ms ease; @starting-style { opacity: 0; } }
+
+/* The scan feed: one line per step the backend reports. Done lines get a drawn check. */
+.scan-feed { display: grid; gap: 5px; margin: 4px 0 0; padding: 0; list-style: none; font-size: 0.925rem; }
+.scan-feed li {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out);
+  @starting-style { opacity: 0; transform: translateY(4px); }
+}
+.scan-feed li::before { content: ""; flex: none; box-sizing: border-box; }
+.scan-feed li.done { color: var(--muted); }
+.scan-feed li.done::before { width: 5px; height: 9px; margin: 0 3px 0 4px; border: solid var(--proven); border-width: 0 2px 2px 0; transform: rotate(45deg) translateY(-1px); }
+.scan-feed li.active { color: var(--text); font-weight: 600; }
+.scan-feed li.active::before { width: 12px; height: 12px; border: 2px solid var(--accent); border-right-color: transparent; border-radius: 50%; translate: 0 1px; animation: feed-spin 0.8s linear infinite; }
+.scan-feed li.summary-line { color: var(--text); font-weight: 600; }
+@keyframes feed-spin { to { transform: rotate(1turn); } }
+
+.filter { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--border); border-radius: 8px; }
+.filter button { padding: 4px 10px; border: 0; border-radius: 5px; background: transparent; color: var(--muted); font-size: 0.875rem; }
+.filter button[aria-pressed="true"] { background: var(--sunken); color: var(--text); }
+.filter button:active:not(:disabled) { transform: none; }
+.new-banner { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; margin: 2px 0 6px; font-weight: 600; }
+
+/* Threat rows: readable at a glance, open for the details. */
+.threat-list { display: grid; gap: 10px; margin-top: 12px; }
+.threat { border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.threat.arrived { transition: opacity 220ms var(--ease-out), transform 220ms var(--ease-out); @starting-style { opacity: 0; transform: translateY(6px); } }
+.threat-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  gap: 6px 14px;
+  align-items: center;
+  padding: 14px 16px;
+  border-radius: 10px;
+  list-style: none;
+  cursor: pointer;
+  transition: background-color 160ms ease;
+}
+.threat-row::-webkit-details-marker { display: none; }
+@media (hover: hover) and (pointer: fine) {
+  .threat-row:hover { background: color-mix(in srgb, var(--sunken) 55%, var(--surface)); }
+}
+.threat-row:active { background: var(--sunken); }
+.threat[open] > .threat-row { border-bottom: 1px solid var(--border); border-radius: 10px 10px 0 0; }
+.threat-main { display: grid; gap: 2px; min-width: 0; }
+.threat-name { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; overflow-wrap: anywhere; }
+.threat-name strong { font-size: 1.02rem; }
+.threat-what { color: var(--muted); font-size: 0.95rem; }
+.threat-meta { display: grid; justify-items: end; gap: 4px; }
+.steps-count { color: var(--muted); font-size: 0.8rem; font-variant-numeric: tabular-nums; }
+.steps-count.all { color: var(--proven); }
+.threat-chevron { fill: none; stroke: var(--muted); stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; transition: transform 200ms var(--ease-out); }
+.threat[open] .threat-chevron { transform: rotate(180deg); }
+.threat.is-done .threat-name strong, .threat.is-done .threat-what { color: var(--muted); }
+@media (max-width: 640px) {
+  .threat-row { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .threat-meta { grid-column: 2; grid-row: 2; justify-items: start; }
+  .threat-chevron { grid-column: 3; grid-row: 1; }
+}
+.company-mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--sunken);
+  color: var(--text);
+  font-size: 0.95rem;
+  font-weight: 650;
+}
+.new-badge { flex: none; padding: 0 8px; border: 1px solid currentColor; border-radius: 999px; color: var(--accent); font-size: 0.75rem; font-weight: 650; }
+
+/* Severity | involvement: two answers side by side, never one colour. */
+.verdict { display: inline-flex; flex-wrap: wrap; max-width: 100%; overflow: hidden; border: 1px solid var(--border); border-radius: 6px; font-size: 0.8rem; font-weight: 650; }
+.verdict > span { padding: 2px 9px; }
+.sev-critical { --tone: var(--sev-critical); }
+.sev-high { --tone: var(--sev-high); }
+.sev-medium { --tone: var(--sev-medium); }
+.sev-low { --tone: var(--sev-low); }
+.verdict-sev { color: var(--tone); background: color-mix(in srgb, var(--tone) 16%, var(--surface)); }
+.verdict-you { color: var(--muted); background: var(--surface); box-shadow: -1px 0 0 var(--border); font-weight: 600; }
+/* Confirmed is the one answer that's about you: a solid fill. */
+.verdict-you.you-confirmed { color: var(--on-accent); background: var(--danger); box-shadow: none; font-weight: 650; }
+.verdict-you.you-not_found { color: var(--text); }
+
+/* Inside an open threat: one box per question. */
+.threat-body { display: grid; gap: 12px; padding: 16px; }
+.box-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 640px) { .box-grid { grid-template-columns: minmax(0, 1fr); } .threat-body { padding: 12px; } }
+.box { min-width: 0; padding: 14px 16px; border: 1px solid var(--border); border-radius: 10px; background: color-mix(in srgb, var(--sunken) 45%, var(--surface)); }
+.box h4 { margin: 0 0 8px; font-size: 1rem; }
+.box-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+.box-head h4 { margin: 0; }
+.fact-list, .risk-points, .analysis-points { display: grid; gap: 4px; margin: 0; padding-left: 1.1em; font-size: 0.925rem; }
+.fact-list { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.box .chips { margin: 0 0 8px; }
+.affected-status { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 1.05rem; font-weight: 650; }
+.affected-status::before { content: ""; flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
+.affected.you-unconfirmed .affected-status::before { background: transparent; box-shadow: inset 0 0 0 2px var(--muted); }
+.affected.you-not_found .affected-status::before { background: var(--proven); }
+.affected.you-confirmed { border-color: color-mix(in srgb, var(--danger) 50%, var(--border)); background: var(--danger-bg); }
+.affected.you-confirmed .affected-status { color: var(--danger); }
+.affected.you-confirmed .affected-status::before { background: var(--danger); }
+.flag-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; padding: 0; list-style: none; }
+.flag-list li { padding: 0 8px; border: 1px solid color-mix(in srgb, var(--notice) 45%, transparent); border-radius: 999px; color: var(--notice); font-size: 0.8rem; }
+
+.step-list { display: grid; gap: 2px; margin: 8px 0 0; padding: 0; list-style: none; }
+.step { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 2px 12px; padding: 5px 0; }
+.step .check { flex: 1 1 22rem; }
+.step-text { display: block; font-weight: 550; transition: color 160ms ease; }
+.step-why { display: block; }
+.step.done .step-text { color: var(--muted); }
+.step-link { padding-left: 28px; font-size: 0.875rem; white-space: nowrap; }
+.steps-note { margin-top: 8px; }
+
+.analysis { transition: opacity 240ms var(--ease-out), transform 240ms var(--ease-out); @starting-style { opacity: 0; transform: translateY(4px); } }
+.analysis > p + ul, .analysis > ul + p { margin-top: 8px; }
+.related-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.related-list .pill { font-size: 0.8rem; }
+.threat-more .detail { margin-top: 4px; }
+.source-list { display: grid; gap: 4px; margin: 8px 0 0; padding: 0; list-style: none; overflow-wrap: anywhere; }
+.description { max-width: 70ch; margin-top: 8px; }
+.attribution { margin-top: 18px; }
+.setup-list { display: grid; gap: 6px; margin: 8px 0 0; padding: 0; list-style: none; font-size: 0.925rem; }
+.setup-list li { display: flex; align-items: center; gap: 8px; }
+
+/* What we watch */
+.watch-list { margin: 8px 0 0; padding: 0; list-style: none; }
+.watch-list > li { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 16px; padding: 12px 2px; border-top: 1px solid var(--border); }
+.watch-list > li:first-child { border-top: 0; }
+.watch-main { flex: 1 1 18rem; min-width: 0; }
+.watch-main strong { overflow-wrap: anywhere; }
+.watch-main .notice { margin-top: 6px; }
+.watch-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.state { padding: 0 8px; border: 1px solid currentColor; border-radius: 999px; font-size: 0.8rem; font-weight: 650; white-space: nowrap; }
+.state.ok { color: var(--proven); }
+.state.wait { color: var(--notice); }
+.state.off { color: var(--muted); }
+.email-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin-top: 14px; }
+.email-form label { flex: 1 1 16rem; }
+.code-form { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: end; margin-top: 10px; }
+.code-input { width: 10ch; letter-spacing: 0.18em; font-variant-numeric: tabular-nums; }
+
+/* History */
+.schedule-row { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-top: 14px; }
+.inline-select select { width: auto; }
+.event-list { margin: 8px 0 0; padding: 0; list-style: none; }
+.event-list li { display: grid; grid-template-columns: 8.5em 6em minmax(0, 1fr); gap: 2px 12px; padding: 8px 0; border-top: 1px solid var(--border); font-size: 0.925rem; }
+.event-time { color: var(--muted); font-variant-numeric: tabular-nums; }
+.event-kind { font-weight: 650; }
+.event-kind.new_incident { color: var(--sev-high); }
+.event-kind.confirmed, .event-kind.error { color: var(--danger); }
+@media (max-width: 560px) { .event-list li { grid-template-columns: minmax(0, 1fr); gap: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .threat.arrived, .analysis, .scan-feed li { transition-property: opacity; }
+  .scan-feed li.active::before { animation: none; border-right-color: var(--accent); }
+  .radar-sweep { opacity: 0.35; }
+}

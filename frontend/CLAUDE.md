@@ -35,6 +35,14 @@ Everything shown on screen (page titles, field quotes, policy quotes, email subj
   - Each row: service, purpose, method + URL, status and time. Expand a row to see the exact body sent (keys are already redacted by the backend).
   - Show counts per service, and include a toggle for local Ollama calls. They're hidden by default and labeled "stayed on this machine".
 
+- **Threat monitor (`/app/monitor`):** a separate section, linked from the app bar.
+  - Tabs: Alerts (summary strip, incident cards), Monitored (companies, emails) and Activity (schedule, history).
+  - Each card shows severity and involvement side by side in one split pill. They're separate answers: a critical breach can be "Not confirmed for you".
+  - Steps are checkboxes. Copy never says an account is secure because steps are checked.
+  - Missing keys or settings show as "off" in the setup line, never as fake results.
+  - Company tiles are local initials, never remote logos.
+  - The page includes the outbound-log drawer.
+
 ## Wording
 
 `lib/display.ts` holds the tier labels, the tier hover text and the date-source labels below. Use them rather than writing new strings.

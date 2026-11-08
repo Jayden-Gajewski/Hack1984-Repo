@@ -16,3 +16,17 @@ def client(monkeypatch):
     monkeypatch.setattr(main, "session", main.Session())
     with TestClient(main.app, base_url="http://localhost") as c:  # TrustedHostMiddleware
         yield c
+
+
+@pytest.fixture(autouse=True)
+def _monitor_state(tmp_path, monkeypatch):
+    """The threat monitor's store lives in a temp dir in tests, never backend/local/, and its
+    in-memory caches start empty."""
+    from app.models import RefreshStatus
+    from app.monitor import service, store
+
+    monkeypatch.setattr(store, "STORE_PATH", tmp_path / "monitor.json")
+    monkeypatch.setattr(service, "_catalog", None)
+    monkeypatch.setattr(service, "_llm_status", None)
+    monkeypatch.setattr(service, "_status", RefreshStatus())
+    monkeypatch.setattr(service, "_task", None)

@@ -6,6 +6,7 @@ commit message, and tell the UI owner before renaming or removing anything.
 Every date carries a source label. A missing date is null with source "unknown", never a guess.
 """
 
+import re
 from typing import Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -287,3 +288,225 @@ class Credentials(BaseModel):
 
 class User(BaseModel):
     email: str
+
+
+# ---------- Threat monitor (app/monitor/) ----------
+# Severity, confidence and involvement are separate on purpose: a serious breach can be
+# "critical" while the user's involvement is still "unconfirmed". Rules in code set all three;
+# the local LLM only explains them.
+
+Severity = Literal["critical", "high", "medium", "low"]
+SEVERITIES: tuple[str, ...] = get_args(Severity)  # strongest first
+Confidence = Literal["high", "medium", "low"]  # how well the incident itself is evidenced
+# "confirmed": a verified email's hash matched this breach in HIBP. "not_found": every verified
+# email was checked and this breach didn't list it. "unconfirmed": nobody could check.
+Involvement = Literal["confirmed", "not_found", "unconfirmed"]
+IncidentSourceKind = Literal["hibp", "official", "ag_notice", "news", "web"]
+EmailCheckStatus = Literal["never", "ok", "not_configured", "rate_limited", "error"]
+
+_EMAIL_FORMAT = r"^[^\s@<>\"']+@[^\s@<>\"']+\.[a-z]{2,}$"
+
+
+class EmailRequest(BaseModel):
+    """An address the user wants monitored. It's only ever sent to the user's own SMTP server
+    (for the ownership code); HIBP gets the first 6 characters of its SHA-1 hash."""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    address: str = Field(min_length=3, max_length=254)
+
+    @field_validator("address")
+    @classmethod
+    def _address(cls, v: str) -> str:
+        v = v.lower()
+        if not re.match(_EMAIL_FORMAT, v):
+            raise ValueError("Enter a valid email address.")
+        return v
+
+
+class VerifyCodeRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    code: str = Field(pattern=r"^\d{6}$")
+
+
+class RefreshRequest(BaseModel):
+    company_id: str | None = None  # one monitored company; None checks everything
+    include_news: bool = False  # also search news and official notices (Tavily/Exa credits, local LLM time)
+
+
+class ActionUpdate(BaseModel):
+    done: bool
+
+
+class SeenRequest(BaseModel):
+    incident_ids: list[str] | None = None  # None marks every incident as seen
+
+
+class MonitorSchedule(BaseModel):
+    """Local scheduled checks. They run inside the backend process, so only while it's running."""
+
+    enabled: bool = False
+    interval_hours: Literal[6, 12, 24, 168] = 24
+    include_news: bool = False
+    last_run: str | None = None  # read-only
+    next_run: str | None = None  # read-only
+
+
+class MonitoredCompany(BaseModel):
+    id: str  # company id from app.companies
+    name: str
+    domains: list[str]
+    added_at: str
+    last_checked: str | None = None  # last match against HIBP's breach list
+    last_news_check: str | None = None  # last news and official-notice search
+    incidents: int = 0
+    messages: list[str] = []  # problems from the last check
+
+
+class MonitoredEmail(BaseModel):
+    id: str
+    display: str  # the address until it's verified; after that only a masked form is kept
+    added_at: str
+    verified: bool = False
+    verified_at: str | None = None
+    code_sent_at: str | None = None
+    code_expires_at: str | None = None
+    check_status: EmailCheckStatus = "never"
+    check_message: str = ""
+    last_checked: str | None = None
+    breaches_found: int = 0
+
+
+class IncidentDate(BaseModel):
+    kind: Literal["occurred", "disclosed", "added_to_hibp"]
+    date: str  # YYYY-MM-DD, YYYY-MM or YYYY
+    source: str  # where the date comes from, shown next to it
+    source_url: str | None = None
+
+
+class IncidentSource(BaseModel):
+    url: str
+    kind: IncidentSourceKind
+    label: str
+    official: bool = False  # the company's own notice, a government notice, or HIBP's verified entry
+
+
+class SecurityAction(BaseModel):
+    id: str
+    text: str
+    why: str
+    link: str | None = None
+    done: bool = False
+    done_at: str | None = None
+
+
+class ThreatAnalysis(BaseModel):
+    """The local LLM's plain-English explanation, after evidence checks in code."""
+
+    summary: str
+    impact: str
+    guidance: str  # empty when the sources contain no official guidance
+    uncertainty: str
+    severity_explanation: str
+    removed_sentences: int = 0  # sentences dropped by the evidence checks
+    analyzed_at: str
+    model: str
+    stale: bool = False  # the incident's facts changed since this was written
+
+
+class RelatedListing(BaseModel):
+    """A listing from the current exposure scan that shows data this breach reportedly exposed.
+    Overlap is not proof that the breach caused the listing."""
+
+    exposure_id: str
+    site: str
+    url: str
+    shared_fields: list[FieldType]
+    lead_tier: Tier | None = None  # Stage 5's tier for this company on that listing, if any
+    reason: str
+
+
+class Incident(BaseModel):
+    id: str
+    company_id: str | None = None  # the monitored company, or None for a breach found by email only
+    company: str
+    title: str
+    domain: str | None = None
+    description: str = ""  # plain text from the source (HIBP's description or the news summary)
+    data_classes: list[str] = []  # as reported (HIBP's names, or Stage 3's types)
+    data_types: list[FieldType] = []  # the same, in the listing vocabulary
+    pwn_count: int | None = None
+    dates: list[IncidentDate] = []
+    sources: list[IncidentSource] = []
+    threat: str
+    risks: list[str] = []
+    severity: Severity
+    severity_reasons: list[str] = []
+    confidence: Confidence
+    confidence_reason: str
+    involvement: Involvement
+    involvement_reason: str
+    flags: list[str] = []
+    actions: list[SecurityAction] = []
+    analysis: ThreatAnalysis | None = None
+    related_listings: list[RelatedListing] = []
+    first_seen: str
+    new: bool = False
+    # Every recommended step is marked done by the user. It never means the account is secure.
+    steps_done: bool = False
+
+
+class MonitorSummary(BaseModel):
+    monitored_companies: int
+    verified_emails: int
+    email_breaches: int  # incidents a verified email is confirmed in
+    company_breaches: int  # incidents at monitored companies, confirmed or not
+    open_alerts: int  # incidents with steps still open
+    new_alerts: int
+    actions_done: int
+    actions_total: int
+    last_check: str | None = None
+
+
+class MonitorEvent(BaseModel):
+    id: str
+    time: str
+    kind: Literal["refresh", "new_incident", "confirmed", "company", "email", "error", "schedule"]
+    message: str
+    incident_id: str | None = None
+
+
+class RefreshStatus(BaseModel):
+    running: bool = False
+    trigger: Literal["manual", "scheduled"] | None = None
+    started_at: str | None = None
+    finished_at: str | None = None
+    step: str = ""
+    done: int = 0
+    total: int = 0
+    include_news: bool = False
+    errors: list[str] = []
+    new_incidents: int = 0
+
+
+class MonitorConfig(BaseModel):
+    """What the monitor can do with this laptop's .env. Never key values."""
+
+    hibp_email_key: bool  # HIBP_API_KEY (hashed email search; Pro or High RPM plan)
+    smtp: bool  # SMTP_HOST and SMTP_FROM, for ownership codes
+    news_search: bool  # TAVILY_API_KEY or EXA_API_KEY
+    local_llm: bool  # Ollama running with OLLAMA_MODEL pulled
+    local_llm_model: str
+
+
+class MonitorDashboard(BaseModel):
+    summary: MonitorSummary
+    companies: list[MonitoredCompany]
+    emails: list[MonitoredEmail]
+    incidents: list[Incident]
+    events: list[MonitorEvent]
+    schedule: MonitorSchedule
+    refresh: RefreshStatus
+    config: MonitorConfig
+    scan_loaded: bool  # an exposure scan is loaded, so related listings can be shown

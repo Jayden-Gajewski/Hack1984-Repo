@@ -44,6 +44,14 @@ FastAPI app in `app/`. Read the privacy rules in the root `CLAUDE.md` first.
 | GET/POST | `/api/aliases` | `{company}` | aliases / new alias (Stage 7) |
 | GET | `/api/inbox/check` | | `AliasHit[]` from the mock inbox (Stage 7) |
 | GET/DELETE | `/api/outbound-log` | `?include_local=` | log entries / clear |
+| GET | `/api/monitor` | | threat monitor dashboard: summary, companies, emails, incidents, history, schedule, config |
+| GET/POST | `/api/monitor/refresh` | `{company_id?, include_news?}` | refresh status / start a background check (202; 409 if one runs) |
+| POST/DELETE | `/api/monitor/companies[/{id}]` | `{name}` | monitor a company (same lookup as `/api/companies`) / stop |
+| POST/DELETE | `/api/monitor/emails[/{id}]` | `{address}` | add an address (sends a code if SMTP is set) / remove |
+| POST | `/api/monitor/emails/{id}/code`, `/verify` | `{code}` | send a code / verify it |
+| POST | `/api/monitor/incidents/{id}/actions/{action}` | `{done}` | mark a step done or not |
+| POST | `/api/monitor/incidents/{id}/analyze` | | local-LLM explanation, checked against the evidence |
+| POST | `/api/monitor/seen`, `/schedule` | | mark alerts seen / save the local schedule |
 
 Reject `/api/scan` with HTTP 400 when `consent` is false. Routes that act on the current scan (`/api/optout`, `/api/rescan`) return 409 until a scan has run or been loaded. FastAPI doesn't serve the frontend: it's a separate Next.js app that proxies `/api/*` here.
 
@@ -60,3 +68,12 @@ Reject `/api/scan` with HTTP 400 when `consent` is false. Routes that act on the
 - Stage 5 ranking and Stage 7 inbox matching are pure functions. Unit-test them with fixtures; they need no network access.
 - Anything that touches Exa or Tavily costs credits. Test with small `max_results`, and use a consenting teammate's name, never a stranger's.
 - Unit-test the guard in `outbound.py` too (formats like `617-555-0123`, `(617) 555 0123`, `a.b+c@x.co`).
+
+## Threat monitor (`app/monitor/`)
+
+Details and setup: `docs/THREAT_MONITOR.md`.
+
+- **What leaves the laptop:** HIBP gets its whole breach list downloaded (nothing personal) or a 6-character SHA-1 prefix for a verified email. Tavily and Exa get company names, through Stage 3; Tavily Extract may get one public URL (an official breach notice) when explaining a breach HIBP doesn't describe. SMTP sends ownership codes. All of it goes through `outbound.py`.
+- **Rules, not the LLM:** severity, confidence and involvement are set by rules in `severity.py`, and steps by `checklist.py` from `data/breach_data_classes.json`. They're derived when an incident is shown, never stored. The LLM only explains them, and `analysis.py` drops unsupported numbers, unconfirmed "you were affected" claims and banned wording.
+- **Involvement:** only a verified email's hashed HIBP match confirms it. Never word a company breach as if it confirmed the user was in it.
+- **State:** `backend/local/monitor.json` (`store.py`). Tests point it at a temp dir in `tests/conftest.py`.

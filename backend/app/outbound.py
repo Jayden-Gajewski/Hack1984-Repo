@@ -13,13 +13,19 @@ Rules:
 - Local LLM calls use local=True. They're logged with long text truncated, and marked
   as staying on this machine.
 - Don't import httpx or requests anywhere else in backend/app or backend/scripts.
+- Email goes out through send_mail() here too (smtplib), never smtplib anywhere else. It's
+  only used to send an ownership code to an address the user typed into the threat monitor.
 """
 
+import asyncio
 import copy
 import re
+import smtplib
+import ssl
 import time
 from collections import deque
 from datetime import datetime, timezone
+from email.message import EmailMessage
 from itertools import count
 from typing import Any
 
@@ -162,6 +168,73 @@ async def request(
         response = await client.send(req)
         entry.status = response.status_code
         return response
+    except Exception as exc:
+        entry.error = f"{type(exc).__name__}: {exc}"
+        raise
+    finally:
+        entry.ms = int((time.monotonic() - started) * 1000)
+
+
+def _smtp_send(host: str, port: int, username: str, password: str, message: EmailMessage, timeout: float) -> None:
+    context = ssl.create_default_context()
+    if port == 465:
+        server: smtplib.SMTP = smtplib.SMTP_SSL(host, port, timeout=timeout, context=context)
+    else:
+        server = smtplib.SMTP(host, port, timeout=timeout)
+    with server:
+        if port != 465:
+            server.ehlo()
+            # A remote server must speak TLS; starttls() raises if it can't. A local test
+            # catcher (Mailpit, MailHog) usually doesn't, and the mail never leaves this machine.
+            if host not in LOCAL_HOSTS or server.has_extn("starttls"):
+                server.starttls(context=context)
+                server.ehlo()
+        if username:
+            server.login(username, password)
+        server.send_message(message)
+
+
+async def send_mail(
+    *,
+    purpose: str,
+    host: str,
+    port: int,
+    username: str,
+    password: str,
+    sender: str,
+    to: str,
+    subject: str,
+    text: str,
+    secrets: list[str] | None = None,
+    timeout: float = 20.0,
+) -> None:
+    """Send one logged email over SMTP. The log shows the server, sender, recipient, subject
+    and text, with each string in `secrets` (a verification code) replaced by REDACTED.
+    The SMTP password is never logged."""
+    shown = text
+    for secret in secrets or []:
+        if secret:
+            shown = shown.replace(secret, REDACTED)
+    message = EmailMessage()
+    message["From"], message["To"], message["Subject"] = sender, to, subject
+    message.set_content(text)
+    entry = OutboundEntry(
+        id=next(_ids),
+        time=datetime.now(timezone.utc).isoformat(),
+        service="smtp",
+        purpose=purpose,
+        local=False,
+        method="SMTP",
+        url=f"smtp://{host}:{port}",
+        headers={"From": sender, "To": to, "Subject": subject},
+        body={"text": shown},
+    )
+    _log.append(entry)
+
+    started = time.monotonic()
+    try:
+        await asyncio.to_thread(_smtp_send, host, port, username, password, message, timeout)
+        entry.status = 250  # SMTP "OK"
     except Exception as exc:
         entry.error = f"{type(exc).__name__}: {exc}"
         raise

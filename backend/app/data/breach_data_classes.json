@@ -1,0 +1,289 @@
+{
+  "_comment": "Threat monitor reference data. data_classes maps Have I Been Pwned's data class names (lowercased; GET /api/v3/dataclasses) to a category. Each category has the severity tier the rules start from, a plain label, the risks it creates, the checklist actions it adds (keys of actions), and the models.FIELD_TYPES value it corresponds to, if any (used to link breaches to people-search listings). Unlisted classes fall into default_category.",
+  "default_category": "profile",
+  "categories": {
+    "government_id": {
+      "tier": "critical", "label": "Government ID numbers", "field": "ssn",
+      "risks": ["Identity theft", "Accounts or loans opened in your name"],
+      "actions": ["credit_freeze", "credit_reports", "phishing_watch"]
+    },
+    "financial": {
+      "tier": "critical", "label": "Card or bank account numbers", "field": "financial",
+      "risks": ["Fraudulent charges", "Bank account fraud"],
+      "actions": ["card_check", "credit_reports"]
+    },
+    "secrets": {
+      "tier": "critical", "label": "PINs, recovery phrases or keys", "field": null,
+      "risks": ["Direct access to accounts or crypto wallets"],
+      "actions": ["rotate_secrets"]
+    },
+    "biometric": {
+      "tier": "critical", "label": "Biometric data", "field": null,
+      "risks": ["Impersonation you can't fix by changing a password"],
+      "actions": ["phishing_watch"]
+    },
+    "password": {
+      "tier": "high", "label": "Passwords", "field": "password",
+      "risks": ["Account takeover", "Credential stuffing on other sites"],
+      "actions": ["change_password", "unique_passwords", "enable_2fa"]
+    },
+    "auth_token": {
+      "tier": "high", "label": "Login tokens", "field": null,
+      "risks": ["Account takeover"],
+      "actions": ["review_sessions", "change_password", "enable_2fa"]
+    },
+    "security_qa": {
+      "tier": "high", "label": "Security questions and answers", "field": null,
+      "risks": ["Password resets by someone else"],
+      "actions": ["security_questions", "enable_2fa"]
+    },
+    "partial_financial": {
+      "tier": "high", "label": "Partial card or payment details", "field": "financial",
+      "risks": ["Payment scams", "Fraud attempts"],
+      "actions": ["card_check", "phishing_watch"]
+    },
+    "health": {
+      "tier": "high", "label": "Health information", "field": "health",
+      "risks": ["Medical identity theft", "Extortion"],
+      "actions": ["health_review"]
+    },
+    "private_messages": {
+      "tier": "high", "label": "Private messages and recordings", "field": null,
+      "risks": ["Extortion", "Harassment"],
+      "actions": ["phishing_watch"]
+    },
+    "sensitive_traits": {
+      "tier": "high", "label": "Sensitive personal details", "field": null,
+      "risks": ["Discrimination", "Extortion"],
+      "actions": ["phishing_watch"]
+    },
+    "birthdate": {
+      "tier": "medium", "label": "Dates of birth", "field": "birthdate",
+      "risks": ["Identity theft", "Getting past identity checks"],
+      "actions": ["credit_reports", "remove_listings"]
+    },
+    "email": {
+      "tier": "medium", "label": "Email addresses", "field": "email",
+      "risks": ["Phishing", "Spam"],
+      "actions": ["phishing_watch"]
+    },
+    "phone": {
+      "tier": "medium", "label": "Phone numbers", "field": "phone",
+      "risks": ["Scam calls and texts", "SIM swapping"],
+      "actions": ["carrier_pin", "phishing_watch", "remove_listings"]
+    },
+    "address": {
+      "tier": "medium", "label": "Home addresses", "field": "address",
+      "risks": ["Mail fraud", "Unwanted contact or stalking"],
+      "actions": ["remove_listings"]
+    },
+    "financial_profile": {
+      "tier": "medium", "label": "Financial details", "field": null,
+      "risks": ["Targeted financial scams"],
+      "actions": ["phishing_watch", "credit_reports"]
+    },
+    "location": {
+      "tier": "low", "label": "Location details", "field": null,
+      "risks": ["More convincing local scams"],
+      "actions": []
+    },
+    "name": {
+      "tier": "low", "label": "Names", "field": "name",
+      "risks": ["Personalized phishing"],
+      "actions": []
+    },
+    "username": {
+      "tier": "low", "label": "Usernames and display names", "field": null,
+      "risks": ["Linking your accounts across sites"],
+      "actions": []
+    },
+    "employer": {
+      "tier": "low", "label": "Employment details", "field": "employer",
+      "risks": ["Targeted (spear) phishing"],
+      "actions": ["phishing_watch"]
+    },
+    "technical": {
+      "tier": "low", "label": "Device and network details", "field": null,
+      "risks": ["Device or network targeting"],
+      "actions": []
+    },
+    "profile": {
+      "tier": "low", "label": "Profile and lifestyle details", "field": null,
+      "risks": ["More convincing scams"],
+      "actions": []
+    }
+  },
+  "data_classes": {
+    "social security numbers": "government_id",
+    "government issued ids": "government_id",
+    "partial government issued ids": "government_id",
+    "passport numbers": "government_id",
+    "driver's licenses": "government_id",
+    "taxation records": "government_id",
+    "credit cards": "financial",
+    "credit card cvv": "financial",
+    "bank account numbers": "financial",
+    "mnemonic phrases": "secrets",
+    "pins": "secrets",
+    "encrypted keys": "secrets",
+    "biometric data": "biometric",
+    "passwords": "password",
+    "historical passwords": "password",
+    "password hints": "password",
+    "auth tokens": "auth_token",
+    "security questions and answers": "security_qa",
+    "mothers maiden names": "security_qa",
+    "partial credit card data": "partial_financial",
+    "payment methods": "partial_financial",
+    "payment histories": "partial_financial",
+    "financial information": "partial_financial",
+    "health information": "health",
+    "health insurance information": "health",
+    "personal health data": "health",
+    "hiv statuses": "health",
+    "disabilities": "health",
+    "private messages": "private_messages",
+    "email messages": "private_messages",
+    "sms messages": "private_messages",
+    "chat logs": "private_messages",
+    "ai prompts": "private_messages",
+    "audio recordings": "private_messages",
+    "photos": "private_messages",
+    "browsing histories": "private_messages",
+    "address book contacts": "private_messages",
+    "sexual orientations": "sensitive_traits",
+    "sexual fetishes": "sensitive_traits",
+    "religions": "sensitive_traits",
+    "political views": "sensitive_traits",
+    "ethnicities": "sensitive_traits",
+    "races": "sensitive_traits",
+    "drug habits": "sensitive_traits",
+    "dates of birth": "birthdate",
+    "partial dates of birth": "birthdate",
+    "email addresses": "email",
+    "recovery email addresses": "email",
+    "phone numbers": "phone",
+    "partial phone numbers": "phone",
+    "physical addresses": "address",
+    "delivery instructions": "address",
+    "income levels": "financial_profile",
+    "net worths": "financial_profile",
+    "credit scores": "financial_profile",
+    "credit status information": "financial_profile",
+    "loan information": "financial_profile",
+    "earnings": "financial_profile",
+    "account balances": "financial_profile",
+    "financial transactions": "financial_profile",
+    "financial investments": "financial_profile",
+    "utility bills": "financial_profile",
+    "geographic locations": "location",
+    "latitude and longitude pairs": "location",
+    "travel plans": "location",
+    "flights taken": "location",
+    "travel habits": "location",
+    "names": "name",
+    "spouses names": "name",
+    "family members' names": "name",
+    "nicknames": "name",
+    "usernames": "username",
+    "display names": "username",
+    "instant messenger identities": "username",
+    "social media profiles": "username",
+    "employers": "employer",
+    "job titles": "employer",
+    "occupations": "employer",
+    "company names": "employer",
+    "career levels": "employer",
+    "employment statuses": "employer",
+    "job applications": "employer",
+    "professional skills": "employer",
+    "years of professional experience": "employer",
+    "ip addresses": "technical",
+    "device information": "technical",
+    "browser user agent details": "technical",
+    "mac addresses": "technical",
+    "imei numbers": "technical",
+    "imsi numbers": "technical",
+    "device serial numbers": "technical",
+    "login histories": "technical",
+    "time zones": "technical",
+    "cellular network names": "technical",
+    "telecommunications carrier": "technical",
+    "apps installed on devices": "technical",
+    "device usage tracking data": "technical",
+    "password strengths": "technical",
+    "homepage urls": "technical",
+    "user website urls": "technical"
+  },
+  "field_types": {
+    "_comment": "Stage 3 data types (models.FIELD_TYPES) for breaches found in news and official notices.",
+    "name": "name", "email": "email", "phone": "phone", "address": "address",
+    "birthdate": "birthdate", "ssn": "government_id", "password": "password",
+    "financial": "partial_financial", "health": "health", "employer": "employer"
+  },
+  "actions": {
+    "change_password": {
+      "text": "Change your {company} password",
+      "why": "Passwords from this breach may be in attackers' lists. A new password makes the old one useless."
+    },
+    "unique_passwords": {
+      "text": "Change the password anywhere else you used the same one",
+      "why": "Attackers try leaked email and password pairs on other sites (credential stuffing)."
+    },
+    "enable_2fa": {
+      "text": "Turn on two-factor authentication for {company}",
+      "why": "A second step stops someone who only has your password."
+    },
+    "review_sessions": {
+      "text": "Review active sessions and sign out devices you don't recognize",
+      "why": "A stolen login token can keep someone signed in without your password."
+    },
+    "security_questions": {
+      "text": "Change your security questions and answers",
+      "why": "Leaked answers can be used to reset your password."
+    },
+    "phishing_watch": {
+      "text": "Watch for emails, texts and calls that mention {company} or this breach",
+      "why": "Scammers use breach news and leaked details to make phishing look real."
+    },
+    "carrier_pin": {
+      "text": "Add a PIN or port-out lock with your mobile carrier",
+      "why": "A leaked phone number makes SIM-swap attempts easier."
+    },
+    "credit_freeze": {
+      "text": "Consider a credit freeze at Equifax, Experian and TransUnion",
+      "why": "A freeze stops new credit being opened in your name. In the US it's free and you can lift it any time.",
+      "link": "https://consumer.ftc.gov/articles/what-know-about-credit-freezes-and-fraud-alerts"
+    },
+    "credit_reports": {
+      "text": "Check your credit reports for accounts you don't recognize",
+      "why": "New accounts in your name are the first sign of identity theft.",
+      "link": "https://www.annualcreditreport.com"
+    },
+    "card_check": {
+      "text": "Check card and bank statements, and ask your bank about a replacement card",
+      "why": "Exposed card details can be used for fraudulent charges."
+    },
+    "health_review": {
+      "text": "Review insurance statements for care you didn't receive",
+      "why": "Health and insurance details can be used for medical identity theft."
+    },
+    "rotate_secrets": {
+      "text": "Change exposed PINs, and move funds from any wallet whose recovery phrase or key was exposed",
+      "why": "These secrets give direct access; changing them is the only fix."
+    },
+    "remove_listings": {
+      "text": "Run an exposure scan and request removal from people-search sites",
+      "why": "Contact details from breaches often end up on people-search sites.",
+      "link": "/app"
+    },
+    "read_notice": {
+      "text": "Read {company}'s official notice and follow its instructions",
+      "why": "The company's own notice says what it found and what it recommends."
+    },
+    "monitor_activity": {
+      "text": "Watch your {company} account for activity you don't recognize",
+      "why": "Unexpected logins, emails about changes or new devices are early warning signs."
+    }
+  }
+}
