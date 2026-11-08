@@ -141,6 +141,8 @@
   align-items: center;
   height: var(--space-5);
   min-height: 0;
+  /* The global button rule centers content; in this grid that shrinks the empty track to 0px wide. */
+  justify-content: stretch;
   padding: 0;
   background: none;
   border: 0;
@@ -166,7 +168,9 @@
 /* Stories-style progress: when the bar fills, ListingCycler shows the next listing. */
 .mock-tab-fill[data-active="true"] { animation: tab-fill 5.5s linear forwards; }
 @media (hover: hover) and (pointer: fine) {
-  .mock:hover .mock-tab-fill { animation-play-state: paused; }
+  /* Pause only while the pointer rests on the listing text (someone reading it). Pausing on the whole
+     card left a clicked tab's bar stuck at zero until the pointer left the card. */
+  .mock:has(.mock-stack:hover) .mock-tab-fill { animation-play-state: paused; }
 }
 @keyframes tab-fill {
   from { transform: scaleX(0); }
