@@ -100,15 +100,8 @@
 /* ---------- Install ---------- */
 
 .ext-install { padding-top: 0; }
-.ext-install code,
-.ext-req code { font-family: var(--mono); font-size: 0.875em; color: var(--text); }
-.ext-install-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.75fr);
-  gap: var(--space-16);
-  align-items: start;
-  margin-top: var(--space-12);
-}
+.ext-install code { font-family: var(--mono); font-size: 0.875em; color: var(--text); }
+.ext-install-grid { max-width: 44rem; margin-top: var(--space-12); }
 .ext-steps { display: grid; gap: var(--space-8); margin: 0; padding: 0; list-style: none; }
 .ext-steps li { display: grid; grid-template-columns: var(--space-10) minmax(0, 1fr); gap: var(--space-4); }
 .ext-num { font-size: var(--text-2xl); font-weight: 600; line-height: var(--leading-2xl); color: var(--accent-ink); font-variant-numeric: tabular-nums; }
@@ -145,27 +138,11 @@
 @media (hover: hover) and (pointer: fine) {
   .ext-copy-btn:hover { background: color-mix(in srgb, var(--text) 14%, transparent); }
 }
-.ext-req { padding: var(--space-6); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
-.ext-req h3 { margin: 0 0 var(--space-2); font-size: var(--text-lg); line-height: var(--leading-lg); font-weight: 600; }
-.ext-req p { font-size: var(--text-base); line-height: var(--leading-base); color: var(--muted); }
-.ext-req p + p { margin-top: var(--space-3); }
-.ext-req pre {
-  margin: var(--space-4) 0 0;
-  padding: var(--space-3) var(--space-4);
-  overflow-x: auto;
-  font-size: var(--text-sm);
-  line-height: var(--leading-sm);
-  font-family: var(--mono);
-  background: var(--sunken);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-}
 
 /* ---------- Responsive and reduced motion ---------- */
 
 @media (max-width: 900px) {
   .ext-shows { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .ext-install-grid { grid-template-columns: minmax(0, 1fr); gap: var(--space-10); }
 }
 @media (max-width: 560px) {
   .ext-shows { grid-template-columns: minmax(0, 1fr); gap: var(--space-8); }

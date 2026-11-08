@@ -208,35 +208,13 @@ export default function ExtensionPage() {
                   <span className="ext-num">4</span>
                   <div>
                     <h3>Pin it and reload your tabs</h3>
-                    <p>Pin it from the puzzle-piece menu. Tabs you already had open need a reload before it can see them.</p>
+                    <p>
+                      Pin it from the puzzle-piece menu. Tabs you already had open need a reload before it can see them.
+                      {HOSTED && " Stay signed in to Dossier in this browser: the extension checks sites with your account."}
+                    </p>
                   </div>
                 </li>
               </ol>
-              {HOSTED ? (
-                <aside className="ext-req">
-                  <h3>Stay signed in</h3>
-                  <p>
-                    The extension checks sites with your Dossier account, so sign in to Dossier in the same browser.
-                    Signed out, the popup says so and checks nothing.
-                  </p>
-                  <p>
-                    It checks a site when you open the popup on it. For a badge on every page, turn on &ldquo;Check
-                    every site I visit&rdquo; in its Settings. That sends each site&apos;s address to Dossier, so
-                    it&apos;s off until you choose it.
-                  </p>
-                </aside>
-              ) : (
-                <aside className="ext-req">
-                  <h3>Keep Dossier running</h3>
-                  <p>
-                    During the beta, the extension checks sites with the Dossier app on this computer. If it isn&apos;t
-                    running, the badge stays blank and the popup says so. Start it from the Dossier folder:
-                  </p>
-                  <pre>
-                    <code>{"cd backend\nuvicorn app.main:app"}</code>
-                  </pre>
-                </aside>
-              )}
             </div>
           </div>
         </section>
