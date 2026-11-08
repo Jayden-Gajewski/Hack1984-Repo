@@ -70,7 +70,8 @@ export default function AuthForm({ mode, next }: { mode: Mode; next?: string }) 
         <div className="auth-card">
           <h1 className="auth-title">{copy.title}</h1>
           <p className="auth-sub">{copy.sub}</p>
-          <form className="auth-form" onSubmit={onSubmit}>
+          {/* method="post": a submit before React loads must never put the password in the URL. */}
+          <form className="auth-form" method="post" onSubmit={onSubmit}>
             <label className="auth-field">
               Email
               <input name="email" type="email" autoComplete="email" required autoFocus />
