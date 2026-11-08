@@ -58,7 +58,7 @@ frontend/
   lib/api.ts         typed API client; mirrors models.py
   lib/display.ts     wording rules (tier labels, date sources) and safe links
   next.config.ts     /api proxy to the backend
-  proxy.ts           sends /app to /login when there's no session cookie
+  proxy.ts           sends /app to /login without a session cookie, and /login and /signup to /app with one
 extension/           Chrome/Edge extension (Manifest V3, plain JS, no build step)
 docker-compose.yml   local Postgres
 ```
