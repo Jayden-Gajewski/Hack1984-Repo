@@ -25,8 +25,8 @@ function Account() {
         <h1>Account</h1>
         <p className="lede">
           Signed in as {user.email}
-          {user.role === "admin" ? ", an admin" : ""}. Your account is stored in the database on this laptop and
-          isn&apos;t sent anywhere.
+          {user.role === "admin" ? ", an admin" : ""}. Your account is stored in Dossier&apos;s database and isn&apos;t
+          shared with anyone.
         </p>
       </header>
       <ChangePassword />

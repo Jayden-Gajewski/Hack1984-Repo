@@ -3,7 +3,7 @@ import AuthForm from "../components/AuthForm";
 
 export const metadata: Metadata = {
   title: "Log in",
-  description: "Log in to Dossier on this laptop to see your scans and send opt-outs.",
+  description: "Log in to Dossier to see your scans and send opt-outs.",
 };
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string | string[] }> }) {

@@ -164,7 +164,7 @@ export default function AliasPanel({ onChecked }: Props) {
           <button type="button" className="secondary" onClick={checkInbox} disabled={busy !== null} aria-busy={busy === "inbox" || undefined}>
             <SwapLabel on={busy === "inbox"} idle="Check inbox (mock)" active="Checking…" />
           </button>
-          <span className="muted small">Runs on this laptop. Nothing is searched.</span>
+          <span className="muted small">Nothing is searched.</span>
         </div>
 
         <div role="status">
@@ -359,7 +359,7 @@ function AliasRow({ alias: a, isNew, onChange }: RowProps) {
 
           <div className="row alias-actions">
             <button type="button" onClick={investigate} disabled={investigating} aria-busy={investigating || undefined}>
-              <SwapLabel on={investigating} idle="Investigate" active={`Reading on this laptop… ${elapsed} s`} />
+              <SwapLabel on={investigating} idle="Investigate" active={`Asking Gemini… ${elapsed} s`} />
             </button>
             <button type="button" className="secondary" onClick={setStatus} disabled={saving !== null} aria-busy={saving === "status" || undefined}>
               <SwapLabel on={saving === "status"} idle={off ? "Turn on" : "Turn off"} active="Saving…" />
@@ -367,7 +367,7 @@ function AliasRow({ alias: a, isNew, onChange }: RowProps) {
           </div>
           {investigating && (
             <p className="muted small" role="status">
-              The local model usually takes under a minute. Nothing leaves this laptop.
+              Gemini gets the sender domains and subjects, never your alias address. It usually answers in seconds.
             </p>
           )}
 

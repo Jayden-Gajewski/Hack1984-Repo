@@ -48,7 +48,7 @@ def client(monkeypatch):
     monkeypatch.setattr(db, "alias_states", lambda: dict(states))
     monkeypatch.setattr(db, "set_alias_state", set_alias_state)
     monkeypatch.setattr(db, "session_user_id", lambda token: TEST_USER if token == TEST_SESSION else None)
-    monkeypatch.setattr(main, "session", main.Session())
+    monkeypatch.setattr(main, "_sessions", {})
     with TestClient(main.app, base_url="http://localhost") as c:  # TrustedHostMiddleware
         c.cookies.set("h84_session", TEST_SESSION)
         yield c

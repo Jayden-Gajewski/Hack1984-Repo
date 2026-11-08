@@ -492,6 +492,7 @@ class StatusResponse(BaseModel):
     ollama_model: str  # GEMINI_MODEL
     model_pulled: bool  # same as ollama_running
     database: bool
+    public: bool = False  # the public site (SITE_URL set): no Threat Monitor or extension route
 
 
 # ---------- Local accounts (stored in the local Postgres only) ----------

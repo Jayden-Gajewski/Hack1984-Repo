@@ -21,8 +21,7 @@ from urllib.parse import urlsplit
 
 import psycopg
 from fastapi import Cookie, Depends, FastAPI, Header, HTTPException, Query, Request, Response
-from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 
 from app import auth, db, explain, extension_package, footprint, outbound, site_policy
 from app.clients import gemini
@@ -83,7 +82,7 @@ DB_DOWN = "Postgres isn't reachable. Start it with `docker compose up -d`."
 
 @dataclass
 class Session:
-    """The current scan, in memory. Single user on one laptop."""
+    """One account's current scan, in memory."""
 
     person: ScanRequest | None = None
     exposures: list[Exposure] = field(default_factory=list)
@@ -92,7 +91,14 @@ class Session:
     alias_hits: list[AliasHit] = field(default_factory=list)
 
 
-session = Session()
+# Each account's current scan, by account id. The public server keeps them in this one process, so
+# it runs one worker (render.yaml); after a restart the app just loads the saved scan again.
+_sessions: dict[str | None, Session] = {}
+
+
+def _session() -> Session:
+    """The signed-in account's current scan."""
+    return _sessions.setdefault(auth.current_user(), Session())
 
 
 async def _stage(
@@ -128,8 +134,9 @@ async def _call(label: str, fn: Callable[..., Any], *args: Any) -> Any:
 
 
 def _rank(exposures: list[Exposure]) -> tuple[list[Exposure], list[str]]:
+    current = _session()
     ranked = s5_ranking.rank_sources(
-        exposures, session.breaches, session.policies, session.alias_hits
+        exposures, current.breaches, current.policies, current.alias_hits
     )
     return ranked, []
 
@@ -139,34 +146,60 @@ def _company_ids() -> set[str]:
 
 
 def _require_scan() -> ScanRequest:
-    if session.person is None:
+    person = _session().person
+    if person is None:
         raise HTTPException(409, "Run a scan (or load the last one) first.")
-    return session.person
+    return person
+
+
+async def _spend_search() -> None:
+    """Public site: count one of today's paid searches (Exa, Tavily, Gemini), or refuse with 429
+    when this account or everyone together has used up today's limit."""
+    settings = get_settings()
+    if not settings.public:
+        return
+    try:
+        allowed = await asyncio.to_thread(db.take_search, settings.searches_per_day, settings.searches_per_day_total)
+    except psycopg.Error:
+        raise HTTPException(503, DB_DOWN) from None
+    if not allowed:
+        raise HTTPException(429, "Today's searches are used up. Try again tomorrow.")
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    get_settings()  # refuses to start if DATABASE_URL isn't localhost
+    settings = get_settings()  # refuses a DATABASE_URL it may not use (config.py)
     try:
         await asyncio.to_thread(db.init_schema)
     except Exception as exc:  # the app still runs without Postgres; scans just aren't saved
         log.warning("%s Scans won't be saved until it is. (%s)", DB_DOWN, exc)
     # Threat monitor's scheduled checks: a loop in this process, so only while the backend runs.
-    scheduled = asyncio.create_task(monitor_scheduler.run())
+    # The public site has no Threat Monitor yet: it keeps one person's data.
+    scheduled = None if settings.public else asyncio.create_task(monitor_scheduler.run())
     yield
-    scheduled.cancel()
+    if scheduled:
+        scheduled.cancel()
     await monitor_service.stop()
     await outbound.close()
 
 
 app = FastAPI(title="Hack1984 API", lifespan=lifespan)
-# Only answer requests addressed to this machine, which blocks DNS-rebinding pages from
-# reading saved scans or the outbound log through the browser.
-app.add_middleware(TrustedHostMiddleware, allowed_hosts=["localhost", "127.0.0.1"])
+
+
+@app.middleware("http")
+async def only_this_machine(request: Request, call_next):
+    """On this laptop, only answer requests addressed to this machine, which blocks DNS-rebinding
+    pages from reading saved scans or the outbound log through the browser. The public server
+    answers on whatever hostname its host routes to it."""
+    if not get_settings().public and request.url.hostname not in ("localhost", "127.0.0.1"):
+        return PlainTextResponse("Invalid host header", status_code=400)
+    return await call_next(request)
+
+
 # Threat monitor (/api/monitor/*, app/monitor/). It reads the loaded scan to show which
 # listings share data with a breach.
 app.include_router(monitor_routes.router)
-app.state.current_exposures = lambda: session.exposures
+app.state.current_exposures = lambda: _session().exposures
 
 # Routes anyone on this laptop may call. Everything else under /api/ holds or acts on personal
 # data (scans, saved scans, the outbound log, aliases, the footprint), so it needs a signed-in
@@ -192,8 +225,20 @@ def _extension_may_call(request: Request, origin: str | None) -> bool:
     ) in EXTENSION_SESSION_ROUTES
 
 
-def _from_this_laptop(origin: str) -> bool:
-    """localhost, or this laptop's own network address (the app opened from a phone on the same Wi-Fi)."""
+# Not on the public site yet: the Threat Monitor keeps one person's data, and the extension talks
+# to the Dossier app on its user's own computer.
+PUBLIC_OFF = {
+    "/api/monitor": "The Threat Monitor isn't on the public site yet. It runs in the Dossier app on your own computer.",
+    "/api/site-policy": "The browser extension works with the Dossier app on your own computer.",
+}
+
+
+def _allowed_origin(origin: str) -> bool:
+    """The public site's own address (SITE_URL). On this laptop: localhost, or this laptop's own
+    network address (the app opened from a phone on the same Wi-Fi)."""
+    site = get_settings().site_url
+    if site:
+        return origin.rstrip("/").lower() == site.lower()
     host = urlsplit(origin).hostname
     if host in LOCAL_HOSTS:
         return True
@@ -206,18 +251,22 @@ def _from_this_laptop(origin: str) -> bool:
 @app.middleware("http")
 async def require_session(request: Request, call_next):
     path = request.url.path
+    if get_settings().public:
+        off = next((msg for prefix, msg in PUBLIC_OFF.items() if path.startswith(prefix)), None)
+        if off:
+            return JSONResponse({"detail": off}, status_code=404)
     if not path.startswith("/api/") or path in EXTENSION_ROUTES:
         return await call_next(request)
-    # Changes must come from a page on this laptop, even if some other site's page got a browser
+    # Changes must come from Dossier's own pages, even if some other site's page got a browser
     # to send our cookie along.
     origin = request.headers.get("origin")
     if (
         request.method not in ("GET", "HEAD", "OPTIONS")
         and origin
-        and not _from_this_laptop(origin)
+        and not _allowed_origin(origin)
         and not _extension_may_call(request, origin)
     ):
-        return JSONResponse({"detail": "Requests must come from this laptop."}, status_code=403)
+        return JSONResponse({"detail": "Requests must come from Dossier's own pages."}, status_code=403)
     if path in OPEN_ROUTES:
         return await call_next(request)
     token = request.cookies.get(auth.COOKIE)
@@ -245,6 +294,7 @@ async def status():
         ollama_model=settings.gemini_model,
         model_pulled=ready,
         database=database,
+        public=settings.public,
     )
 
 
@@ -263,6 +313,7 @@ async def companies():
 async def add_company_route(req: CompanyRequest):
     """Add any company to the account picker. A typed website is used as is; a name is matched
     to its official website with one Exa company search (company name only, logged)."""
+    await _spend_search()
     return await _call("Add company", add_company, req.name)
 
 
@@ -273,12 +324,14 @@ async def scan(req: ScanRequest):
     if not req.consent:
         raise HTTPException(400, "A scan needs consent: you can only scan yourself.")
 
+    current = _session()
     if not req.refresh:
         saved = await _saved_scan(req)
         if saved is not None:
-            session.person, session.exposures = req, saved.exposures
+            current.person, current.exposures = req, saved.exposures
             return saved
 
+    await _spend_search()
     exposures, errors = await _stage(
         "Stage 1 (find exposures)", [], s1_exposures.find_exposures, req
     )
@@ -288,7 +341,7 @@ async def scan(req: ScanRequest):
         )
         errors += more
     exposures = [explain.explain(e) for e in exposures]  # summary, risk and per-field details
-    session.person, session.exposures = req, exposures
+    current.person, current.exposures = req, exposures
 
     response = ScanResponse(scan_id=str(uuid.uuid4()), exposures=exposures, errors=errors)
     try:
@@ -334,8 +387,9 @@ async def latest_scan():
     response = ScanResponse.model_validate(saved_response)
     # Re-run the write-up: older saved scans don't have it, and its wording may have changed.
     response.exposures = [explain.explain(e) for e in response.exposures]
-    session.person = ScanRequest(**saved_request, consent=True)  # it was consented when it ran
-    session.exposures = response.exposures
+    current = _session()
+    current.person = ScanRequest(**saved_request, consent=True)  # it was consented when it ran
+    current.exposures = response.exposures
     return response
 
 
@@ -345,11 +399,13 @@ async def accounts(req: AccountsRequest):
     unknown = sorted(set(req.companies) - _company_ids())
     if unknown:
         raise HTTPException(400, f"Unknown company ids: {', '.join(unknown)}")
+    await _spend_search()
     (breaches, breach_errors), (policies, policy_errors) = await asyncio.gather(
         _stage("Stage 3 (breach timelines)", [], s3_breaches.breach_timelines, req.companies),
         _stage("Stage 4 (policy check)", [], s4_policy.check_policies, req.companies),
     )
-    session.breaches, session.policies = breaches, policies
+    current = _session()
+    current.breaches, current.policies = breaches, policies
     return AccountsResponse(
         breaches=breaches, policies=policies, errors=breach_errors + policy_errors
     )
@@ -358,10 +414,11 @@ async def accounts(req: AccountsRequest):
 @app.get("/api/leads", response_model=LeadsResponse)
 async def leads():
     """Stage 5, over everything gathered so far."""
+    current = _session()
     exposures, errors = await _stage(
-        "Stage 5 (likely sources)", session.exposures, _rank, session.exposures
+        "Stage 5 (likely sources)", current.exposures, _rank, current.exposures
     )
-    session.exposures = exposures
+    current.exposures = exposures
     return LeadsResponse(exposures=exposures, errors=errors)
 
 
@@ -370,7 +427,7 @@ async def optout(req: OptOutRequest):
     """Stage 6: draft a removal request for one listing or one company."""
     person = _require_scan()
     if req.exposure_id is not None:
-        exposure = next((e for e in session.exposures if e.id == req.exposure_id), None)
+        exposure = next((e for e in _session().exposures if e.id == req.exposure_id), None)
         if exposure is None:
             raise HTTPException(404, "No exposure with that id in the current scan.")
         return await _call(
@@ -387,8 +444,9 @@ async def optout(req: OptOutRequest):
 async def rescan():
     """Stage 6: check which listings came down. This is the subscription hook."""
     person = _require_scan()
+    await _spend_search()
     results, errors = await _stage(
-        "Stage 6 (re-scan)", [], s6_resolve.rescan, session.exposures, person
+        "Stage 6 (re-scan)", [], s6_resolve.rescan, _session().exposures, person
     )
     return RescanResponse(results=results, errors=errors)
 
@@ -426,8 +484,9 @@ async def investigate_alias(address: str):
 @app.get("/api/inbox/check", response_model=list[AliasHit])
 async def inbox_check():
     """Stage 7: runs locally on the mock inbox, no search."""
-    session.alias_hits = await _call("Stage 7 (inbox check)", s7_aliases.check_inbox)
-    return session.alias_hits
+    current = _session()
+    current.alias_hits = await _call("Stage 7 (inbox check)", s7_aliases.check_inbox)
+    return current.alias_hits
 
 
 @app.get("/api/extension.zip")
@@ -446,7 +505,7 @@ async def extension_download():
 async def site_policy_check(req: SitePolicyRequest, origin: str | None = Header(default=None)):
     """The browser extension (extension/): what the privacy policy of the site you're visiting
     says it collects and shares, and the risks. The policy is read straight from the site (or
-    sent by the browser) and analyzed on this laptop. Which sites you visit is never saved."""
+    sent by the browser) and checked by fixed rules and Gemini. Which sites you visit is never saved."""
     # Only the extension calls this route. A web page can't read the answer, but it could still
     # send page text to plant a fake verdict, so refuse anything that says it came from a page.
     if origin and not origin.startswith("chrome-extension://"):
@@ -459,13 +518,18 @@ async def site_policy_check(req: SitePolicyRequest, origin: str | None = Header(
 
 @app.get("/api/outbound-log", response_model=list[OutboundEntry])
 async def outbound_log(include_local: bool = Query(default=True)):
-    return outbound.get_log(include_local=include_local)
+    return outbound.get_log(include_local=include_local, user_id=_log_owner())
 
 
 @app.delete("/api/outbound-log")
 async def clear_outbound_log():
-    outbound.clear_log()
+    outbound.clear_log(user_id=_log_owner())
     return {"cleared": True}
+
+
+def _log_owner() -> str | None:
+    """The public site shows each account only its own requests. This laptop has one user."""
+    return auth.current_user() if get_settings().public else None
 
 
 # ---------- Local accounts ----------
@@ -487,8 +551,13 @@ def _start_session(response: Response, user_id: str) -> None:
     token = auth.new_token()
     db.create_session(user_id, token)
     response.set_cookie(
-        auth.COOKIE, token, httponly=True, samesite="lax", max_age=30 * 24 * 3600, path="/"
+        auth.COOKIE, token, httponly=True, samesite="lax", max_age=30 * 24 * 3600, path="/",
+        secure=_https(),  # the public site is https only
     )
+
+
+def _https() -> bool:
+    return get_settings().site_url.startswith("https://")
 
 
 async def _signed_in_user() -> dict[str, Any]:
@@ -542,7 +611,7 @@ async def logout(response: Response, h84_session: str | None = Cookie(default=No
             await asyncio.to_thread(db.delete_session, h84_session)
         except Exception:
             pass  # the cookie is cleared either way
-    response.delete_cookie(auth.COOKIE, path="/")
+    response.delete_cookie(auth.COOKIE, path="/", secure=_https(), httponly=True, samesite="lax")
     return {"ok": True}
 
 

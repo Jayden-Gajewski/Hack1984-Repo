@@ -1,0 +1,24 @@
+# Render Blueprint for Dossier's backend (docs/DEPLOY.md). The Next.js frontend goes on Vercel.
+services:
+  - type: web
+    name: dossier-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    # One process on purpose: each account's current scan is kept in memory (saved scans are in Postgres).
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/status
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.13.14"
+      - key: SITE_URL # the Vercel address, e.g. https://dossier-yourname.vercel.app (no trailing slash)
+        sync: false
+      - key: DATABASE_URL # hosted Postgres ending in ?sslmode=require, e.g. from Neon
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: EXA_API_KEY
+        sync: false
+      - key: TAVILY_API_KEY
+        sync: false

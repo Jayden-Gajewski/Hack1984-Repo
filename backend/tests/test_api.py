@@ -9,6 +9,11 @@ from app.models import Exposure
 PERSON = {"name": "Jane Example", "city": "Springfield", "state": "il", "consent": True}
 
 
+def _current():
+    """The test account's current scan (the client is signed in as one account)."""
+    return next(iter(main._sessions.values()))
+
+
 def _fake_stages(monkeypatch, exposures):
     async def find(req):
         return exposures, []
@@ -42,8 +47,8 @@ def test_scan_returns_the_contract_shape(client, monkeypatch):
     assert set(body) == {"scan_id", "exposures", "errors", "saved_at"}
     assert body["saved_at"] is None  # a fresh scan
     assert body["exposures"][0]["public_by_source"] == "unknown"
-    assert main.session.person.state == "IL"
-    assert main.session.exposures[0].id == "e1"
+    assert _current().person.state == "IL"
+    assert _current().exposures[0].id == "e1"
 
 
 def _saved(monkeypatch, calls):
@@ -71,7 +76,7 @@ def test_a_person_scanned_before_gets_the_saved_scan_without_searching(client, m
     assert res.status_code == 200
     assert body["scan_id"] == "old-scan" and body["saved_at"] == "2026-11-06T18:30:00+00:00"
     assert calls == [("Jane Example", "Springfield", "IL")]
-    assert main.session.exposures[0].id == "s1"  # opt-outs and re-scan work on the loaded scan
+    assert _current().exposures[0].id == "s1"  # opt-outs and re-scan work on the loaded scan
 
 
 def test_refresh_runs_a_fresh_scan_even_when_one_is_saved(client, monkeypatch):

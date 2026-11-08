@@ -11,8 +11,8 @@ const DESCRIPTION =
   "Dossier finds your listings on people-search sites, shows the likely source with its evidence, and drafts the opt-out. Every request it sends is logged, including what Gemini reads.";
 
 export const metadata: Metadata = {
-  // Dossier runs on this laptop, so absolute URLs (the Open Graph image) point at localhost.
-  metadataBase: new URL("http://localhost:3000"),
+  // Absolute URLs (the Open Graph image) use the public site's address when there is one.
+  metadataBase: new URL(process.env.SITE_URL ?? "http://localhost:3000"),
   title: { default: "Dossier: find where your personal data is exposed", template: "%s | Dossier" },
   description: DESCRIPTION,
   applicationName: "Dossier",

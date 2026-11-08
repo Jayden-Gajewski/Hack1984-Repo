@@ -166,7 +166,7 @@ export default function FootprintCompany({ company, suggestions, onSaved, onRemo
         <h4 id={`fp-requests-${company.id}`}>Requests</h4>
         <p className="muted small">
           Draft a request here, send it yourself by email or through the company&apos;s privacy form, then
-          record each step. Drafts are saved on this laptop and never sent by Dossier.
+          record each step. Drafts are saved in your account and never sent by Dossier.
         </p>
         <div className="fp-draft">
           <label>

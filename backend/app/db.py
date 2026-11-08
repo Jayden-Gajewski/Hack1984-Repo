@@ -125,6 +125,23 @@ create table if not exists alias_states (
     updated_at  timestamptz not null default now(),
     primary key (user_id, alias)
 );
+
+-- Public site: companies an account added to its picker (this laptop keeps backend/local/companies.json).
+create table if not exists custom_companies (
+    user_id    uuid not null references users(id) on delete cascade,
+    id         text not null,
+    company    jsonb not null,
+    created_at timestamptz not null default now(),
+    primary key (user_id, id)
+);
+
+-- Public site: paid searches (Exa, Tavily, Gemini) per account per day, for the daily limits.
+create table if not exists usage_counts (
+    day     date not null,
+    user_id uuid not null references users(id) on delete cascade,
+    count   integer not null default 0,
+    primary key (day, user_id)
+);
 """
 
 
@@ -196,6 +213,42 @@ def latest_scan() -> tuple[dict[str, Any], dict[str, Any]] | None:
             (_owner(),),
         ).fetchone()
     return (row[0], row[1]) if row else None
+
+
+def custom_companies() -> list[dict[str, Any]]:
+    """Companies this account added to its picker (public site), oldest first."""
+    with connect() as conn:
+        rows = conn.execute(
+            "select company from custom_companies where user_id = %s order by created_at", (_owner(),)
+        ).fetchall()
+    return [r[0] for r in rows]
+
+
+def add_custom_company(company: dict[str, Any]) -> None:
+    with connect() as conn:
+        conn.execute(
+            "insert into custom_companies (user_id, id, company) values (%s, %s, %s) on conflict do nothing",
+            (_owner(), company["id"], Jsonb(company)),
+        )
+
+
+def take_search(per_account: int, total: int) -> bool:
+    """Count one paid search for this account today. False, and nothing counted, when this
+    account or everyone together has used up today's limit."""
+    with connect() as conn, conn.transaction():
+        mine, everyone = conn.execute(
+            "select coalesce(sum(count) filter (where user_id = %s), 0), coalesce(sum(count), 0)"
+            " from usage_counts where day = current_date",
+            (_owner(),),
+        ).fetchone()
+        if mine >= per_account or everyone >= total:
+            return False
+        conn.execute(
+            "insert into usage_counts (day, user_id, count) values (current_date, %s, 1)"
+            " on conflict (day, user_id) do update set count = usage_counts.count + 1",
+            (_owner(),),
+        )
+    return True
 
 
 def save_alias(alias: str, company: str, company_domains: list[str], site: str = "", label: str = "") -> str:

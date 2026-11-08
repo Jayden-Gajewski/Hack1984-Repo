@@ -91,8 +91,8 @@ export default function FootprintPanel() {
           )}
         </div>
         <p className="muted fp-lede">
-          Keep track of the companies that hold your data and the requests you make to them. It&apos;s saved on
-          this laptop only. Dossier never sends a request or changes a company&apos;s settings for you.
+          Keep track of the companies that hold your data and the requests you make to them. It&apos;s saved in
+          your account only. Dossier never sends a request or changes a company&apos;s settings for you.
         </p>
         {empty && !open && (
           <p className="fp-empty">

@@ -229,6 +229,7 @@ export interface Status {
   keys: Record<string, boolean>;
   ollama_running: boolean; // GEMINI_API_KEY is set (named before the switch to Gemini)
   ollama_model: string; // GEMINI_MODEL
+  public?: boolean; // the public site (SITE_URL set): no Threat Monitor there yet
   model_pulled: boolean;
   database: boolean;
 }
@@ -250,7 +251,7 @@ export interface OutboundEntry {
 
 // ---------- Local accounts (backend: models.User; stored in the local Postgres) ----------
 
-// "admin": the first account made on this laptop, and anyone an admin promotes.
+// "admin": the first account made, and anyone an admin promotes.
 export type Role = "user" | "admin";
 
 export interface User {
