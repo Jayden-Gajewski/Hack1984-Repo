@@ -6,7 +6,7 @@ The exposure scanner asks "where is my data public right now?" The threat monito
 
 ## What works with no setup
 
-Add companies on the **Monitored** tab, then press **Refresh now**:
+Add companies on the **What we watch** tab, then press **Scan now**:
 
 - HIBP's whole public breach list (about 1,000 breaches) is downloaded, and your companies are matched against it on this laptop. No key is needed. HIBP never learns which companies you use, because the download is the same for everyone.
 - Each match becomes an incident card with:
@@ -104,7 +104,7 @@ The card says how many sentences were removed. An explanation is marked stale wh
   - A new incident is reported once.
   - Incident ids are stable (`hibp-<name>`, `news-<company>-<year>`). When a news report and an HIBP breach describe the same incident, they merge, so a breach first seen in the news isn't alerted again when HIBP adds it. Its steps carry over.
   - A newly confirmed email match is a separate alert.
-- **Scheduled checks** (Activity tab) run every 6 h, 12 h, 1 day or 1 week.
+- **Scheduled checks** (History tab) run every 6 h, 12 h, 1 day or 1 week.
   - They run as a loop inside the backend, **only while it's running**, and the UI says so.
   - They include news searches only if you tick that option, because those spend credits.
 - **History** keeps the last 300 events, also in `monitor.json`.
@@ -119,10 +119,10 @@ The card says how many sentences were removed. An explanation is marked stale wh
 
 - **Code:**
   - Backend: `backend/app/monitor/` (pure modules first: `breach_data`, `incidents`, `severity`, `checklist`), `backend/app/clients/hibp.py`, and the routes under `/api/monitor/*` in `backend/app/monitor/routes.py`.
-  - Frontend: `frontend/app/app/monitor/page.tsx` and components `IncidentCard`, `MonitoredCompanies`, `MonitoredEmails`, `MonitorActivity`, `CompanyMark`.
+  - Frontend: `frontend/app/app/monitor/page.tsx` and components `IncidentCard`, `MonitoredCompanies`, `MonitoredEmails`, `MonitorActivity`, `CompanyMark`, `RadarScope`.
 - **Tests:** `cd backend && pytest tests/test_monitor_*.py`. They're offline: HIBP, SMTP, Stage 3 and Ollama are faked, and the store goes to a temp dir (`tests/conftest.py`).
 - **Reference data:** `breach_data_classes.json` maps all of HIBP's data classes (`GET /api/v3/dataclasses`) to categories. An unknown class falls back to "profile" (low). Saved incidents re-derive their categories when shown, so editing the file applies everywhere.
-- **Licensing:** HIBP data is CC BY 4.0. Cards and the Alerts tab show "Have I Been Pwned" with a link.
+- **Licensing:** HIBP data is CC BY 4.0. Threat rows and the Threats tab show "Have I Been Pwned" with a link.
 
 ## Not built yet
 
