@@ -6,8 +6,17 @@ Accounts live in the local Postgres next to saved scans. Nothing here talks to t
 import hashlib
 import hmac
 import secrets
+from contextvars import ContextVar
 
 COOKIE = "h84_session"
+
+# The signed-in account for the API request being handled. main.py's session middleware sets it,
+# and db.py uses it to keep saved scans per account. None outside a request (scripts, tests).
+CURRENT_USER: ContextVar[str | None] = ContextVar("current_user", default=None)
+
+
+def current_user() -> str | None:
+    return CURRENT_USER.get()
 _N, _R, _P = 2**14, 8, 1  # scrypt cost
 
 

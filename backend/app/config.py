@@ -32,6 +32,20 @@ class Settings:
     ollama_parallel: int = 1  # LLM calls at once; >1 only helps with a GPU
     ollama_keep_alive: str = "2m"  # unload the model this long after the last call
     scan_max_pages: int = 8  # pages analyzed per scan (known brokers first)
+    # Threat monitor (all optional). HIBP_API_KEY enables the hashed email check, which needs
+    # an HIBP Pro or High RPM plan. Company breach matching needs no key.
+    hibp_api_key: str = ""
+    # SMTP server for email ownership codes. Unset: emails can be added but are never verified
+    # or checked. A server that isn't on this machine must use TLS (port 465 or STARTTLS).
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
+
+    @property
+    def smtp_configured(self) -> bool:
+        return bool(self.smtp_host and self.smtp_from)
 
 
 def _int_env(name: str, default: int, lo: int, hi: int) -> int:
@@ -69,4 +83,10 @@ def get_settings() -> Settings:
         ollama_parallel=_int_env("OLLAMA_PARALLEL", 1, 1, 8),
         ollama_keep_alive=os.getenv("OLLAMA_KEEP_ALIVE", "2m").strip() or "2m",
         scan_max_pages=_int_env("SCAN_MAX_PAGES", 8, 1, 50),
+        hibp_api_key=os.getenv("HIBP_API_KEY", "").strip(),
+        smtp_host=os.getenv("SMTP_HOST", "").strip(),
+        smtp_port=_int_env("SMTP_PORT", 587, 1, 65535),
+        smtp_username=os.getenv("SMTP_USERNAME", "").strip(),
+        smtp_password=os.getenv("SMTP_PASSWORD", ""),
+        smtp_from=os.getenv("SMTP_FROM", "").strip() or os.getenv("SMTP_USERNAME", "").strip(),
     )

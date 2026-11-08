@@ -14,15 +14,19 @@ import uuid
 from collections.abc import Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
+from datetime import date
 from typing import Any
+from urllib.parse import urlsplit
 
-from fastapi import Cookie, FastAPI, Header, HTTPException, Query, Response
+import psycopg
+from fastapi import Cookie, Depends, FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import JSONResponse
 
-from app import auth, db, explain, outbound, site_policy
+from app import auth, db, explain, footprint, outbound, site_policy
 from app.clients import ollama
 from app.companies import add_company, all_companies
-from app.config import get_settings
+from app.config import LOCAL_HOSTS, get_settings
 from app.data import load_json
 from app.models import (
     AccountsRequest,
@@ -38,14 +42,22 @@ from app.models import (
     LeadsResponse,
     OptOutRequest,
     PolicyResult,
+    RequestCreate,
+    RequestTextUpdate,
+    RequestUpdate,
     RescanResponse,
     ScanRequest,
     ScanResponse,
     SitePolicyRequest,
     SitePolicyResponse,
     StatusResponse,
+    TrackedCompany,
+    TrackedCompanyInput,
     User,
 )
+from app.monitor import routes as monitor_routes
+from app.monitor import scheduler as monitor_scheduler
+from app.monitor import service as monitor_service
 from app.outbound import OutboundEntry
 from app.stages import (
     s1_exposures,
@@ -131,7 +143,11 @@ async def lifespan(_: FastAPI):
         await asyncio.to_thread(db.init_schema)
     except Exception as exc:  # the app still runs without Postgres; scans just aren't saved
         log.warning("%s Scans won't be saved until it is. (%s)", DB_DOWN, exc)
+    # Threat monitor's scheduled checks: a loop in this process, so only while the backend runs.
+    scheduled = asyncio.create_task(monitor_scheduler.run())
     yield
+    scheduled.cancel()
+    await monitor_service.stop()
     await outbound.close()
 
 
@@ -139,6 +155,45 @@ app = FastAPI(title="Hack1984 API", lifespan=lifespan)
 # Only answer requests addressed to this machine, which blocks DNS-rebinding pages from
 # reading saved scans or the outbound log through the browser.
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=["localhost", "127.0.0.1"])
+# Threat monitor (/api/monitor/*, app/monitor/). It reads the loaded scan to show which
+# listings share data with a breach.
+app.include_router(monitor_routes.router)
+app.state.current_exposures = lambda: session.exposures
+
+# Routes anyone on this laptop may call. Everything else under /api/ holds or acts on personal
+# data (scans, saved scans, the outbound log, aliases, the footprint), so it needs a signed-in
+# local account, whoever is asking: the browser, a script, or another program on this machine.
+OPEN_ROUTES = {"/api/status", "/api/brokers", "/api/auth/signup", "/api/auth/login", "/api/auth/logout", "/api/auth/me"}
+# The browser extension (extension/) calls only this route. It has no session cookie (it talks to
+# 127.0.0.1:8000, not the app) and sends a chrome-extension:// Origin. The route doesn't read or
+# change anything stored here, and it checks the Origin itself: it refuses any web page.
+EXTENSION_ROUTES = {"/api/site-policy"}
+
+
+@app.middleware("http")
+async def require_session(request: Request, call_next):
+    path = request.url.path
+    if not path.startswith("/api/") or path in EXTENSION_ROUTES:
+        return await call_next(request)
+    # Changes must come from a page on this laptop, even if some other site's page got a browser
+    # to send our cookie along.
+    origin = request.headers.get("origin")
+    if request.method not in ("GET", "HEAD", "OPTIONS") and origin and urlsplit(origin).hostname not in LOCAL_HOSTS:
+        return JSONResponse({"detail": "Requests must come from this laptop."}, status_code=403)
+    if path in OPEN_ROUTES:
+        return await call_next(request)
+    token = request.cookies.get(auth.COOKIE)
+    try:
+        user_id = await asyncio.to_thread(db.session_user_id, token) if token else None
+    except psycopg.Error:
+        return JSONResponse({"detail": DB_DOWN}, status_code=503)
+    if not user_id:
+        return JSONResponse({"detail": "Log in to continue."}, status_code=401)
+    signed_in = auth.CURRENT_USER.set(user_id)  # db.py keeps saved scans per account with it
+    try:
+        return await call_next(request)
+    finally:
+        auth.CURRENT_USER.reset(signed_in)
 
 
 @app.get("/api/status", response_model=StatusResponse)
@@ -365,6 +420,7 @@ async def signup(req: Credentials, response: Response):
         if not created:
             raise HTTPException(409, "An account with that email already exists. Log in instead.")
         user = await asyncio.to_thread(db.get_user, req.email)
+        await asyncio.to_thread(db.claim_unowned_scans, user[0])  # the laptop's first account only
         await asyncio.to_thread(_start_session, response, user[0])
     except HTTPException:
         raise
@@ -408,3 +464,134 @@ async def me(h84_session: str | None = Cookie(default=None)):
     if not found:
         raise HTTPException(401, "Your session ended. Log in again.")
     return User(email=found)
+
+
+# ---------- Digital footprint ----------
+# The user's own records of companies that hold their data and the requests they've made to
+# them, kept in the local Postgres for the signed-in account. Nothing here calls outbound.request:
+# drafts are local templates, and Dossier never sends a request or changes a company's settings.
+
+NOT_TRACKED = "That company isn't in your footprint."
+NO_REQUEST = "That request isn't in your footprint."
+
+
+async def _footprint_db(fn: Callable[..., Any], *args: Any) -> Any:
+    try:
+        return await asyncio.to_thread(fn, *args)
+    except psycopg.Error as exc:
+        raise HTTPException(503, DB_DOWN) from exc
+
+
+async def _footprint_user() -> str:
+    """The signed-in account (require_session checked the cookie). Footprint records are only
+    ever read or changed for it."""
+    user_id = auth.current_user()
+    if not user_id:
+        raise HTTPException(401, "Log in to see your footprint.")
+    return user_id
+
+
+async def _check_new_name(user_id: str, name: str, company_id: str | None = None) -> None:
+    rows = await _footprint_db(db.footprint_companies, user_id)
+    if any(r["name"].casefold() == name.casefold() and r["id"] != company_id for r in rows):
+        raise HTTPException(409, f"You already track {name}.")
+
+
+def _tracked_company(row: dict[str, Any]) -> TrackedCompany:
+    for request in row["requests"]:
+        request["next_statuses"] = list(footprint.NEXT[request["status"]])
+        request["editable"] = request["status"] in footprint.EDITABLE
+    return TrackedCompany(**row)
+
+
+async def _tracked(user_id: str, company_id: str) -> TrackedCompany:
+    rows = await _footprint_db(db.footprint_companies, user_id, company_id)
+    if not rows:
+        raise HTTPException(404, NOT_TRACKED)
+    return _tracked_company(rows[0])
+
+
+async def _owned_request(user_id: str, request_id: uuid.UUID) -> dict[str, Any]:
+    found = await _footprint_db(db.footprint_request, user_id, str(request_id))
+    if not found:
+        raise HTTPException(404, NO_REQUEST)
+    return found
+
+
+@app.get("/api/footprint", response_model=list[TrackedCompany])
+async def footprint_list(user_id: str = Depends(_footprint_user)):
+    return [_tracked_company(row) for row in await _footprint_db(db.footprint_companies, user_id)]
+
+
+@app.post("/api/footprint", response_model=TrackedCompany)
+async def footprint_add(req: TrackedCompanyInput, user_id: str = Depends(_footprint_user)):
+    await _check_new_name(user_id, req.name)
+    company_id = await _footprint_db(db.create_footprint_company, user_id, req.model_dump(mode="json"))
+    return await _tracked(user_id, company_id)
+
+
+@app.put("/api/footprint/{company_id}", response_model=TrackedCompany)
+async def footprint_edit(company_id: uuid.UUID, req: TrackedCompanyInput, user_id: str = Depends(_footprint_user)):
+    await _check_new_name(user_id, req.name, str(company_id))
+    if not await _footprint_db(db.update_footprint_company, user_id, str(company_id), req.model_dump(mode="json")):
+        raise HTTPException(404, NOT_TRACKED)
+    return await _tracked(user_id, str(company_id))
+
+
+@app.delete("/api/footprint/{company_id}")
+async def footprint_remove(company_id: uuid.UUID, user_id: str = Depends(_footprint_user)):
+    if not await _footprint_db(db.delete_footprint_company, user_id, str(company_id)):
+        raise HTTPException(404, NOT_TRACKED)
+    return {"deleted": True}
+
+
+@app.post("/api/footprint/{company_id}/requests", response_model=TrackedCompany)
+async def footprint_draft(company_id: uuid.UUID, req: RequestCreate, user_id: str = Depends(_footprint_user)):
+    company = await _tracked(user_id, str(company_id))
+    subject, body = footprint.draft(req.kind, req.law, company.name, company.account_label)
+    if not await _footprint_db(db.create_footprint_request, user_id, company.id, req.kind, req.law, subject, body):
+        raise HTTPException(404, NOT_TRACKED)
+    return await _tracked(user_id, company.id)
+
+
+@app.patch("/api/footprint/requests/{request_id}", response_model=TrackedCompany)
+async def footprint_edit_request(request_id: uuid.UUID, req: RequestTextUpdate, user_id: str = Depends(_footprint_user)):
+    current = await _owned_request(user_id, request_id)
+    if current["status"] not in footprint.EDITABLE:
+        raise HTTPException(409, "You marked this request sent, so its text stays as it was sent.")
+    if not await _footprint_db(db.update_footprint_request_text, user_id, str(request_id), req.subject, req.body):
+        raise HTTPException(404, NO_REQUEST)
+    return await _tracked(user_id, current["company_id"])
+
+
+@app.post("/api/footprint/requests/{request_id}/updates", response_model=TrackedCompany)
+async def footprint_record_update(request_id: uuid.UUID, req: RequestUpdate, user_id: str = Depends(_footprint_user)):
+    current = await _owned_request(user_id, request_id)
+    happened_on = req.happened_on or date.today()
+    try:
+        footprint.check_update(current["status"], req.status, req.note, happened_on, current["last_on"])
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    if not await _footprint_db(db.add_footprint_event, user_id, str(request_id), req.status, happened_on, req.note):
+        raise HTTPException(404, NO_REQUEST)
+    return await _tracked(user_id, current["company_id"])
+
+
+@app.delete("/api/footprint/requests/{request_id}/updates/last", response_model=TrackedCompany)
+async def footprint_undo_update(request_id: uuid.UUID, user_id: str = Depends(_footprint_user)):
+    """Undo the last recorded step, e.g. a request marked sent by mistake."""
+    undone = await _footprint_db(db.undo_footprint_event, user_id, str(request_id))
+    if not undone:
+        raise HTTPException(404, NO_REQUEST)
+    company_id, removed = undone
+    if not removed:
+        raise HTTPException(409, "There's no recorded step to undo.")
+    return await _tracked(user_id, company_id)
+
+
+@app.delete("/api/footprint/requests/{request_id}", response_model=TrackedCompany)
+async def footprint_remove_request(request_id: uuid.UUID, user_id: str = Depends(_footprint_user)):
+    company_id = await _footprint_db(db.delete_footprint_request, user_id, str(request_id))
+    if not company_id:
+        raise HTTPException(404, NO_REQUEST)
+    return await _tracked(user_id, company_id)

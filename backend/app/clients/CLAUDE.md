@@ -36,3 +36,11 @@ Use REST, not vendor SDKs, so the outbound log shows the exact payload. Raise a 
 - `POST {OLLAMA_URL}/api/generate` with `model`, `prompt`, `system`, `format: "json"`, `stream: false` and `options: {temperature: 0, num_ctx, num_predict}`, with `num_ctx` and `keep_alive` from `.env` (`OLLAMA_NUM_CTX`, `OLLAMA_KEEP_ALIVE`). Every call sends the same `num_ctx`, warm-up included, or Ollama reloads the model.
 - `GET {OLLAMA_URL}/api/tags` tells you whether Ollama is running and the model is pulled.
 - Always pass `local=True` to `outbound.request`. `config.py` refuses to start if `OLLAMA_URL` isn't localhost. Don't remove that check.
+
+## Have I Been Pwned (`hibp.py`), https://haveibeenpwned.com/API/v3
+
+- A `user-agent` is required on every request (outbound sets one). Breach data is CC BY 4.0: show "Have I Been Pwned" with a link.
+- `GET /api/v3/breaches`: the whole catalog, no key. Match companies locally; don't use `?Domain=`, which would tell HIBP which companies the user has.
+- `GET /api/v3/breachedaccount/range/{first 6 hex of SHA-1}`: the k-anonymity email search, with the `hibp-api-key` header, on Pro or High RPM plans only. It returns `[{hashSuffix, websites}]`. Keep the matching suffix and discard the rest immediately (HIBP's terms). `range_search()` refuses anything but a 6-character hex prefix.
+- Errors: 401 is a bad key, 403 is a plan without the hashed search, and 429 sends `retry-after` (`HibpError.retry_after`).
+- Breach pages: `https://haveibeenpwned.com/Breach/{Name}`. `Description` is HTML: strip it to text and never render it as HTML.

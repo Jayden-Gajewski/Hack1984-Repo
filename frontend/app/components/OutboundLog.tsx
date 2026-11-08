@@ -3,7 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import { api, type OutboundEntry } from "@/lib/api";
 
-const SERVICE_LABEL: Record<string, string> = { tavily: "Tavily", exa: "Exa", wayback: "Wayback", ollama: "Ollama" };
+const SERVICE_LABEL: Record<string, string> = {
+  tavily: "Tavily",
+  exa: "Exa",
+  wayback: "Wayback",
+  ollama: "Ollama",
+  hibp: "Have I Been Pwned",
+  smtp: "Email (SMTP)",
+};
 const serviceLabel = (s: string) => SERVICE_LABEL[s] ?? s.charAt(0).toUpperCase() + s.slice(1);
 
 // The backend logs each purpose as an instruction ("Ask the Wayback Machine when…").
@@ -18,6 +25,8 @@ const TITLE_RULES: [RegExp, string][] = [
   [/^Check (.+)$/, "Checked $1"],
   [/^Build (.+)$/, "Built $1"],
   [/^Flag (.+)$/, "Flagged $1"],
+  [/^Download (.+)$/, "Downloaded $1"],
+  [/^Send (.+)$/, "Sent $1"],
 ];
 
 function shortTitle(purpose: string) {

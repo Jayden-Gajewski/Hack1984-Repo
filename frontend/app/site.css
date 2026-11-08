@@ -635,9 +635,28 @@ body:has(.site) { background: #060b1a; }
 .app-bar-user { display: flex; align-items: center; gap: 12px; min-width: 0; font-size: 0.9rem; color: var(--muted); }
 .app-bar-user span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .app-bar-user button { flex: none; }
+/* Exposure scan | Threat monitor. The current section gets the accent underline, like the tabs. */
+.app-nav { display: flex; gap: 4px; margin-right: auto; }
+.app-nav a {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.95rem;
+  font-weight: 600;
+  padding: 6px 10px;
+  border-bottom: 2px solid transparent;
+  transition: color 160ms ease, border-color 160ms ease;
+}
+.app-nav a[aria-current="page"] { color: var(--text); border-bottom-color: var(--accent); }
+@media (hover: hover) and (pointer: fine) {
+  .app-nav a:hover { color: var(--text); }
+}
 @media (max-width: 900px) {
   .app-bar { padding: 56px 16px 0; }
   .app-bar + .scanner { padding-top: 24px; }
+}
+@media (max-width: 560px) {
+  .app-bar { flex-wrap: wrap; }
+  .app-nav { order: 3; flex-basis: 100%; margin-right: 0; margin-left: -10px; }
 }
 .gate-wait {
   display: flex;

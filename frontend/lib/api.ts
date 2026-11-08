@@ -206,6 +206,233 @@ export interface User {
   email: string;
 }
 
+// ---------- Threat monitor (backend: app/monitor/, models.py "Threat monitor") ----------
+// Severity, confidence and involvement are separate answers: a critical breach can still be
+// "unconfirmed" for this user. Rules in the backend set all three; the local LLM only explains.
+
+export type Severity = "critical" | "high" | "medium" | "low";
+export type Confidence = "high" | "medium" | "low";
+export type Involvement = "confirmed" | "not_found" | "unconfirmed";
+export type IncidentSourceKind = "hibp" | "official" | "ag_notice" | "news" | "web";
+export type EmailCheckStatus = "never" | "ok" | "not_configured" | "rate_limited" | "error";
+
+export interface MonitoredCompany {
+  id: string;
+  name: string;
+  domains: string[];
+  added_at: string;
+  last_checked: string | null; // last match against HIBP's breach list
+  last_news_check: string | null;
+  incidents: number;
+  messages: string[];
+}
+
+export interface MonitoredEmail {
+  id: string;
+  display: string; // the address until verified; then a masked form
+  added_at: string;
+  verified: boolean;
+  verified_at: string | null;
+  code_sent_at: string | null;
+  code_expires_at: string | null;
+  check_status: EmailCheckStatus;
+  check_message: string;
+  last_checked: string | null;
+  breaches_found: number;
+}
+
+export interface IncidentDate {
+  kind: "occurred" | "disclosed" | "added_to_hibp";
+  date: string;
+  source: string;
+  source_url: string | null;
+}
+
+export interface IncidentSource {
+  url: string;
+  kind: IncidentSourceKind;
+  label: string;
+  official: boolean;
+}
+
+export interface SecurityAction {
+  id: string;
+  text: string;
+  why: string;
+  link: string | null;
+  done: boolean;
+  done_at: string | null;
+}
+
+export interface ThreatAnalysis {
+  summary: string;
+  impact: string;
+  guidance: string; // "" when the sources give no advice
+  uncertainty: string;
+  severity_explanation: string;
+  removed_sentences: number;
+  analyzed_at: string;
+  model: string;
+  stale: boolean;
+}
+
+export interface RelatedListing {
+  exposure_id: string;
+  site: string;
+  url: string;
+  shared_fields: FieldType[];
+  lead_tier: Tier | null;
+  reason: string;
+}
+
+export interface Incident {
+  id: string;
+  company_id: string | null;
+  company: string;
+  title: string;
+  domain: string | null;
+  description: string;
+  data_classes: string[];
+  data_types: FieldType[];
+  pwn_count: number | null;
+  dates: IncidentDate[];
+  sources: IncidentSource[];
+  threat: string;
+  risks: string[];
+  severity: Severity;
+  severity_reasons: string[];
+  confidence: Confidence;
+  confidence_reason: string;
+  involvement: Involvement;
+  involvement_reason: string;
+  flags: string[];
+  actions: SecurityAction[];
+  analysis: ThreatAnalysis | null;
+  related_listings: RelatedListing[];
+  first_seen: string;
+  new: boolean;
+  steps_done: boolean; // every step marked done by the user; never means "secure"
+}
+
+export interface MonitorSummary {
+  monitored_companies: number;
+  verified_emails: number;
+  email_breaches: number;
+  company_breaches: number;
+  open_alerts: number;
+  new_alerts: number;
+  actions_done: number;
+  actions_total: number;
+  last_check: string | null;
+}
+
+export interface MonitorEvent {
+  id: string;
+  time: string;
+  kind: "refresh" | "new_incident" | "confirmed" | "company" | "email" | "error" | "schedule";
+  message: string;
+  incident_id: string | null;
+}
+
+export interface MonitorSchedule {
+  enabled: boolean;
+  interval_hours: 6 | 12 | 24 | 168;
+  include_news: boolean;
+  last_run: string | null;
+  next_run: string | null;
+}
+
+export interface RefreshStatus {
+  running: boolean;
+  trigger: "manual" | "scheduled" | null;
+  started_at: string | null;
+  finished_at: string | null;
+  step: string;
+  done: number;
+  total: number;
+  include_news: boolean;
+  errors: string[];
+  new_incidents: number;
+}
+
+export interface MonitorConfig {
+  hibp_email_key: boolean;
+  smtp: boolean;
+  news_search: boolean;
+  local_llm: boolean;
+  local_llm_model: string;
+}
+
+export interface MonitorDashboard {
+  summary: MonitorSummary;
+  companies: MonitoredCompany[];
+  emails: MonitoredEmail[];
+  incidents: Incident[];
+  events: MonitorEvent[];
+  schedule: MonitorSchedule;
+  refresh: RefreshStatus;
+  config: MonitorConfig;
+  scan_loaded: boolean;
+}
+
+// ---------- Digital footprint (backend: models.TrackedCompany and friends) ----------
+// The user's own records, in the local Postgres for the signed-in account. Never sent anywhere:
+// drafts are local templates, and Dossier doesn't send requests or change company settings.
+
+export type RequestKind = "access" | "deletion";
+export type RequestStatus =
+  | "draft"
+  | "ready_to_send"
+  | "sent"
+  | "response_received"
+  | "completed"
+  | "unable_to_complete";
+export type LawBasis = "none" | "gdpr" | "ccpa"; // a law is named in a draft only if the user picks one
+export type ControlState = "on" | "off" | "unknown";
+
+export interface PrivacyControl {
+  name: string;
+  state: ControlState;
+  checked_on: string | null; // YYYY-MM-DD the user checked; null means they didn't record one
+  note: string;
+}
+
+export interface TrackedCompanyInput {
+  name: string;
+  website: string;
+  account_label: string; // how the company knows the user: email, username or account number
+  notes: string;
+  controls: PrivacyControl[];
+}
+
+export interface RequestEvent {
+  status: RequestStatus;
+  happened_on: string; // YYYY-MM-DD, as the user recorded it
+  note: string;
+  recorded_at: string; // when Dossier saved this step
+}
+
+export interface DataRequest {
+  id: string;
+  kind: RequestKind;
+  law: LawBasis;
+  subject: string;
+  body: string;
+  status: RequestStatus;
+  created_at: string;
+  updated_at: string;
+  history: RequestEvent[]; // oldest first
+  next_statuses: RequestStatus[]; // what the user can record next
+  editable: boolean; // false once marked sent: the text stays as it was sent
+}
+
+export interface TrackedCompany extends TrackedCompanyInput {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  requests: DataRequest[]; // newest first
+}
+
 // ---------- Calls ----------
 
 // FastAPI errors look like {detail: "message"}, or {detail: [{msg}, ...]} for validation errors.
@@ -224,7 +451,11 @@ function errorMessage(data: unknown, status: number): string {
   return `Request failed (${status}).`;
 }
 
-async function request<T>(method: "GET" | "POST" | "DELETE", path: string, body?: unknown): Promise<T> {
+async function request<T>(
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
+  path: string,
+  body?: unknown,
+): Promise<T> {
   const res = await fetch(path, {
     method,
     headers: body === undefined ? undefined : { "Content-Type": "application/json" },
@@ -259,4 +490,50 @@ export const api = {
   login: (body: { email: string; password: string }) => request<User>("POST", "/api/auth/login", body),
   logout: () => request<{ ok: boolean }>("POST", "/api/auth/logout"),
   me: () => request<User>("GET", "/api/auth/me"),
+
+  // Threat monitor. Email addresses and codes go in POST bodies, never URLs.
+  monitor: {
+    dashboard: () => request<MonitorDashboard>("GET", "/api/monitor"),
+    refreshStatus: () => request<RefreshStatus>("GET", "/api/monitor/refresh"),
+    refresh: (body: { company_id?: string; include_news?: boolean }) =>
+      request<RefreshStatus>("POST", "/api/monitor/refresh", body),
+    addCompany: (name: string) => request<MonitoredCompany>("POST", "/api/monitor/companies", { name }),
+    removeCompany: (id: string) =>
+      request<{ removed: boolean }>("DELETE", `/api/monitor/companies/${encodeURIComponent(id)}`),
+    addEmail: (address: string) => request<MonitoredEmail>("POST", "/api/monitor/emails", { address }),
+    sendCode: (id: string) => request<MonitoredEmail>("POST", `/api/monitor/emails/${encodeURIComponent(id)}/code`),
+    verifyEmail: (id: string, code: string) =>
+      request<MonitoredEmail>("POST", `/api/monitor/emails/${encodeURIComponent(id)}/verify`, { code }),
+    removeEmail: (id: string) =>
+      request<{ removed: boolean }>("DELETE", `/api/monitor/emails/${encodeURIComponent(id)}`),
+    setAction: (incidentId: string, actionId: string, done: boolean) =>
+      request<Incident>(
+        "POST",
+        `/api/monitor/incidents/${encodeURIComponent(incidentId)}/actions/${encodeURIComponent(actionId)}`,
+        { done },
+      ),
+    analyze: (incidentId: string) =>
+      request<Incident>("POST", `/api/monitor/incidents/${encodeURIComponent(incidentId)}/analyze`),
+    markSeen: (incidentIds?: string[]) =>
+      request<{ marked: number }>("POST", "/api/monitor/seen", { incident_ids: incidentIds ?? null }),
+    setSchedule: (body: Pick<MonitorSchedule, "enabled" | "interval_hours" | "include_news">) =>
+      request<MonitorSchedule>("POST", "/api/monitor/schedule", body),
+  },
+  // Digital footprint. Ids are random UUIDs; everything personal goes in the request body.
+  footprint: () => request<TrackedCompany[]>("GET", "/api/footprint"),
+  trackCompany: (body: TrackedCompanyInput) => request<TrackedCompany>("POST", "/api/footprint", body),
+  editTrackedCompany: (id: string, body: TrackedCompanyInput) =>
+    request<TrackedCompany>("PUT", `/api/footprint/${encodeURIComponent(id)}`, body),
+  removeTrackedCompany: (id: string) =>
+    request<{ deleted: boolean }>("DELETE", `/api/footprint/${encodeURIComponent(id)}`),
+  draftDataRequest: (companyId: string, body: { kind: RequestKind; law: LawBasis }) =>
+    request<TrackedCompany>("POST", `/api/footprint/${encodeURIComponent(companyId)}/requests`, body),
+  editDataRequest: (requestId: string, body: { subject: string; body: string }) =>
+    request<TrackedCompany>("PATCH", `/api/footprint/requests/${encodeURIComponent(requestId)}`, body),
+  recordRequestUpdate: (requestId: string, body: { status: RequestStatus; happened_on: string; note: string }) =>
+    request<TrackedCompany>("POST", `/api/footprint/requests/${encodeURIComponent(requestId)}/updates`, body),
+  undoRequestUpdate: (requestId: string) =>
+    request<TrackedCompany>("DELETE", `/api/footprint/requests/${encodeURIComponent(requestId)}/updates/last`),
+  removeDataRequest: (requestId: string) =>
+    request<TrackedCompany>("DELETE", `/api/footprint/requests/${encodeURIComponent(requestId)}`),
 };

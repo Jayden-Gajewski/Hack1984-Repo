@@ -1,7 +1,7 @@
 // Display helpers: the wording rules from frontend/CLAUDE.md in one place, plus safe links.
 // Say "likely source", never "who leaked it". Every date shows its source.
 
-import type { DateSource, SourceKind, Tier } from "./api";
+import type { Confidence, DateSource, Involvement, MonitorEvent, Severity, SourceKind, Tier } from "./api";
 
 export const TIER_LABEL: Record<Tier, string> = {
   proven: "Proven",
@@ -86,3 +86,134 @@ export function safeMailto(email: string | null | undefined): string | undefined
 }
 
 export const RISK_LABEL = { high: "High risk", medium: "Medium risk", low: "Low risk" } as const;
+
+// ---------- Threat monitor ----------
+// Severity (how bad the breach is) and involvement (whether you're in it) are separate answers.
+// Never word a company breach as if it confirmed the user was affected.
+
+export const SEVERITY_LABEL: Record<Severity, string> = {
+  critical: "Critical",
+  high: "High",
+  medium: "Medium",
+  low: "Low",
+};
+
+export const INVOLVEMENT_LABEL: Record<Involvement, string> = {
+  confirmed: "Your email is in it",
+  not_found: "Not found for your email",
+  unconfirmed: "Not confirmed for you",
+};
+
+// The short form for a threat row.
+export const INVOLVEMENT_SHORT: Record<Involvement, string> = {
+  confirmed: "Your email is in it",
+  not_found: "Email not found",
+  unconfirmed: "Not confirmed",
+};
+
+export const CONFIDENCE_LABEL: Record<Confidence, string> = {
+  high: "Well evidenced",
+  medium: "Partly evidenced",
+  low: "Thinly evidenced",
+};
+
+export const INCIDENT_DATE_LABEL = {
+  occurred: "Happened",
+  disclosed: "Disclosed",
+  added_to_hibp: "Added to Have I Been Pwned",
+} as const;
+
+export const EVENT_LABEL: Record<MonitorEvent["kind"], string> = {
+  refresh: "Check",
+  new_incident: "New",
+  confirmed: "Confirmed",
+  company: "Company",
+  email: "Email",
+  error: "Problem",
+  schedule: "Schedule",
+};
+
+export const SCHEDULE_LABEL = { 6: "every 6 hours", 12: "every 12 hours", 24: "every day", 168: "every week" } as const;
+
+export const HIBP_ATTRIBUTION_URL = "https://haveibeenpwned.com";
+
+/** "4 minutes ago" for a past ISO time; "never" for null. The exact time goes in a title. */
+export function timeAgo(iso: string | null | undefined, now: number = Date.now()): string {
+  if (!iso) return "never";
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return "unknown";
+  const seconds = Math.round((now - then) / 1000);
+  if (seconds < 45) return "just now";
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"} ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+  const days = Math.round(hours / 24);
+  return `${days} day${days === 1 ? "" : "s"} ago`;
+}
+
+/** A local date and time, for title attributes and the history list. */
+export function localTime(iso: string | null | undefined): string {
+  if (!iso) return "unknown";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString();
+}
+
+// ---------- Digital footprint ----------
+// Footprint dates are the ones the user entered, so they read "(you recorded)". Dates Dossier
+// set itself read "saved". A missing date reads "unknown".
+
+export const REQUEST_KIND_LABEL = {
+  access: "Copy of my data",
+  deletion: "Delete my account and data",
+} as const;
+
+export const REQUEST_STATUS_LABEL = {
+  draft: "Draft",
+  ready_to_send: "Ready to send",
+  sent: "Sent",
+  response_received: "Response received",
+  completed: "Completed",
+  unable_to_complete: "Unable to complete",
+} as const;
+
+// Draft and Ready to send mean the user hasn't sent it yet.
+export const UNSENT_STATUSES = new Set(["draft", "ready_to_send"]);
+// Requests still waiting on someone: the user or the company.
+export const OPEN_STATUSES = new Set(["draft", "ready_to_send", "sent", "response_received"]);
+
+export const LAW_LABEL = {
+  none: "Don't name a law",
+  gdpr: "GDPR (EU and UK)",
+  ccpa: "CCPA (California)",
+} as const;
+
+export const CONTROL_STATE_LABEL = { on: "On", off: "Off", unknown: "Not sure" } as const;
+
+/** "Nov 2, 2026" for a YYYY-MM-DD day, read as a local date so it never shifts a day. */
+export function formatDay(day: string): string {
+  const [y, m, d] = day.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+
+/** The local calendar day of a saved timestamp, formatted like formatDay. */
+export function formatSavedDay(timestamp: string): string {
+  return new Date(timestamp).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+
+/** A date as YYYY-MM-DD in local time. Today by default, for date inputs. */
+export function localDayISO(when: Date | string = new Date()): string {
+  const t = new Date(when);
+  return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+}
+
+export const todayISO = () => localDayISO();
+
+/** "shop.example" for display, from a stored website. */
+export function websiteHost(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}

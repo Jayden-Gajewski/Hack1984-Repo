@@ -10,7 +10,7 @@ These rules are the product. Do not break them, even temporarily, even to debug.
 
 1. **Analysis runs locally.** Page text, policy text and all LLM analysis go only to Ollama on localhost. Never send page content to Exa, Tavily or a hosted LLM. Never add a hosted LLM API.
 2. **One door out.** Every request to an outside service goes through `backend/app/outbound.py`. No direct `httpx`/`requests` calls or vendor SDKs anywhere else. That module feeds the outbound log panel. The Next.js app talks only to the FastAPI backend on localhost. Its server code (route handlers, server components) never calls Exa, Tavily or any other external service.
-3. **Minimal queries.** Search with name + city/state only, or a company name. Never send phone numbers, emails, SSNs or birthdates. `outbound.py` rejects queries that contain them. Don't weaken that check.
+3. **Minimal queries.** Search with name + city/state only, or a company name. Never send phone numbers, emails, SSNs or birthdates. `outbound.py` rejects queries that contain them. Don't weaken that check. The threat monitor's email check is the one place an email is involved: HIBP gets only the first 6 characters of a verified address's SHA-1 hash (`clients/hibp.py` refuses anything else), and the ownership code goes to the user's own address through their SMTP server via `outbound.send_mail`. Never add HIBP's full-address lookup.
 4. **Self-scan only.** A scan requires a `consent: true` flag. Demos use a consenting teammate.
 5. **User data stays on this laptop and out of git.** User data lives in memory, in `backend/local/` (gitignored), or in the local Postgres container (never a hosted database). Never commit real scan results, names or page text. Fixtures use fictional people and `.example` domains.
 6. **Wording.** Say "likely source", never "who leaked it" or "leaked by". Every date shows its source. A missing date is "unknown", never a guess.
@@ -21,7 +21,7 @@ These rules are the product. Do not break them, even temporarily, even to debug.
 - **Database:** PostgreSQL 16 in Docker (`docker-compose.yml`), plain SQL through `psycopg` in `backend/app/db.py`. It holds saved scans for the "load last scan" fallback, and it runs on this laptop only.
 - **Local LLM:** Ollama in JSON mode. The model is set by `OLLAMA_MODEL` (default `llama3.1:8b`).
 - **Frontend:** Next.js (App Router, React, TypeScript) in `frontend/`, on port 3000. It proxies `/api/*` to FastAPI on port 8000, so the browser only ever talks to localhost.
-- **Config:** `.env` at the repo root (`EXA_API_KEY`, `TAVILY_API_KEY`, `OLLAMA_URL`, `OLLAMA_MODEL`, `ALIAS_DOMAIN`, `DATABASE_URL`). `config.py` refuses an `OLLAMA_URL` or `DATABASE_URL` that isn't localhost. Commit `.env.example`, never `.env`.
+- **Config:** `.env` at the repo root (`EXA_API_KEY`, `TAVILY_API_KEY`, `OLLAMA_URL`, `OLLAMA_MODEL`, `ALIAS_DOMAIN`, `DATABASE_URL`, and for the threat monitor the optional `HIBP_API_KEY` and `SMTP_*`). `config.py` refuses an `OLLAMA_URL` or `DATABASE_URL` that isn't localhost. Commit `.env.example`, never `.env`.
 - **State:** the current scan in memory, saved scans in Postgres, and aliases and reports as JSON in `backend/local/`. Single user, runs on one laptop.
 
 ## Don't build
@@ -41,17 +41,20 @@ backend/
     db.py            PostgreSQL: saved scans, local users and sessions
     auth.py          local accounts: scrypt password hashes, session tokens
     site_policy.py   browser extension: privacy check for the site you're visiting
-    clients/         exa.py, tavily.py, wayback.py, ollama.py,
+    clients/         exa.py, tavily.py, wayback.py, ollama.py, hibp.py,
                      website.py (reads a policy straight from a site)
     stages/          s1_exposures.py ... s7_aliases.py
+    monitor/         threat monitor (/api/monitor/*): HIBP matching, severity rules,
+                     checklists, local-LLM explanations, scheduler; docs/THREAT_MONITOR.md
     data/            checked-in reference data: brokers.json, companies.json,
-                     breach_sources.json, mock_inbox.json, mock_aliases.json
-  local/             gitignored: aliases, reports
+                     breach_sources.json, mock_inbox.json, mock_aliases.json,
+                     breach_data_classes.json (threat monitor)
+  local/             gitignored: aliases, reports, monitor.json
   scripts/           one-off tests, e.g. test_extract.py
   tests/             pytest, offline
   requirements.txt
 frontend/
-  app/               Next.js pages and components
+  app/               Next.js pages and components (/app scanner, /app/monitor threat monitor)
   lib/api.ts         typed API client; mirrors models.py
   lib/display.ts     wording rules (tier labels, date sources) and safe links
   next.config.ts     /api proxy to the backend
