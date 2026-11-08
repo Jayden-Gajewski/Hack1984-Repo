@@ -99,10 +99,32 @@ function announce(text) {
 
 // ---------- states ----------
 
+// The status line now, and the shape of the result (it fades in only if the wait passes 150 ms).
 function renderLoading(text) {
   shown = "";
-  show(h("section", { class: "message" }, h("p", { class: "working" }, h("span", { class: "spinner", "aria-hidden": "true" }), text)));
+  show(
+    h(
+      "section",
+      { class: "loading" },
+      h("p", { class: "working" }, h("span", { class: "spinner", "aria-hidden": "true" }), text),
+      h(
+        "div",
+        { class: "skeleton", "aria-hidden": "true" },
+        h("span", { class: "skeleton-item skeleton-item--verdict" }),
+        h("span", { class: "skeleton-item skeleton-item--line" }),
+        h("span", { class: "skeleton-item" }),
+        h("span", { class: "skeleton-item" }),
+        h("span", { class: "skeleton-item" }),
+      ),
+    ),
+  );
   announce(text);
+}
+
+/** A button that starts a request: it keeps its label (and width) and shows a spinner. */
+function busy(button) {
+  button.disabled = true;
+  button.setAttribute("aria-busy", "true");
 }
 
 function renderMessage(title, text, ...extra) {
@@ -116,7 +138,19 @@ function renderOffline() {
     "Start Dossier on this laptop",
     "The extension checks privacy policies with the Dossier backend on your own computer, and it isn't running. Start it from the repo:",
     h("pre", { class: "code" }, "cd backend\nuvicorn app.main:app"),
-    h("button", { class: "button", type: "button", onclick: () => start() }, "Try again"),
+    h(
+      "button",
+      {
+        class: "button",
+        type: "button",
+        onclick: (event) => {
+          busy(event.currentTarget);
+          announce("Trying again…");
+          start();
+        },
+      },
+      "Try again",
+    ),
   );
 }
 
@@ -208,7 +242,7 @@ function unreadableHelp(result) {
     "section",
     { class: "help" },
     h("p", {}, text),
-    result.policy_url ? h("p", {}, link(result.policy_url, `Open the privacy policy on ${bareHost(result.policy_url)} ↗`)) : null,
+    result.policy_url ? h("p", {}, link(result.policy_url, `Open the privacy policy on ${bareHost(result.policy_url)}`)) : null,
   );
 }
 
@@ -271,9 +305,9 @@ function brokerCard(broker) {
     h(
       "div",
       { class: "actions" },
-      h("a", { class: "button button--primary", href: APP_URL, target: "_blank", rel: "noopener noreferrer" }, "Scan yourself with Dossier ↗"),
+      h("a", { class: "button button--primary", href: APP_URL, target: "_blank", rel: "noopener noreferrer" }, "Scan yourself with Dossier"),
       optOut
-        ? h("a", { class: "button", href: optOut, target: "_blank", rel: "noopener noreferrer" }, `Opt out on ${bareHost(optOut)} ↗`)
+        ? h("a", { class: "button", href: optOut, target: "_blank", rel: "noopener noreferrer" }, `Opt out on ${bareHost(optOut)}`)
         : null,
     ),
   );
@@ -361,7 +395,7 @@ function render(result) {
       ? h(
           "a",
           { class: "button button--primary", href: optOut, target: "_blank", rel: "noopener noreferrer" },
-          `Opt out of sale and sharing on ${bareHost(optOut)} ↗`, // say where it goes before anyone types in it
+          `Opt out of sale and sharing on ${bareHost(optOut)}`, // say where it goes before anyone types in it
         )
       : null,
     details(result),

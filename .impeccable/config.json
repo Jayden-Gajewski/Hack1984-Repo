@@ -1,0 +1,20 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "geist",
+        "createdAt": "2026-11-08T04:05:33.327Z",
+        "reason": "Claude (design refactor): incumbent brand face, self-hosted in frontend/app/layout.tsx and added to extension/fonts in the owner's own popup work; refinement keeps brand identity"
+      },
+      {
+        "rule": "overused-font",
+        "value": "geist mono",
+        "createdAt": "2026-11-08T04:05:33.442Z",
+        "reason": "Claude (design refactor): incumbent brand face, self-hosted in frontend/app/layout.tsx and added to extension/fonts in the owner's own popup work; refinement keeps brand identity"
+      }
+    ]
+  }
+}
