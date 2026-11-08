@@ -84,32 +84,32 @@ export default function LogDemo() {
   const kept = visible.length - sent;
 
   return (
-    <div ref={ref} className="log" role="figure" aria-label="Sample outbound log">
-      <div className="log-head">
-        <span className="log-title">
-          <span className="log-live" data-on={armed && shown < ROWS.length} aria-hidden />
+    <div ref={ref} className="demo-log" role="figure" aria-label="Sample outbound log">
+      <div className="demo-log-head">
+        <span className="demo-log-title">
+          <span className="demo-log-live" data-on={armed && shown < ROWS.length} aria-hidden />
           Outbound log
         </span>
-        <span className="log-count">
+        <span className="demo-log-count">
           <span>{sent} left this laptop</span>
-          <span className="log-count-local">{kept} stayed local</span>
+          <span className="demo-log-count-local">{kept} stayed local</span>
         </span>
       </div>
-      <ol className="log-rows">
+      <ol className="demo-log-rows">
         {ROWS.map((row, i) => (
-          <li key={i} className={`log-row${row.local ? " log-local" : ""}`} data-in={i < shown}>
-            <span className="log-svc">{row.service}</span>
-            <span className="log-url">
-              <span className="log-method">{row.method}</span> {row.url}
+          <li key={i} className={`demo-log-row${row.local ? " demo-log-local" : ""}`} data-in={i < shown}>
+            <span className="demo-log-svc">{row.service}</span>
+            <span className="demo-log-url">
+              <span className="demo-log-method">{row.method}</span> {row.url}
             </span>
-            <span className="log-status">
-              200 <span className="log-ms">{row.ms}</span>
+            <span className="demo-log-status">
+              200 <span className="demo-log-ms">{row.ms}</span>
             </span>
-            <code className="log-body">{row.body}</code>
+            <code className="demo-log-body">{row.body}</code>
           </li>
         ))}
       </ol>
-      <p className="log-foot">Sample scan of a fictional person. In the app, this panel lists every real request with its full body.</p>
+      <p className="demo-log-foot">Sample scan of a fictional person. In the app, this panel lists every real request with its full body.</p>
     </div>
   );
 }

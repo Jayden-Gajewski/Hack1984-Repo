@@ -132,8 +132,23 @@ class ScanResponse(BaseModel):
 # ---------- Stages 3 and 4: accounts ----------
 
 
+class CompanyRequest(BaseModel):
+    """A company typed into the account picker: a name ("Tinder") or a website ("tinder.com").
+    It's searched for, so it gets the same guard as every query: no phone, email or other contact detail."""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    name: str = Field(min_length=2, max_length=80)
+
+    @field_validator("name")
+    @classmethod
+    def _company_name_only(cls, v: str) -> str:
+        assert_minimal_query(v)
+        return v
+
+
 class AccountsRequest(BaseModel):
-    companies: list[str]  # ids from data/companies.json
+    companies: list[str]  # ids from GET /api/companies: the checked-in list plus companies the user added
 
 
 class BreachEvent(BaseModel):
@@ -179,7 +194,7 @@ class LeadsResponse(BaseModel):
 
 class OptOutRequest(BaseModel):
     exposure_id: str | None = None
-    company: str | None = None  # company id from data/companies.json
+    company: str | None = None  # company id from GET /api/companies
 
     @model_validator(mode="after")
     def _exactly_one(self) -> "OptOutRequest":
@@ -213,7 +228,7 @@ class RescanResponse(BaseModel):
 
 
 class AliasRequest(BaseModel):
-    company: str  # company id from data/companies.json, or a name for a demo company
+    company: str  # company id from GET /api/companies, or a name for a demo company
 
 
 class Alias(BaseModel):

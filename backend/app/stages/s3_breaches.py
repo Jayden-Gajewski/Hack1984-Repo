@@ -1,6 +1,6 @@
 """Stage 3: breach timelines. OWNER: Evidence.
 
-For each company the user picked (ids from data/companies.json). Every query is the company
+For each company the user picked (ids from app.companies: the checked-in list plus added ones). Every query is the company
 name only; nothing about the person is sent:
 1. Gather sources: Tavily news search (10 years back), Tavily restricted to the state
    attorney general domains in data/breach_sources.json, and Exa with a start date.
@@ -26,6 +26,7 @@ from urllib.parse import urlsplit
 
 from app import prompts
 from app.clients import exa, ollama, tavily
+from app.companies import all_companies
 from app.data import load_json
 from app.models import BreachEvent
 
@@ -300,7 +301,7 @@ async def _timeline(company: dict[str, Any], errors: list[str]) -> list[BreachEv
 
 async def breach_timelines(company_ids: list[str]) -> tuple[list[BreachEvent], list[str]]:
     """Return (breach events for every picked company, oldest first, errors)."""
-    companies = [c for c in load_json("companies.json") if c["id"] in company_ids]
+    companies = [c for c in all_companies() if c["id"] in company_ids]
     errors: list[str] = []
     timelines = await asyncio.gather(*(_timeline(c, errors) for c in companies))
     events = [event for timeline in timelines for event in timeline]

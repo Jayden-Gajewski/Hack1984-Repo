@@ -19,6 +19,7 @@ import re
 from typing import Any
 
 from app.clients import tavily
+from app.companies import all_companies
 from app.data import load_json
 from app.models import Draft, Exposure, RescanItem, ScanRequest
 from app.stages.s1_exposures import MIN_EXTRACT_CHARS, has_word, host_of, last_name, normalize_url
@@ -176,7 +177,7 @@ async def draft_broker_opt_out(exposure: Exposure, person: ScanRequest) -> Draft
 
 async def draft_company_request(company_id: str, person: ScanRequest) -> Draft:
     """Ask the company who it sold or shared the data with, to opt the person out, and to delete it."""
-    company = next(c for c in load_json("companies.json") if c["id"] == company_id)
+    company = next(c for c in all_companies() if c["id"] == company_id)
     errors: list[str] = []
     email, page = await _find_privacy_contact(company, errors)
     subject, body = company_letter(company["name"], person)

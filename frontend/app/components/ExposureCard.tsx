@@ -8,6 +8,7 @@ import {
   exposureKind,
   safeHref,
 } from "@/lib/display";
+import TierClaim from "./TierClaim";
 
 const FOUND_VIA_LABEL = { tavily: "Tavily search", exa: "Exa search" } as const;
 
@@ -32,40 +33,36 @@ export default function ExposureCard({ exposure, onDraft, removal }: Props) {
   return (
     <article className="card">
       <div className="card-head">
-        <span className="card-title">
-          <strong>{exposure.broker}</strong>
-          <span className="muted">{source.label}</span>
+        <div className="card-title">
+          <h3>{exposure.broker}</h3>
+          <span className="muted small">{source.label}</span>
           {exposure.risk && (
             <span className={`risk ${exposure.risk}`} title={exposure.risk_reason}>
               {RISK_LABEL[exposure.risk]}
             </span>
           )}
           {removal && <span className={`status ${removal}`}>{REMOVAL_LABEL[removal]}</span>}
-        </span>
-        {top && (
-          <span className="lead-badge" title={TIER_HELP[top.tier]}>
-            Likely source: <strong>{top.company}</strong>
-            <span className={`tier ${top.tier}`}>{TIER_LABEL[top.tier]}</span>
-          </span>
-        )}
+        </div>
       </div>
 
-      <div className="chips">
-        {kinds.length === 0 && <span className="muted">Lists your name</span>}
+      {top && <TierClaim tier={top.tier} company={top.company} />}
+
+      <ul className="chips" aria-label="Exposed fields">
+        {kinds.length === 0 && <li className="muted">Lists your name</li>}
         {kinds.map((field) => (
-          <span key={field} className="chip">
+          <li key={field} className="chip">
             {field}
-          </span>
+          </li>
         ))}
-      </div>
+      </ul>
 
       {exposure.summary && <p>{exposure.summary}</p>}
 
-      <p className="muted">
-        Public by: {exposure.public_by ?? "unknown"}
+      <p className="date-line">
+        Public by <strong>{exposure.public_by ?? "unknown"}</strong>
         {exposure.public_by && (
           <>
-            {" ("}
+            . Source:{" "}
             {evidenceHref ? (
               <a href={evidenceHref} target="_blank" rel="noopener noreferrer">
                 {sourceLabel}
@@ -73,13 +70,12 @@ export default function ExposureCard({ exposure, onDraft, removal }: Props) {
             ) : (
               sourceLabel
             )}
-            {")"}
           </>
         )}
       </p>
 
       {exposure.text_source === "snippet" && (
-        <p className="muted">From search snippet; page blocked extraction.</p>
+        <p className="muted small">From search snippet; page blocked extraction.</p>
       )}
 
       <details className="detail">
@@ -124,29 +120,29 @@ export default function ExposureCard({ exposure, onDraft, removal }: Props) {
           </ul>
         )}
         <p className="muted">
-          {exposure.title && <>{exposure.title} · </>}
+          {exposure.title && <>{exposure.title}. </>}
           Found with {exposure.found_via ? FOUND_VIA_LABEL[exposure.found_via] : "search"}, read from{" "}
-          {exposure.text_source === "extract" ? "the page itself" : "the search snippet"}. Checked
-          on this laptop by the local LLM.
+          {exposure.text_source === "extract" ? "the page itself" : "the search snippet"}. Checked on this
+          laptop by the local LLM.
         </p>
         {exposure.leads.length > 0 && (
-          <div>
-            <strong>Likely sources</strong>
+          <>
+            <h4>Likely sources</h4>
             <ul className="quotes">
               {exposure.leads.map((lead) => (
                 <li key={lead.company}>
-                  <span className={`badge ${lead.tier}`} title={TIER_HELP[lead.tier]}>
+                  <span className={`pill ${lead.tier}`} title={TIER_HELP[lead.tier]}>
                     {TIER_LABEL[lead.tier]}
-                  </span>{" "}
-                  {lead.company}: {lead.reasons.join(" ")}
+                  </span>
+                  <strong>{lead.company}</strong>: {lead.reasons.join(" ")}
                 </li>
               ))}
             </ul>
-          </div>
+          </>
         )}
       </details>
 
-      <p className="row">
+      <div className="actions">
         {onDraft && (
           <button type="button" className="secondary" onClick={() => onDraft(exposure.id)}>
             {source.draft}
@@ -162,7 +158,7 @@ export default function ExposureCard({ exposure, onDraft, removal }: Props) {
             {source.page}
           </a>
         )}
-      </p>
+      </div>
     </article>
   );
 }

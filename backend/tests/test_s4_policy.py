@@ -56,7 +56,7 @@ def _use(monkeypatch, handler):
     get_settings.cache_clear()
     monkeypatch.setattr(outbound, "_client", httpx.AsyncClient(transport=httpx.MockTransport(handler)))
     monkeypatch.setattr(ollama, "_generate_slots", asyncio.Semaphore(2))
-    monkeypatch.setattr(s4, "load_json", lambda name: [SHOPCO])
+    monkeypatch.setattr(s4, "all_companies", lambda: [SHOPCO])
     outbound.clear_log()
 
 

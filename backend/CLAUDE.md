@@ -35,7 +35,8 @@ FastAPI app in `app/`. Read the privacy rules in the root `CLAUDE.md` first.
 | POST | `/api/scan` | `{name, city, state, consent, refresh?}` | `{scan_id, exposures, errors, saved_at}` (Stages 1 and 2); saved to Postgres. A person scanned before gets their newest saved scan back (`saved_at` set, nothing searched) unless `refresh` is true |
 | GET | `/api/scans/latest` | | the last saved scan ("load last scan" fallback) |
 | GET | `/api/brokers` | | the broker list |
-| GET | `/api/companies` | | account list for the picker |
+| GET | `/api/companies` | | account list for the picker: `data/companies.json` plus companies the user added |
+| POST | `/api/companies` | `{name}` | add any company (`app/companies.py`): a website is used as typed; a name gets one Exa company search, else a labeled guess. Saved to `backend/local/` |
 | POST | `/api/accounts` | `{companies: [...]}` | `{breaches, policies, errors}` (Stages 3 and 4) |
 | GET | `/api/leads` | | exposures with ranked `leads` (Stage 5) |
 | POST | `/api/optout` | `{exposure_id}` or `{company}` | `Draft` (Stage 6) |

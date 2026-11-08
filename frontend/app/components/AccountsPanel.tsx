@@ -9,6 +9,7 @@ import {
   SOURCE_KIND_LABEL,
   safeHref,
 } from "@/lib/display";
+import CompanyPicker from "./CompanyPicker";
 
 interface Props {
   onChecked: () => void; // refresh the likely sources on the cards
@@ -21,6 +22,7 @@ interface Props {
 export default function AccountsPanel({ onChecked, onDraft, canDraft }: Props) {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [checked, setChecked] = useState<string[]>([]);
   const [result, setResult] = useState<AccountsResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,20 +31,30 @@ export default function AccountsPanel({ onChecked, onDraft, canDraft }: Props) {
     api.companies().then(setCompanies, (err) => setError(err instanceof Error ? err.message : String(err)));
   }, []);
 
-  function toggle(id: string) {
+  const add = (id: string) => setPicked((prev) => new Set(prev).add(id));
+
+  // Any company not in the list: the backend finds its website (one logged search) and saves it.
+  async function create(name: string) {
+    const company = await api.addCompany(name);
+    setCompanies((prev) => (prev.some((c) => c.id === company.id) ? prev : [...prev, company]));
+    add(company.id);
+    return company;
+  }
+  function remove(id: string) {
     setPicked((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      next.delete(id);
       return next;
     });
   }
 
   async function check() {
+    const ids = [...picked];
     setLoading(true);
     setError(null);
     try {
-      setResult(await api.accounts([...picked]));
+      setResult(await api.accounts(ids));
+      setChecked(ids);
       onChecked();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Check failed");
@@ -54,30 +66,38 @@ export default function AccountsPanel({ onChecked, onDraft, canDraft }: Props) {
   const name = (id: string) => companies.find((c) => c.id === id)?.name ?? id;
 
   return (
-    <div className="panel">
-      <h2>Your accounts</h2>
-      <p className="muted">Pick companies you have accounts with. We search with the company name only.</p>
-      <div className="checks">
-        {companies.map((c) => (
-          <label key={c.id} className="consent">
-            <input type="checkbox" checked={picked.has(c.id)} onChange={() => toggle(c.id)} />
-            <span>{c.name}</span>
-          </label>
-        ))}
+    <section className="section" aria-labelledby="accounts-h">
+      <div className="task-panel">
+        <h2 id="accounts-h">Your accounts</h2>
+        <p className="muted">Add the companies you have accounts with. We search with the company name only.</p>
+        <CompanyPicker companies={companies} selected={[...picked]} onAdd={add} onRemove={remove} onCreate={create} />
+        <div className="row mt">
+          <button type="button" onClick={check} disabled={picked.size === 0 || loading}>
+            {loading ? "Checking…" : "Check breaches & policies"}
+          </button>
+          <span className="muted small" role="status">
+            {loading
+              ? `Checking ${picked.size} ${picked.size === 1 ? "company" : "companies"}. About a minute each.`
+              : picked.size === 0
+                ? "Add at least one company."
+                : ""}
+          </span>
+        </div>
+        {error && (
+          <p className="error" role="alert">
+            {error}
+          </p>
+        )}
       </div>
-      <button type="button" onClick={check} disabled={picked.size === 0 || loading}>
-        {loading ? "Checking… (about a minute per company)" : "Check breaches & policies"}
-      </button>
-      {error && <p className="error">{error}</p>}
 
       {result && (
-        <div>
+        <div className="cards results">
           {result.errors.map((err, i) => (
-            <p key={i} className="muted">
-              {err}
+            <p key={i} className="notice">
+              <strong>Note:</strong> {err}
             </p>
           ))}
-          {[...picked].filter((id) => result.policies.some((p) => p.company_id === id) || result.breaches.some((b) => b.company_id === id)).map((id) => {
+          {checked.map((id) => {
             const breaches = result.breaches.filter((b) => b.company_id === id);
             const policy = result.policies.find((p) => p.company_id === id);
             const sold = policy?.clauses.filter((c) => SELL_OR_SHARE.has(c.category)) ?? [];
@@ -86,79 +106,89 @@ export default function AccountsPanel({ onChecked, onDraft, canDraft }: Props) {
             return (
               <article key={id} className="card">
                 <div className="card-head">
-                  <strong>{name(id)}</strong>
-                  <button type="button" className="secondary" onClick={() => onDraft(id)} disabled={!canDraft}
-                    title={canDraft ? "" : "Run a scan (or load the last one) first"}>
+                  <h3>{name(id)}</h3>
+                  <button type="button" className="secondary" onClick={() => onDraft(id)} disabled={!canDraft}>
                     Draft privacy request
                   </button>
                 </div>
+                {!canDraft && <p className="muted small">Run a scan, or load the last one, to draft a request.</p>}
 
-                <h3>Breaches</h3>
-                {breaches.length === 0 && <p className="muted">No breaches found.</p>}
-                <ul className="timeline">
-                  {breaches.map((b, i) => {
-                    const href = safeHref(b.source_url);
-                    return (
-                      <li key={i}>
-                        <strong>{b.date ?? "unknown"}</strong> {b.date && DATE_KIND_LABEL[b.date_kind]} ·{" "}
-                        {href ? (
-                          <a href={href} target="_blank" rel="noopener noreferrer">
-                            {SOURCE_KIND_LABEL[b.source_kind]}
-                          </a>
-                        ) : (
-                          SOURCE_KIND_LABEL[b.source_kind]
-                        )}
-                        <div className="chips">
-                          {b.data_types.map((t) => (
-                            <span key={t} className="chip">
-                              {t}
-                            </span>
-                          ))}
-                        </div>
-                        <span className="muted">{b.summary}</span>
-                      </li>
-                    );
-                  })}
-                </ul>
-
-                <h3>
-                  Privacy policy{" "}
-                  {policyHref && (
-                    <a href={policyHref} target="_blank" rel="noopener noreferrer" className="muted">
-                      (read it)
-                    </a>
-                  )}
-                </h3>
                 {sold.length > 0 && (
                   <div className="flag">
                     <strong>This wasn&apos;t a hack, they sold it.</strong>
                     {sold.map((c, i) => (
                       <blockquote key={i}>
                         &ldquo;{c.quote}&rdquo;
-                        <span className="muted"> {POLICY_CATEGORY_LABEL[c.category]}: {c.explanation}</span>
+                        <span className="muted">
+                          {POLICY_CATEGORY_LABEL[c.category]}: {c.explanation}
+                        </span>
                       </blockquote>
                     ))}
                   </div>
+                )}
+
+                <h4>Breaches</h4>
+                {breaches.length === 0 && <p className="muted">No breaches found.</p>}
+                <ul className="timeline">
+                  {breaches.map((b, i) => {
+                    const href = safeHref(b.source_url);
+                    return (
+                      <li key={i}>
+                        <p>
+                          <strong>{b.date ?? "Date unknown"}</strong>
+                          {b.date && <> ({DATE_KIND_LABEL[b.date_kind]})</>}. Source:{" "}
+                          {href ? (
+                            <a href={href} target="_blank" rel="noopener noreferrer">
+                              {SOURCE_KIND_LABEL[b.source_kind]}
+                            </a>
+                          ) : (
+                            SOURCE_KIND_LABEL[b.source_kind]
+                          )}
+                        </p>
+                        <ul className="chips" aria-label="Exposed data">
+                          {b.data_types.map((t) => (
+                            <li key={t} className="chip">
+                              {t}
+                            </li>
+                          ))}
+                        </ul>
+                        <p className="muted">{b.summary}</p>
+                      </li>
+                    );
+                  })}
+                </ul>
+
+                <h4>
+                  Privacy policy
+                  {policyHref && (
+                    <>
+                      {" "}
+                      <a href={policyHref} target="_blank" rel="noopener noreferrer" className="small">
+                        Read it
+                      </a>
+                    </>
+                  )}
+                </h4>
+                {!policy && <p className="muted">Couldn&apos;t read this company&apos;s privacy policy.</p>}
+                {policy && policy.clauses.length === 0 && (
+                  <p className="muted">No clauses about selling or sharing data were found.</p>
                 )}
                 {also.length > 0 && (
                   <div>
-                    <span className="muted">The policy also allows:</span>
+                    <p className="muted">The policy also allows:</p>
                     {also.map((c, i) => (
                       <blockquote key={i}>
                         &ldquo;{c.quote}&rdquo;
-                        <span className="muted"> {POLICY_CATEGORY_LABEL[c.category]}</span>
+                        <span className="muted">{POLICY_CATEGORY_LABEL[c.category]}</span>
                       </blockquote>
                     ))}
                   </div>
-                )}
-                {policy && policy.clauses.length === 0 && (
-                  <p className="muted">No clauses about selling or sharing data were found.</p>
                 )}
               </article>
             );
           })}
         </div>
       )}
-    </div>
+    </section>
   );
 }

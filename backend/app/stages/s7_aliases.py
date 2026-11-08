@@ -16,6 +16,7 @@ import secrets
 from typing import Any
 
 from app import db
+from app.companies import all_companies
 from app.config import get_settings
 from app.data import load_json
 from app.models import Alias, AliasHit
@@ -36,9 +37,9 @@ def slug(company: str) -> str:
 
 
 def resolve_company(value: str) -> tuple[str, list[str]]:
-    """(name, domains) for a company id or name from companies.json or the demo aliases."""
+    """(name, domains) for a company id or name from the company list or the demo aliases."""
     wanted = value.strip().lower()
-    for company in load_json("companies.json"):
+    for company in all_companies():
         if wanted in (company["id"], company["name"].lower()):
             return company["name"], company["domains"]
     for alias in load_mock_aliases():

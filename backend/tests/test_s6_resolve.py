@@ -56,7 +56,8 @@ def fake_internet(monkeypatch):
     from app.config import get_settings
     get_settings.cache_clear()
     monkeypatch.setattr(outbound, "_client", httpx.AsyncClient(transport=httpx.MockTransport(fake_web)))
-    monkeypatch.setattr(s6, "load_json", lambda name: {"brokers.json": [], "public_profiles.json": [], "companies.json": [SHOPCO]}[name])
+    monkeypatch.setattr(s6, "load_json", lambda name: {"brokers.json": [], "public_profiles.json": []}[name])
+    monkeypatch.setattr(s6, "all_companies", lambda: [SHOPCO])
     outbound.clear_log()
     yield
     get_settings.cache_clear()
