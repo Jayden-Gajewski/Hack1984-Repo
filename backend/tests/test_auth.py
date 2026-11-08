@@ -1,6 +1,7 @@
 """Local accounts, with Postgres replaced by an in-memory fake. Offline."""
 
 import re
+import socket
 import uuid
 from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
@@ -363,6 +364,13 @@ def test_changes_must_come_from_this_laptop(client):
     assert client.post("/api/auth/reset", json={}, headers={"Origin": "https://evil.example"}).status_code == 403
     assert client.delete("/api/outbound-log", headers={"Origin": "http://localhost:3000"}).status_code == 200
     assert client.get("/api/outbound-log", headers={"Origin": "https://evil.example"}).status_code == 200  # reads: SameSite
+
+
+def test_this_laptops_wifi_address_counts_as_this_laptop(client, monkeypatch):
+    monkeypatch.setattr(socket, "getaddrinfo", lambda *args, **kwargs: [(2, 1, 6, "", ("192.168.0.20", 0))])
+    assert client.delete("/api/outbound-log", headers={"Origin": "http://192.168.0.20:3001"}).status_code == 200
+    # Another device on the same network is still another site.
+    assert client.delete("/api/outbound-log", headers={"Origin": "http://192.168.0.21:3001"}).status_code == 403
 
 
 def test_saved_scans_are_looked_up_for_the_signed_in_account(client, monkeypatch):

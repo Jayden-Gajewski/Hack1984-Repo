@@ -10,6 +10,7 @@ Run from backend/:  uvicorn app.main:app --reload
 import asyncio
 import inspect
 import logging
+import socket
 import uuid
 from collections.abc import Callable
 from contextlib import asynccontextmanager
@@ -177,6 +178,17 @@ OPEN_ROUTES = {
 EXTENSION_ROUTES = {"/api/site-policy"}
 
 
+def _from_this_laptop(origin: str) -> bool:
+    """localhost, or this laptop's own network address (the app opened from a phone on the same Wi-Fi)."""
+    host = urlsplit(origin).hostname
+    if host in LOCAL_HOSTS:
+        return True
+    try:
+        return host in {info[4][0] for info in socket.getaddrinfo(socket.gethostname(), None)}
+    except OSError:
+        return False
+
+
 @app.middleware("http")
 async def require_session(request: Request, call_next):
     path = request.url.path
@@ -185,7 +197,7 @@ async def require_session(request: Request, call_next):
     # Changes must come from a page on this laptop, even if some other site's page got a browser
     # to send our cookie along.
     origin = request.headers.get("origin")
-    if request.method not in ("GET", "HEAD", "OPTIONS") and origin and urlsplit(origin).hostname not in LOCAL_HOSTS:
+    if request.method not in ("GET", "HEAD", "OPTIONS") and origin and not _from_this_laptop(origin):
         return JSONResponse({"detail": "Requests must come from this laptop."}, status_code=403)
     if path in OPEN_ROUTES:
         return await call_next(request)
