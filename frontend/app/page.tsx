@@ -1,13 +1,11 @@
 import { cookies } from "next/headers";
 import Link from "next/link";
-import type { CSSProperties } from "react";
 import FilmPlayer from "./components/FilmPlayer";
 import ListingCycler from "./components/ListingCycler";
 import LogDemo from "./components/LogDemo";
 import Logo from "./components/Logo";
-import Motion from "./components/Motion";
-import Words from "./components/Words";
-import { Arrow, Check, Lock } from "./components/icons";
+import NavScroll from "./components/NavScroll";
+import { Check, Lock } from "./components/icons";
 
 // Landing page. Every person, site and company shown here is fictional sample data.
 
@@ -77,10 +75,6 @@ const TIERS = [
   { tier: "possible", label: "Possible", body: "The company's privacy policy lets it sell or share your data." },
 ];
 
-// Stagger index and delay for the scroll reveals in site.css.
-const order = (n: number) => ({ "--i": n }) as CSSProperties;
-const delay = (ms: number) => ({ "--d": `${ms}ms` }) as CSSProperties;
-
 export default async function Landing() {
   // Signed in on this laptop: the buttons go back to the app instead of to sign-up.
   const signedIn = (await cookies()).has("h84_session");
@@ -100,16 +94,16 @@ export default async function Landing() {
           </nav>
           <div className="nav-actions">
             {signedIn ? (
-              <Link href="/app" className="btn btn-light btn-sm">
-                Open Dossier <Arrow />
+              <Link href="/app" className="btn btn-secondary btn-sm">
+                Open Dossier
               </Link>
             ) : (
               <>
                 <Link href="/login" className="btn btn-ghost btn-sm">
                   Log in
                 </Link>
-                <Link href="/signup" className="btn btn-light btn-sm">
-                  Sign up <Arrow />
+                <Link href="/signup" className="btn btn-secondary btn-sm">
+                  Sign up
                 </Link>
               </>
             )}
@@ -119,10 +113,8 @@ export default async function Landing() {
 
       <main>
         <section className="wrap hero">
-          <div>
-            <h1 className="hero-title">
-              <Words text={HEADLINE} className="hero-word" />
-            </h1>
+          <div className="hero-copy">
+            <h1 className="hero-title">{HEADLINE}</h1>
             <p className="hero-lede">
               Dossier finds you on people-search sites, shows what each listing reveals and which company
               is the likely source, then drafts the opt-out. It runs on your laptop, so you aren&apos;t
@@ -130,7 +122,7 @@ export default async function Landing() {
             </p>
             <div className="hero-ctas">
               <Link href={signedIn ? "/app" : "/signup"} className="btn btn-primary btn-lg">
-                Start a scan <Arrow />
+                Start a scan
               </Link>
               <a href="#watch" className="btn btn-ghost btn-lg">
                 Watch the 35-second demo
@@ -155,9 +147,9 @@ export default async function Landing() {
           </div>
         </section>
 
-        <dl className="wrap credits" aria-label="What powers Dossier" data-reveal="stagger">
+        <dl className="wrap credits" aria-label="What powers Dossier">
           {POWERED_BY.map((p, n) => (
-            <div key={p.name} style={order(n)}>
+            <div key={p.name}>
               <dt>{p.name}</dt>
               <dd>{p.role}</dd>
             </div>
@@ -167,15 +159,13 @@ export default async function Landing() {
         <section id="watch" className="film" aria-labelledby="watch-title">
           <div className="wrap">
             <div className="film-head">
-              <h2 id="watch-title" className="sec-title" data-reveal="words">
-                <Words text="See Dossier in 35 seconds" />
-              </h2>
-              <p className="sec-lede" data-reveal="fade" style={delay(150)}>
+              <h2 id="watch-title" className="sec-title">See Dossier in 35 seconds</h2>
+              <p className="sec-lede">
                 Find it, trace it, take it down: from a listing with your name on it to an opt-out sent from your
                 laptop.
               </p>
             </div>
-            <div data-reveal="fade" style={delay(200)}>
+            <div>
               <FilmPlayer />
             </div>
             <p className="film-caption">Sample data: Jordan Avery and every site in the film are fictional. No sound.</p>
@@ -184,19 +174,17 @@ export default async function Landing() {
 
         <section id="how" className="lp-section">
           <div className="wrap">
-            <h2 className="sec-title" data-reveal="words">
-              <Words text="From your name to a sent opt-out" />
-            </h2>
-            <p className="sec-lede" data-reveal="fade" style={delay(150)}>
+            <h2 className="sec-title">From your name to a sent opt-out</h2>
+            <p className="sec-lede">
               Seven steps, all started from your laptop. Each one shows you the evidence it found.
             </p>
             <div className="how-grid">
               {STEPS.map((g, gi) => (
-                <div className="how-col" key={g.group} data-reveal="col" style={delay(gi * 140)}>
+                <div className="how-col" key={g.group}>
                   <h3 className="how-group">{g.group}</h3>
                   <ol className="how-steps">
                     {g.items.map((s, si) => (
-                      <li key={s.title} style={order(si + 1)}>
+                      <li key={s.title}>
                         <span className="how-num">{STEP_START[gi] + si + 1}</span>
                         <div>
                           <h4 className="how-step">{s.title}</h4>
@@ -214,21 +202,19 @@ export default async function Landing() {
         <section id="privacy" className="dark">
           <div className="wrap dark-grid">
             <div>
-              <h2 className="sec-title" data-reveal="words">
-                <Words text="Here's everything that left this laptop" />
-              </h2>
-              <p className="sec-lede" data-reveal="fade" style={delay(150)}>
+              <h2 className="sec-title">Here&apos;s everything that left this laptop</h2>
+              <p className="sec-lede">
                 You shouldn&apos;t have to hand your data to another company to get it removed. Dossier sends
                 search services your name and city, nothing else, and shows you the receipt.
               </p>
-              <ul className="dark-points" data-reveal="stagger" style={delay(250)}>
-                <li style={order(0)}>
+              <ul className="dark-points">
+                <li>
                   <Check /> Phone numbers, emails, birthdates and SSNs are blocked before a search is sent.
                 </li>
-                <li style={order(1)}>
+                <li>
                   <Check /> Pages and privacy policies are read by Ollama on this machine, never by a hosted AI.
                 </li>
-                <li style={order(2)}>
+                <li>
                   <Check /> Your account and saved scans stay in a database on this laptop.
                 </li>
               </ul>
@@ -240,16 +226,14 @@ export default async function Landing() {
         <section id="evidence" className="lp-section">
           <div className="wrap ev-grid">
             <div>
-              <h2 className="sec-title" data-reveal="words">
-                <Words text="A likely source, with the evidence attached" />
-              </h2>
-              <p className="sec-lede" data-reveal="fade" style={delay(150)}>
+              <h2 className="sec-title">A likely source, with the evidence attached</h2>
+              <p className="sec-lede">
                 Dossier doesn&apos;t guess who&apos;s to blame. Each lead says how strong its evidence is and links
                 to it.
               </p>
-              <dl className="lp-tiers" data-reveal="stagger" style={delay(250)}>
+              <dl className="lp-tiers">
                 {TIERS.map((t, n) => (
-                  <div className="lp-tier-row" key={t.tier} style={order(n)}>
+                  <div className="lp-tier-row" key={t.tier}>
                     <dt>
                       <span className={`lp-tier lp-tier-${t.tier}`}>{t.label}</span>
                     </dt>
@@ -258,7 +242,7 @@ export default async function Landing() {
                 ))}
               </dl>
             </div>
-            <figure className="ev-quote" data-reveal="fade" style={delay(200)}>
+            <figure className="ev-quote">
               <p className="ev-quote-title">Sometimes it wasn&apos;t a hack</p>
               <blockquote>
                 “We may <mark className="ev-mark">sell or share your personal information</mark> with marketing
@@ -274,24 +258,22 @@ export default async function Landing() {
 
         <section className="wrap cta">
           <div>
-            <h2 className="sec-title" data-reveal="words">
-              <Words text="Take your data back." />
-            </h2>
-            <p className="sec-lede" data-reveal="fade" style={delay(150)}>
+            <h2 className="sec-title">Take your data back.</h2>
+            <p className="sec-lede">
               {signedIn
                 ? "You're signed in on this laptop. Pick up where you left off."
                 : "Create an account on this laptop to run your first scan."}
             </p>
           </div>
-          <div className="hero-ctas" data-reveal="fade" style={delay(250)}>
+          <div className="hero-ctas">
             {signedIn ? (
-              <Link href="/app" className="btn btn-primary btn-glow btn-lg">
-                Open Dossier <Arrow />
+              <Link href="/app" className="btn btn-primary btn-lg">
+                Open Dossier
               </Link>
             ) : (
               <>
-                <Link href="/signup" className="btn btn-primary btn-glow btn-lg">
-                  Create account <Arrow />
+                <Link href="/signup" className="btn btn-primary btn-lg">
+                  Create account
                 </Link>
                 <Link href="/login" className="btn btn-ghost btn-lg">
                   Log in
@@ -303,11 +285,24 @@ export default async function Landing() {
       </main>
 
       <footer className="wrap foot">
-        <Logo />
-        <p>Sample data on this page is fictional. Jane Example, the .example sites and the Example companies don&apos;t exist.</p>
+        <div className="foot-brand">
+          <Logo />
+          <p>Runs on your laptop. Every request that leaves it is logged.</p>
+        </div>
+        <nav className="foot-nav" aria-label="Footer">
+          <a href="#how">How it works</a>
+          <a href="#privacy">Privacy</a>
+          <a href="#evidence">Evidence</a>
+          <Link href="/extension">Browser extension</Link>
+          {signedIn ? <Link href="/app">Open Dossier</Link> : <Link href="/login">Log in</Link>}
+        </nav>
+        <p className="foot-note">
+          Sample data on this page is fictional. Jane Example, the .example sites and the Example companies don&apos;t
+          exist.
+        </p>
       </footer>
 
-      <Motion />
+      <NavScroll />
     </div>
   );
 }

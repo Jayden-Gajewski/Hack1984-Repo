@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import SpotlightCard from "./SpotlightCard";
 
 // Hero sample: one fictional person on three fictional broker sites, one per evidence tier.
 // The progress bar's CSS animation advances the card; hovering pauses it, and with reduced
@@ -49,7 +48,7 @@ export default function ListingCycler() {
   const advance = () => setIndex((i) => (i + 1) % LISTINGS.length);
 
   return (
-    <SpotlightCard className="mock">
+    <div className="mock">
       <div className="mock-tabs">
         {LISTINGS.map((l, i) => (
           <button
@@ -113,6 +112,6 @@ export default function ListingCycler() {
         <span className="mock-btn">Draft opt-out</span>
         <span className="mock-note">Sample listings, fictional person</span>
       </div>
-    </SpotlightCard>
+    </div>
   );
 }

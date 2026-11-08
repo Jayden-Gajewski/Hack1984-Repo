@@ -1,92 +1,90 @@
-/* /extension: the browser extension's page. Same world and tokens as the landing page (site.css);
-   only what this page adds lives here. The one authored moment is the popup dropping from the
-   toolbar icon after the window rises. */
+/* /extension: the browser extension's page. Shared tokens (globals.css) and landing layout
+   (site.css); only what this page adds lives here. Its one load moment: the window rises with the
+   hero, then the popup drops from the toolbar icon. */
 
 /* ---------- Download button and its note ---------- */
 
-.ext-get { display: grid; gap: 10px; }
-.ext-get .btn .icon { margin-left: -2px; }
-.ext-get-note { min-height: 1.4em; font-size: 0.9rem; color: var(--ink-3); }
+.ext-get { display: grid; gap: var(--space-3); }
+.ext-get-note { min-height: var(--leading-sm); font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--muted); }
 
 /* ---------- Hero visual: a browser toolbar with the popup hanging from the Dossier icon ---------- */
 
 .ext-shot { margin: 0; }
 .ext-window {
   overflow: hidden;
-  background: var(--bg-2);
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  box-shadow: var(--shadow-lg);
+  background: var(--sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
 }
 .ext-bar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  height: 46px;
-  padding: 0 12px 0 14px;
+  gap: var(--space-3);
+  height: var(--space-12);
+  padding: 0 var(--space-3) 0 var(--space-4);
   background: var(--surface);
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--border);
 }
-.ext-dots { display: flex; gap: 6px; }
-.ext-dots i { width: 9px; height: 9px; background: var(--line-strong); border-radius: 50%; }
+.ext-dots { display: flex; gap: var(--space-2); }
+.ext-dots i { width: 8px; height: 8px; background: var(--border-strong); border-radius: 50%; }
 .ext-url {
   flex: 1;
   min-width: 0;
-  padding: 5px 12px;
+  padding: var(--space-1) var(--space-3);
   overflow: hidden;
-  font-family: var(--font-mono), monospace;
-  font-size: 0.78rem;
-  color: var(--ink-3);
+  font-family: var(--mono);
+  font-size: var(--text-xs); line-height: var(--leading-xs);
+  color: var(--muted);
   white-space: nowrap;
   text-overflow: ellipsis;
-  background: var(--field);
-  border-radius: 999px;
+  background: var(--sunken);
+  border-radius: var(--radius-sm);
 }
 .ext-icon {
   position: relative;
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
-  color: #fff;
-  background: rgb(255 255 255 / 0.08);
-  border-radius: 8px;
+  width: var(--space-8);
+  height: var(--space-8);
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  border-radius: var(--radius);
 }
 .ext-badge {
   position: absolute;
-  top: -5px;
-  right: -9px;
-  padding: 0 5px;
-  font-size: 0.68rem;
-  font-weight: 700;
-  line-height: 1.45;
-  color: #fff;
-  background: #c4352a;
-  border: 2px solid var(--surface);
-  border-radius: 7px;
-  animation: ext-badge 220ms var(--ease-out) 1450ms both; /* after the popup lands */
+  top: calc(-1 * var(--space-1));
+  right: calc(-1 * var(--space-2));
+  padding: 0 var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  line-height: var(--leading-xs);
+  color: var(--bg);
+  background: var(--danger);
+  box-shadow: 0 0 0 2px var(--surface);
+  border-radius: var(--radius-full);
+  animation: ext-badge var(--dur-base) var(--ease-out) 800ms both; /* after the popup lands */
 }
-.ext-stage { display: flex; justify-content: flex-end; padding: 0 10px; }
+.ext-stage { display: flex; justify-content: flex-end; padding: 0 var(--space-3); }
 .ext-popup {
   width: min(100%, 380px);
   max-height: 470px;
   overflow: hidden;
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--border-strong);
   border-top: 0;
-  border-radius: 0 0 12px 12px;
+  border-radius: 0 0 var(--radius) var(--radius);
   /* The popup is long: show its verdict and risks, then let it fade out. */
   mask-image: linear-gradient(#000 70%, transparent);
   -webkit-mask-image: linear-gradient(#000 70%, transparent);
   transform-origin: top right;
-  animation: ext-drop 450ms var(--ease-out) 1000ms both; /* once the window (.hero-visual) has risen */
+  animation: ext-drop var(--dur-slow) var(--ease-out) 500ms both; /* once the window (.hero-visual) has risen */
 }
 .ext-popup img { display: block; width: 100%; height: auto; }
-.ext-shot figcaption { margin-top: 12px; font-size: 0.85rem; color: var(--ink-3); }
+.ext-shot figcaption { margin-top: var(--space-3); font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--muted); }
 @keyframes ext-drop {
   from { opacity: 0; transform: translateY(-8px) scale(0.98); }
 }
 @keyframes ext-badge {
-  from { opacity: 0; transform: scale(0.9); }
+  from { opacity: 0; transform: scale(0.95); }
 }
 
 /* ---------- What it shows ---------- */
@@ -94,87 +92,89 @@
 .ext-shows {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 40px 48px;
-  margin: 56px 0 0;
+  gap: var(--space-10) var(--space-12);
+  margin: var(--space-16) 0 0;
   padding: 0;
   list-style: none;
 }
-.ext-shows li { padding-top: 20px; border-top: 1px solid var(--line-strong); }
-.ext-shows h3 { margin: 0 0 6px; font-size: 1.05rem; font-weight: 650; letter-spacing: -0.01em; }
-.ext-shows p { max-width: 34ch; font-size: 0.95rem; color: var(--ink-2); }
+.ext-shows li { padding-top: var(--space-5); border-top: 1px solid var(--border); }
+.ext-shows h3 { margin: 0 0 var(--space-2); font-size: var(--text-lg); line-height: var(--leading-lg); font-weight: 600; letter-spacing: -0.01em; }
+.ext-shows p { max-width: 34ch; font-size: var(--text-base); line-height: var(--leading-base); color: var(--muted); }
 
 /* ---------- Install ---------- */
 
 .ext-install { padding-top: 0; }
 .ext-install code,
-.ext-req code { font-family: var(--font-mono), monospace; font-size: 0.88em; color: var(--ink); }
+.ext-req code { font-family: var(--mono); font-size: 0.875em; color: var(--text); }
 .ext-install-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.75fr);
-  gap: 56px;
+  gap: var(--space-16);
   align-items: start;
-  margin-top: 48px;
+  margin-top: var(--space-12);
 }
-.ext-steps { display: grid; gap: 30px; margin: 0; padding: 0; list-style: none; }
-.ext-steps li { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 14px; }
-.ext-num { font-size: 1.6rem; font-weight: 650; line-height: 1.05; color: var(--brand-ink); font-variant-numeric: tabular-nums; }
-.ext-steps h3 { margin: 0 0 4px; font-size: 1.05rem; font-weight: 650; letter-spacing: -0.01em; }
-.ext-steps p { font-size: 0.95rem; color: var(--ink-2); }
-.ext-copies { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.ext-steps { display: grid; gap: var(--space-8); margin: 0; padding: 0; list-style: none; }
+.ext-steps li { display: grid; grid-template-columns: var(--space-10) minmax(0, 1fr); gap: var(--space-4); }
+.ext-num { font-size: var(--text-2xl); font-weight: 600; line-height: var(--leading-2xl); color: var(--accent-ink); font-variant-numeric: tabular-nums; }
+.ext-steps h3 { margin: 0 0 var(--space-1); font-size: var(--text-lg); line-height: var(--leading-lg); font-weight: 600; letter-spacing: -0.01em; }
+.ext-steps p { font-size: var(--text-base); line-height: var(--leading-base); color: var(--muted); }
+.ext-copies { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); }
 .ext-copy {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  padding: 4px 4px 4px 14px;
-  background: var(--field);
-  border: 1px solid var(--line-strong);
-  border-radius: 999px;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-4);
+  background: var(--sunken);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
 }
 .ext-copy-btn {
   display: inline-grid;
-  height: 28px;
-  padding: 0 12px;
+  height: var(--control-sm);
+  min-height: 0;
+  padding: 0 var(--space-3);
   font: inherit;
-  font-size: 0.8rem;
+  font-size: var(--text-sm); line-height: var(--leading-sm);
   font-weight: 600;
-  color: var(--ink);
-  background: rgb(255 255 255 / 0.08);
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 8%, transparent);
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: transform 160ms var(--ease-out), background-color 160ms ease;
+  transition: transform var(--dur-fast) var(--ease-out), background-color var(--dur-fast) ease;
 }
-.ext-copy-btn > span { grid-area: 1 / 1; align-self: center; transition: opacity 150ms ease-out; }
+.ext-copy-btn > span { grid-area: 1 / 1; align-self: center; transition: opacity var(--dur-fast) ease-out; }
 .ext-copy-btn > span[data-on="false"] { opacity: 0; }
 .ext-copy-btn:active { transform: scale(0.97); }
 @media (hover: hover) and (pointer: fine) {
-  .ext-copy-btn:hover { background: rgb(255 255 255 / 0.14); }
+  .ext-copy-btn:hover { background: color-mix(in srgb, var(--text) 14%, transparent); }
 }
-.ext-req { padding: 24px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; }
-.ext-req h3 { margin: 0 0 6px; font-size: 1.05rem; font-weight: 650; }
-.ext-req p { font-size: 0.95rem; color: var(--ink-2); }
+.ext-req { padding: var(--space-6); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+.ext-req h3 { margin: 0 0 var(--space-2); font-size: var(--text-lg); line-height: var(--leading-lg); font-weight: 600; }
+.ext-req p { font-size: var(--text-base); line-height: var(--leading-base); color: var(--muted); }
 .ext-req pre {
-  margin: 14px 0 0;
-  padding: 12px 14px;
+  margin: var(--space-4) 0 0;
+  padding: var(--space-3) var(--space-4);
   overflow-x: auto;
-  font-size: 0.85rem;
-  line-height: 1.6;
-  background: var(--field);
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  font-family: var(--mono);
+  background: var(--sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
 }
 
 /* ---------- Responsive and reduced motion ---------- */
 
 @media (max-width: 900px) {
   .ext-shows { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .ext-install-grid { grid-template-columns: minmax(0, 1fr); gap: 40px; }
+  .ext-install-grid { grid-template-columns: minmax(0, 1fr); gap: var(--space-10); }
 }
 @media (max-width: 560px) {
-  .ext-shows { grid-template-columns: minmax(0, 1fr); gap: 28px; }
+  .ext-shows { grid-template-columns: minmax(0, 1fr); gap: var(--space-8); }
   .ext-popup { max-height: 380px; }
   /* The signed-out note wraps here: keep room for it so nothing below jumps when the check returns. */
-  .ext-get-note { min-height: 2.8em; }
+  .ext-get-note { min-height: calc(2 * var(--leading-sm)); }
 }
 @media (prefers-reduced-motion: reduce) {
   .ext-popup,

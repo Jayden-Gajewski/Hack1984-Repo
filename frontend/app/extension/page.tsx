@@ -1,19 +1,17 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import type { CSSProperties } from "react";
 import ExtensionDownload, { CopyText } from "../components/ExtensionDownload";
 import Logo from "../components/Logo";
-import Motion from "../components/Motion";
-import Words from "../components/Words";
-import { Arrow, Check, Lock } from "../components/icons";
+import NavScroll from "../components/NavScroll";
+import { Check, Lock } from "../components/icons";
 import "./extension.css";
 
 // The browser extension's page. Public; the download itself needs a signed-in account during the
 // beta. ShopCo, in the screenshot and the sample receipt, is a fictional store.
 
 export const metadata: Metadata = {
-  title: "Dossier for Chrome and Edge",
+  title: "Browser extension",
   description:
     "See what every site's privacy policy allows, which trackers it loads and what its forms ask for. Checked on your computer.",
 };
@@ -58,9 +56,6 @@ const RECEIPT = [
   { service: "Ollama", local: true, method: "POST", url: "localhost:11434/api/generate", note: "Policy sentences, read by the AI on this computer.", status: "200" },
 ];
 
-const order = (n: number) => ({ "--i": n }) as CSSProperties;
-const delay = (ms: number) => ({ "--d": `${ms}ms` }) as CSSProperties;
-
 export default function ExtensionPage() {
   return (
     <div className="site">
@@ -78,8 +73,8 @@ export default function ExtensionPage() {
             <Link href="/login?next=/extension" className="btn btn-ghost btn-sm">
               Log in
             </Link>
-            <Link href="/signup?next=/extension" className="btn btn-light btn-sm">
-              Sign up <Arrow />
+            <Link href="/signup?next=/extension" className="btn btn-secondary btn-sm">
+              Sign up
             </Link>
           </div>
         </div>
@@ -87,10 +82,8 @@ export default function ExtensionPage() {
 
       <main>
         <section className="wrap hero">
-          <div>
-            <h1 className="hero-title">
-              <Words text="A privacy check on every site you visit" className="hero-word" />
-            </h1>
+          <div className="hero-copy">
+            <h1 className="hero-title">A privacy check on every site you visit</h1>
             <p className="hero-lede">
               Dossier for Chrome and Edge shows what a site&apos;s privacy policy allows, which trackers the page
               loads and what its forms ask for. It runs on your computer and never reads what you type.
@@ -148,15 +141,11 @@ export default function ExtensionPage() {
 
         <section id="shows" className="lp-section ext-shows-section">
           <div className="wrap">
-            <h2 className="sec-title" data-reveal="words">
-              <Words text="What it shows you" />
-            </h2>
-            <p className="sec-lede" data-reveal="fade" style={delay(150)}>
-              The badge appears as you browse. Open the popup for the evidence behind it.
-            </p>
-            <ul className="ext-shows" data-reveal="stagger" style={delay(200)}>
+            <h2 className="sec-title">What it shows you</h2>
+            <p className="sec-lede">The badge appears as you browse. Open the popup for the evidence behind it.</p>
+            <ul className="ext-shows">
               {SHOWS.map((s, n) => (
-                <li key={s.title} style={order(n)}>
+                <li key={s.title}>
                   <h3>{s.title}</h3>
                   <p>{s.body}</p>
                 </li>
@@ -167,15 +156,13 @@ export default function ExtensionPage() {
 
         <section id="install" className="lp-section ext-install">
           <div className="wrap">
-            <h2 className="sec-title" data-reveal="words">
-              <Words text="Install it in four steps" />
-            </h2>
-            <p className="sec-lede" data-reveal="fade" style={delay(150)}>
+            <h2 className="sec-title">Install it in four steps</h2>
+            <p className="sec-lede">
               It isn&apos;t in the Chrome Web Store yet, so you add it yourself. It takes about a minute.
             </p>
             <div className="ext-install-grid">
-              <ol className="ext-steps" data-reveal="stagger" style={delay(200)}>
-                <li style={order(0)}>
+              <ol className="ext-steps">
+                <li>
                   <span className="ext-num">1</span>
                   <div>
                     <h3>Download it and unzip it</h3>
@@ -184,7 +171,7 @@ export default function ExtensionPage() {
                     </p>
                   </div>
                 </li>
-                <li style={order(1)}>
+                <li>
                   <span className="ext-num">2</span>
                   <div>
                     <h3>Open your browser&apos;s extensions page</h3>
@@ -195,7 +182,7 @@ export default function ExtensionPage() {
                     </div>
                   </div>
                 </li>
-                <li style={order(2)}>
+                <li>
                   <span className="ext-num">3</span>
                   <div>
                     <h3>Choose Load unpacked</h3>
@@ -204,7 +191,7 @@ export default function ExtensionPage() {
                     </p>
                   </div>
                 </li>
-                <li style={order(3)}>
+                <li>
                   <span className="ext-num">4</span>
                   <div>
                     <h3>Pin it and reload your tabs</h3>
@@ -212,7 +199,7 @@ export default function ExtensionPage() {
                   </div>
                 </li>
               </ol>
-              <aside className="ext-req" data-reveal="fade" style={delay(300)}>
+              <aside className="ext-req">
                 <h3>Keep Dossier running</h3>
                 <p>
                   During the beta, the extension checks sites with the Dossier app on this computer. If it isn&apos;t
@@ -229,22 +216,20 @@ export default function ExtensionPage() {
         <section id="privacy" className="dark">
           <div className="wrap dark-grid">
             <div>
-              <h2 className="sec-title" data-reveal="words">
-                <Words text="What it reads, and what it sends" />
-              </h2>
-              <p className="sec-lede" data-reveal="fade" style={delay(150)}>
+              <h2 className="sec-title">What it reads, and what it sends</h2>
+              <p className="sec-lede">
                 A privacy tool shouldn&apos;t become one more thing watching you. Every request it makes is listed in
                 Dossier&apos;s outbound log.
               </p>
-              <ul className="dark-points" data-reveal="stagger" style={delay(250)}>
+              <ul className="dark-points">
                 {GUARANTEES.map((g, n) => (
-                  <li key={g} style={order(n)}>
+                  <li key={g}>
                     <Check /> {g}
                   </li>
                 ))}
               </ul>
             </div>
-            <div className="demo-log" data-reveal="fade" style={delay(200)}>
+            <div className="demo-log">
               <div className="demo-log-head">
                 <span className="demo-log-title">Opening the popup on shopco.example</span>
                 <span className="demo-log-count">
@@ -271,25 +256,31 @@ export default function ExtensionPage() {
 
         <section className="wrap cta">
           <div>
-            <h2 className="sec-title" data-reveal="words">
-              <Words text="Check the next site you visit." />
-            </h2>
-            <p className="sec-lede" data-reveal="fade" style={delay(150)}>
-              Automated removal plans are coming.
-            </p>
+            <h2 className="sec-title">Check the next site you visit.</h2>
+            <p className="sec-lede">Automated removal plans are coming.</p>
           </div>
-          <div data-reveal="fade" style={delay(250)}>
+          <div>
             <ExtensionDownload />
           </div>
         </section>
       </main>
 
       <footer className="wrap foot">
-        <Logo />
-        <p>ShopCo and the .example sites on this page are fictional.</p>
+        <div className="foot-brand">
+          <Logo />
+          <p>Runs on your laptop. Every request that leaves it is logged.</p>
+        </div>
+        <nav className="foot-nav" aria-label="Footer">
+          <a href="#shows">What it shows</a>
+          <a href="#install">Install</a>
+          <a href="#privacy">Privacy</a>
+          <Link href="/">Dossier</Link>
+          <Link href="/login?next=/extension">Log in</Link>
+        </nav>
+        <p className="foot-note">ShopCo and the .example sites on this page are fictional.</p>
       </footer>
 
-      <Motion />
+      <NavScroll />
     </div>
   );
 }
