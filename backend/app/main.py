@@ -172,9 +172,10 @@ OPEN_ROUTES = {
     "/api/status", "/api/brokers",
     "/api/auth/signup", "/api/auth/login", "/api/auth/logout", "/api/auth/me", "/api/auth/reset",
 }
-# The browser extension (extension/) calls only this route. It has no session cookie (it talks to
-# 127.0.0.1:8000, not the app) and sends a chrome-extension:// Origin. The route doesn't read or
-# change anything stored here, and it checks the Origin itself: it refuses any web page.
+# The browser extension (extension/) calls only this route (POST to check a site, DELETE to forget
+# the sites checked). It has no session cookie (it talks to 127.0.0.1:8000, not the app) and sends
+# a chrome-extension:// Origin. The route never touches the database or the disk, only the
+# extension's own in-memory results, and it checks the Origin itself: it refuses any web page.
 EXTENSION_ROUTES = {"/api/site-policy"}
 
 
@@ -407,7 +408,8 @@ async def extension_download():
 async def site_policy_check(req: SitePolicyRequest, origin: str | None = Header(default=None)):
     """The browser extension (extension/): what the privacy policy of the site you're visiting
     says it collects and shares, and the risks. The policy is read straight from the site (or
-    sent by the browser) and analyzed on this laptop. Which sites you visit is never saved."""
+    sent by the browser), checked by fixed rules on this laptop and, from the popup, by Gemini.
+    Which sites you visit is never saved to disk."""
     # Only the extension calls this route. A web page can't read the answer, but it could still
     # send page text to plant a fake verdict, so refuse anything that says it came from a page.
     if origin and not origin.startswith("chrome-extension://"):
@@ -416,6 +418,18 @@ async def site_policy_check(req: SitePolicyRequest, origin: str | None = Header(
         return await site_policy.check_site(req)
     except site_policy.CantCheck as exc:
         raise HTTPException(400, str(exc)) from None
+
+
+@app.delete("/api/site-policy")
+async def site_policy_forget(origin: str | None = Header(default=None)):
+    """The extension's "Forget the sites I've visited": every site result held in memory, and the
+    outbound log's entries for them (pages read from sites, and the Gemini calls, which name the
+    site). It can't recall what was already sent: the sites and Gemini still got those requests."""
+    if origin and not origin.startswith("chrome-extension://"):
+        raise HTTPException(403, "Only the Dossier browser extension can use this route.")
+    sites = site_policy.forget()
+    entries = outbound.drop_entries(site_policy.LOG_PREFIX)
+    return {"sites": sites, "log_entries": entries}
 
 
 @app.get("/api/outbound-log", response_model=list[OutboundEntry])

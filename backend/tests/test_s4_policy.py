@@ -120,6 +120,16 @@ def test_candidate_sentences_skip_headings_tables_and_markdown():
     ("We share personal data with service providers, partners and other third parties.", "sharing", True),
     ("You have many choices about how your data is collected, used and shared.", "sharing", False),
     ("Personal information is shared with advertising partners.", "sharing", False),  # not the company's voice
+    # Denials in the wordings real policies use, curly apostrophes included.
+    ("We don’t sell your personal data to third parties, including data brokers.", "data_broker", False),
+    ("ShopCo doesn’t sell or rent your personal information to anyone.", "sale", False),
+    ("We do not, and will not, sell your personal information to advertising partners.", "sale", False),
+    ("We do not currently sell personal information to third parties.", "sale", False),
+    ("We won't share your personal data with advertisers for their own marketing.", "sharing", False),
+    # Sharing the user asks for is the user's choice.
+    ("If you link your ShopCo account with a third-party service, we will share the information you authorize "
+     "with that third-party service.", "sharing", False),
+    ("We share personal data with partners and other third parties for their own marketing.", "sharing", True),
 ])
 def test_passes_checks(quote, category, kept):
     assert s4.passes_checks(quote, category, "ShopCo") is kept

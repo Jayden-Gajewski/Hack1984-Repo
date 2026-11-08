@@ -124,11 +124,12 @@ _COLLECT = re.compile(
     r"us(e|es|ed|ing))\b(?!\s+in(to)?\b)",
     re.I,
 )
+# Denials, with either apostrophe: "we don’t buy data from data brokers" is no evidence that it does.
+_NEGATED = r"(?:(?:do|does|will|shall|did)\s+not|(?:don|doesn|didn|won)['’]?t|never)"
 _NOT_COLLECTED = re.compile(
-    r"\b(do|does|will|shall|did) not (knowingly |intentionally )?"
-    r"(collect|gather|obtain|receive|store|process|record|track|capture|use)|"
-    r"\bdon['’]?t (collect|store|track|use)|\bnever (collect|gather|store|track|record|use)|"
-    r"\bnot (collected|stored|tracked|used)\b",
+    rf"\b{_NEGATED}\s+(?:knowingly |intentionally |currently )?"
+    r"(collect|gather|obtain|receive|store|process|record|track|capture|use|buy|purchase)|"
+    r"\bnot (collected|stored|tracked|used|bought|purchased)\b",
     re.I,
 )
 # A heading that starts a "what we collect" section: "Information we collect", "Data Collection",
@@ -150,7 +151,9 @@ _SECTION_END = re.compile(
 )
 _SENTENCE_BREAK = re.compile(r"(?<=[.!?])\s+(?=[A-Z\"“(])")
 _NO_SALE = re.compile(
-    r"\b(do|does|will|shall) not (sell|rent)|\bdon['’]?t (sell|rent)|\bnever (sell|rent)|\b(have|has) not sold\b", re.I
+    rf"\b{_NEGATED}(?:\s*,?\s*and\s+will\s+not\s*,?|\s+(?:currently|knowingly|ever|otherwise))*\s+(sell|rent)\b|"
+    r"\b(have|has) not sold\b|\b(is|are) not sold\b",
+    re.I,
 )
 _ABOUT_DATA = re.compile(r"personal|\bdata\b|information", re.I)
 # Disclosure the law requires ("to comply with a request from courts ... or other authorized third
@@ -168,6 +171,39 @@ _POLICY_SENTENCE = re.compile(r"\b(collect|share[sd]?|sharing|disclos|sell|third
 MIN_POLICY_SENTENCES = 3
 _RISK_ORDER = {"high": 0, "medium": 1, "low": 2}
 SELLS_OR_SHARES = ("sale", "data_broker", "sharing", "advertising")
+# Every outbound log entry this module causes starts with this, so "Forget the sites I've visited"
+# can find them: they name the sites you opened.
+LOG_PREFIX = "Browser extension: "
+
+# How Dossier knows, shown under each risk. Each names the kind of evidence and what wasn't read.
+HOW_POLICY = (
+    "This sentence is from the site's privacy policy. A sentence counts only when the company says it "
+    "about itself, and disclosures the law requires, to courts or police, are left out."
+)
+HOW_COLLECTED = "From the part of the site's privacy policy that says what it collects."
+HOW_OPT_OUT = "This page links to a “Do Not Sell or Share” page on the site's own domain."
+HOW_TRACKERS = (
+    "Seen in your browser: while this page loaded, it fetched files from these hosts. Dossier matched "
+    "each hostname against its built-in list of known trackers, and never saw the rest of the address."
+)
+HOW_BROKER = "This site's domain is on Dossier's built-in list of people-search sites."
+HOW_FIELDS = (
+    "Seen in your browser: Dossier read what each form field is for from what the page says about it, "
+    "never what's in it."
+)
+HOW_INSECURE = (
+    "Seen in your browser: the page, or the address its form sends to, starts with http:, not https:. "
+    "Dossier read what each field is for from what the page says about it, never what's in it."
+)
+HOW_NO_POLICY = (
+    "Dossier looked for a privacy-policy link on this page, then at /privacy-policy and /privacy on the "
+    "site, and found none."
+)
+HOW_ADS = (
+    "Sites that sell ads list who may sell them in a public file, /ads.txt. Dossier read this site's file "
+    "once, straight from the site, and counted the ad companies in it."
+)
+HOW_PROMISE = "The quote is from the site's privacy policy. The hostnames are what your browser loaded on this page."
 
 
 # ---------- pure helpers (unit-tested) ----------
@@ -200,9 +236,12 @@ def collected_data(text: str, company: str = "") -> list[DataCollected]:
     shows it. A line counts if it's a sentence in the company's own voice with a collection verb
     ("we collect your IP address"), or if it sits under a heading or lead-in about collection
     ("Information We Collect", "We collect the following:"), like a bullet saying "Precise
-    location". Denials ("we do not collect biometric data") never count."""
+    location". Denials ("we do not collect biometric data") never count. A heading ("Information
+    Collected from Other Sources") is only a stand-in: the first sentence that shows the same
+    category replaces it, because a sentence says what's collected and a heading only names a topic."""
     voice = _voice(company)
     found: dict[str, DataCollected] = {}
+    from_heading: set[str] = set()  # categories whose quote so far is only a heading
     section, left = "", 0
     for raw in text.splitlines():
         line = " ".join(raw.split()).lstrip("-*•#>+ ").strip()
@@ -228,18 +267,24 @@ def collected_data(text: str, company: str = "") -> list[DataCollected]:
             if len(sentence) > s4.MAX_QUOTE_CHARS or _NOT_COLLECTED.search(sentence):
                 continue
             for cat, label, sensitive, pattern in CATEGORIES:
-                if cat not in found and pattern.search(sentence):
+                if (cat not in found or (cat in from_heading and not heading)) and pattern.search(sentence):
                     found[cat] = DataCollected(
                         category=cat, label=label, sensitive=sensitive, quote=sentence,
                         section=section if left > 0 and sentence.rstrip(":") != section else "",
                     )
+                    (from_heading.add if heading else from_heading.discard)(cat)
         left = max(0, left - 1)
     return [found[cat] for cat, *_ in CATEGORIES if cat in found]
 
 
 def not_legal_only(clauses: list[PolicyClause]) -> list[PolicyClause]:
-    """Drop clauses about disclosure the law requires (courts, law enforcement, regulators)."""
-    return [c for c in clauses if not (_LEGAL.search(c.quote) and not _MARKETERS.search(c.quote))]
+    """Drop clauses about disclosure the law requires (courts, law enforcement, regulators), and
+    any sentence that says the company doesn't sell: "we don't sell your data to data brokers" is
+    the opposite of evidence that it does, whatever else Stage 4 or the LLM made of it."""
+    return [
+        c for c in clauses
+        if not (_LEGAL.search(c.quote) and not _MARKETERS.search(c.quote)) and not _NO_SALE.search(c.quote)
+    ]
 
 
 def no_sale_quote(sentences: list[str], company: str = "") -> str | None:
@@ -259,40 +304,45 @@ def risks_for(
         first.setdefault(clause.category, clause)
     by_cat = {c.category: c for c in collected}
     shares = any(cat in first for cat in SELLS_OR_SHARES)
+    sells = "sale" in first or "data_broker" in first
     risks: list[SiteRisk] = []
+    # High is kept for what the company itself admits would expose you: selling your data or
+    # passing it to data brokers, and sensitive data held by a company that does. Everything else
+    # tops out at medium, so a "!!" badge stays rare enough to mean something.
 
     if "sale" in first:
         risks.append(SiteRisk(
             level="high", title="It may sell your personal information",
             detail="The policy says it sells personal information, or shares it in a way the law treats as a sale.",
-            quote=first["sale"].quote,
+            quote=first["sale"].quote, how=HOW_POLICY,
         ))
     if "data_broker" in first:
         risks.append(SiteRisk(
             level="high", title="It shares data with data brokers",
             detail="Data brokers resell personal information, including to people-search sites.",
-            quote=first["data_broker"].quote,
+            quote=first["data_broker"].quote, how=HOW_POLICY,
         ))
     sensitive = [c for c in collected if c.sensitive]
     if sensitive:
         kinds = ", ".join(c.label[0].lower() + c.label[1:] for c in sensitive)
         risks.append(SiteRisk(
-            level="high" if shares else "medium", title="It collects sensitive data",
+            level="high" if sells else "medium", title="It collects sensitive data",
             detail=f"The policy mentions {kinds}."
-            + (" It also sells or shares data, so this could reach other companies." if shares else ""),
-            quote=sensitive[0].quote,
+            + (" It also sells data or passes it to data brokers, so this could reach other companies." if sells
+               else " It also shares some data with other companies." if shares else ""),
+            quote=sensitive[0].quote, how=HOW_COLLECTED,
         ))
     if "sharing" in first:
         risks.append(SiteRisk(
             level="medium", title="It shares your data with other companies",
             detail="The policy says other companies get your data for their own purposes, not just to run the service.",
-            quote=first["sharing"].quote,
+            quote=first["sharing"].quote, how=HOW_POLICY,
         ))
     if "advertising" in first:
         risks.append(SiteRisk(
             level="medium", title="It uses your data for targeted ads",
             detail="Ad partners can use what you do here to follow you across other sites and apps.",
-            quote=first["advertising"].quote,
+            quote=first["advertising"].quote, how=HOW_POLICY,
         ))
     if "from_others" in by_cat:
         quote = by_cat["from_others"].quote
@@ -300,24 +350,26 @@ def risks_for(
             level="high" if _BROKER.search(quote) else "medium",
             title="It gets data about you from other companies",
             detail="It adds information from outside sources, such as partners or data brokers, to what you give it.",
-            quote=quote,
+            quote=quote, how=HOW_COLLECTED,
         ))
     if opt_out_url:
         risks.append(SiteRisk(
-            level="medium", title="It shows a “Do Not Sell or Share” link",
+            level="low", title="It shows a “Do Not Sell or Share” link",
             detail="California requires that link from businesses that sell personal information or share it "
             "for targeted ads. You can use it to opt out.",
+            how=HOW_OPT_OUT,
         ))
     if "affiliates" in first:
         risks.append(SiteRisk(
             level="low", title="It shares data within its corporate family",
             detail="Other companies it owns, or that own it, can use your information.",
-            quote=first["affiliates"].quote,
+            quote=first["affiliates"].quote, how=HOW_POLICY,
         ))
     if len(collected) >= MANY_KINDS:
         risks.append(SiteRisk(
             level="low", title=f"It collects many kinds of data ({len(collected)})",
             detail="The more it holds, the more there is to sell, share or expose in a breach.",
+            how=HOW_COLLECTED,
         ))
     return sorted(risks, key=lambda r: _RISK_ORDER[r.level])
 
@@ -331,7 +383,8 @@ def summary_line(status: str, risks: list[SiteRisk], collected: list[DataCollect
         return f"Open Dossier to read this site's privacy policy.{main_risk}"
     if status == "unreadable":
         return f"Found the privacy policy but couldn't read it.{main_risk}"
-    kinds = f" It says it collects {len(collected)} kinds of data." if collected else ""
+    n = len(collected)
+    kinds = f" It says it collects {n} kind{'' if n == 1 else 's'} of data." if collected else ""
     if risks:
         return f"Main risk: {risks[0].title[0].lower()}{risks[0].title[1:]}.{kinds}"
     return f"Found nothing in the policy about selling or sharing your data.{kinds}"
@@ -461,7 +514,7 @@ def page_risks(
             level="high", title="It publishes profiles of people",
             detail=f"{broker.name} is a people-search site. Sites like this publish profiles of people, often with "
             "home addresses, phone numbers and relatives. Check whether it lists you.",
-            evidence=["On Dossier's list of people-search sites"],
+            evidence=["On Dossier's list of people-search sites"], how=HOW_BROKER,
         ))
     if insecure:
         risks.append(SiteRisk(
@@ -469,32 +522,34 @@ def page_risks(
             title=f"It asks for your {_names([FIELD_LABEL[f] for f in insecure])} without encryption",
             detail="This page or its form doesn't use https, so what you type here can be read by others on "
             "your network or Wi-Fi.",
-            evidence=fields(insecure),
+            evidence=fields(insecure), how=HOW_INSECURE,
         ))
     if "session_recording" in by_cat:
         risks.append(SiteRisk(
-            level="high", title="It loads a session-recording tool",
+            # Medium: what it records depends on the site's setup, and most hide what you type.
+            level="medium", title="It loads a session-recording tool",
             detail=f"{named('session_recording')} can record clicks, scrolling and typing on this page, depending "
             "on how the site set it up.",
-            evidence=seen("session_recording"),
+            evidence=seen("session_recording"), how=HOW_TRACKERS,
         ))
     if "data_broker" in by_cat:
         risks.append(SiteRisk(
-            level="high", title="It shares your visit with data brokers",
+            # Medium: the page loaded the tag; that alone doesn't show what the site sends it.
+            level="medium", title="It shares your visit with data brokers",
             detail=f"{named('data_broker')} link visits to profiles that other companies buy.",
-            evidence=seen("data_broker"),
+            evidence=seen("data_broker"), how=HOW_TRACKERS,
         ))
     if "advertising" in by_cat:
         risks.append(SiteRisk(
             level="medium", title="It sends your visit to ad companies",
             detail=f"{named('advertising')} can add this visit to an ad profile and follow you across sites.",
-            evidence=seen("advertising"),
+            evidence=seen("advertising"), how=HOW_TRACKERS,
         ))
     if very and status == "ok":
         risks.append(SiteRisk(
             level="medium", title=f"It asks for your {_names([FIELD_LABEL[f] for f in very])}",
             detail="Only give it if you know why this site needs it.",
-            evidence=fields(very),
+            evidence=fields(very), how=HOW_FIELDS,
         ))
     if status == "no_policy":
         tracked = [t for t in trackers if t.category != "tag_manager"]
@@ -513,24 +568,51 @@ def page_risks(
             risks.append(SiteRisk(
                 level="high" if very or "card" in asks_for else "medium", title=NO_POLICY_TITLE,
                 detail=f"This page {' and '.join(what)}, but no privacy policy was found saying how that's used.{law}",
-                evidence=fields(asks_for) + [host for t in tracked for host in t.hosts],
+                evidence=fields(asks_for) + [host for t in tracked for host in t.hosts], how=HOW_NO_POLICY,
             ))
     if ads and ads.status == "done" and ads.count:
         companies = f"{ads.count} ad compan{'y' if ads.count == 1 else 'ies'}"
         risks.append(SiteRisk(
-            level="medium",
+            level="low",  # most ad-supported sites publish one; it's context, not a finding
             title=f"{companies[0].upper()}{companies[1:]} {'is' if ads.count == 1 else 'are'} allowed to sell its ad space",
             detail=f"Its ads.txt file names {companies} that may sell its ads, such as {_names(ads.companies[:3])}. "
             "Ad auctions can pass details about your device, rough location and this visit to many of them.",
-            evidence=[ads.url] if ads.url else [],
+            evidence=[ads.url] if ads.url else [], how=HOW_ADS,
         ))
     if "social" in by_cat:
         risks.append(SiteRisk(
             level="low", title="Social networks can see this visit",
             detail=f"{named('social')} learn you were here, even if you don't click anything.",
-            evidence=seen("social"),
+            evidence=seen("social"), how=HOW_TRACKERS,
         ))
     return risks
+
+
+def promise_risks(no_sale: str | None, clauses: list[PolicyClause], trackers: list[TrackerFound]) -> list[SiteRisk]:
+    """Where the policy and the page don't add up: it says it doesn't sell your data, and this page
+    still hands your visit to ad companies or data brokers. It isn't a claim that the policy lies:
+    California law calls passing data on for targeted ads "sharing", which a promise not to sell
+    doesn't cover. Left out when the policy also says it sells data, so there's no promise to weigh."""
+    if not no_sale or any(c.category == "sale" for c in clauses):
+        return []
+    ad_tech = [t for t in trackers if t.category in ("advertising", "data_broker")]
+    if not ad_tech:
+        return []
+    kinds = {t.category for t in ad_tech}
+    who = {
+        frozenset({"advertising"}): "ad companies",
+        frozenset({"data_broker"}): "data brokers",
+    }.get(frozenset(kinds), "ad companies and data brokers")
+    return [SiteRisk(
+        level="medium",
+        title=f"It says it doesn't sell your data, but {who} see this visit",
+        detail=f"This page still loaded {_names([t.name for t in ad_tech])}. California law calls passing data "
+        "to companies for targeted ads “sharing”, and a promise not to sell doesn't cover it. Dossier can't see "
+        "what those tags send, or whether they respect an opt-out.",
+        quote=no_sale,
+        evidence=[host for t in ad_tech for host in t.hosts],
+        how=HOW_PROMISE,
+    )]
 
 
 # ---------- the check ----------
@@ -570,6 +652,14 @@ def reset() -> None:
             entry.task.cancel()
     _cache.clear()
     _locks.clear()
+
+
+def forget() -> int:
+    """The popup's "Forget the sites I've visited": drop every result held here, and return how
+    many sites that was. main.py also drops the outbound log's entries for them (LOG_PREFIX)."""
+    count = len(_cache)
+    reset()
+    return count
 
 
 def _hash(text: str) -> str:
@@ -766,7 +856,8 @@ def _response(entry: _Site, req: SitePolicyRequest) -> SitePolicyResponse:
     broker = broker_for(entry.domain)
     risks = sorted(
         risks_for(entry.collected, entry.clauses, own_opt_out)
-        + page_risks(entry.status, trackers, asks_for, insecure, broker, entry.ads),
+        + page_risks(entry.status, trackers, asks_for, insecure, broker, entry.ads)
+        + promise_risks(entry.no_sale_quote, entry.clauses, trackers),
         key=lambda r: _RISK_ORDER[r.level],
     )
     overall = risks[0].level if risks else ("low" if entry.status == "ok" else None)

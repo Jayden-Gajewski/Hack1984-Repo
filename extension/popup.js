@@ -1,9 +1,30 @@
-// The popup: the privacy check for the site in the current tab. Opening it also starts the local
-// LLM pass for that site, and the popup asks again every few seconds until it's done.
+// The popup: the privacy check for the site in the current tab. Opening it also starts the Gemini
+// pass for that site, and the popup asks again every few seconds until it's done.
 //
 // Everything shown comes from a web page (quotes, links), so it's added as text nodes, never as
 // HTML, and links must be plain http(s).
-import { APP_URL, Offline, cachedResult, checkPage, isCheckable, readPage, rememberResult, setBadge } from "./shared.js";
+//
+// It reads like a dossier of the visit: plain claims in the second person, each with the evidence
+// behind it and how Dossier knows. A claim says only what was seen, and how sure it is ("can",
+// "may"); silence beats a confident claim that turns out wrong.
+//
+// Layout: the site in a header, then three views behind the tab bar. "This site" is the verdict
+// card and four tiles (risks, trackers, what it collects, what it shares) that pick the panel
+// below them. "Sites" lists the sites you opened this session, from session storage. "Settings"
+// holds the browsing preferences.
+import {
+  APP_URL,
+  Offline,
+  cachedResult,
+  checkPage,
+  forgetSites,
+  isCheckable,
+  readPage,
+  rememberResult,
+  setBadge,
+  sightings,
+  visitedSites,
+} from "./shared.js";
 
 const POLL_MS = 2500;
 const VERDICT = { high: "High risk", medium: "Some risk", low: "Low risk" };
@@ -34,17 +55,76 @@ const FIELD_LABEL = {
   ssn: "Social Security number",
   government_id: "government ID number",
 };
+// The tiles under the verdict, in order. Each one picks the panel below it.
+const TILES = [
+  { key: "risks", icon: "alert", label: "Risks" },
+  { key: "page", icon: "eye", label: "Trackers" },
+  { key: "collects", icon: "file", label: "Collects" },
+  { key: "shares", icon: "share", label: "Shares" },
+];
+// The verdict card's icon: a warning for a risk, a shield when nothing concerning was found.
+const DISC = { high: "alert", medium: "alert", low: "shield" };
+
+// Line icons on a 24px grid, drawn with the current text color.
+const ICONS = {
+  refresh: ["M20 12a8 8 0 1 1-8-8c2.2 0 4.3.9 5.9 2.4L20 8.5", "M20 3.5v5h-5"],
+  open: ["M14 4h6v6", "M20 4l-9 9", "M19 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h4"],
+  shield: ["M12 3.5 5 6.5v5c0 4.4 2.9 7.6 7 9 4.1-1.4 7-4.6 7-9v-5Z"],
+  clock: ["M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17Z", "M12 7.5V12l3 2"],
+  sliders: [
+    "M4 8h9",
+    "M17 8h3",
+    "M4 16h3",
+    "M11 16h9",
+    "M15 6a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z",
+    "M9 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z",
+  ],
+  alert: [
+    "M10.3 4.5 2.9 17.3a2 2 0 0 0 1.7 3h14.8a2 2 0 0 0 1.7-3L13.7 4.5a2 2 0 0 0-3.4 0Z",
+    "M12 9.5v4",
+    "M12 17h.01",
+  ],
+  eye: [
+    "M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z",
+    "M12 9.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Z",
+  ],
+  file: ["M14 3.5H7a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8.5Z", "M14 3.5v5h5", "M9 13h6", "M9 16.5h4"],
+  share: ["M14 5l6 6-6 6", "M20 11h-8a7 7 0 0 0-7 7v1"],
+  question: [
+    "M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17Z",
+    "M9.6 9.3a2.5 2.5 0 0 1 4.9.7c0 1.7-2.5 2.2-2.5 3.7",
+    "M12 17h.01",
+  ],
+  power: ["M12 3.5v8", "M7 6.3a7.5 7.5 0 1 0 10 0"],
+  check: ["M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17Z", "M8.5 12.2l2.4 2.4 4.6-4.8"],
+};
 
 const main = document.getElementById("main");
+const avatar = document.getElementById("avatar");
 const siteLabel = document.getElementById("site");
+const siteSub = document.getElementById("site-sub");
+const recheckButton = document.getElementById("recheck");
 const statusLine = document.getElementById("status");
 const autoBox = document.getElementById("auto");
 const readBox = document.getElementById("read-policies");
+const forgetButton = document.getElementById("forget");
+const forgetResult = document.getElementById("forget-result");
+const siteList = document.getElementById("site-list");
+const views = { main, sites: document.getElementById("sites"), settings: document.getElementById("settings") };
+const tabButtons = [...document.querySelectorAll(".tabbar button")];
+const mark = [...avatar.childNodes]; // the app's mark, shown until a site is known
+// Trackers that can follow a browser from site to site; analytics and tag managers only see the visit.
+const FOLLOWS = new Set(["advertising", "data_broker", "social"]);
 
 let tabId = null;
 let page = null;
 let pollTimer = null;
 let shown = "";
+// The tile picked under the verdict; kept while the popup polls, reset for a new site.
+let tab = null;
+// The other sites you opened where Dossier saw each company and tracker (sightings() in shared.js).
+let elsewhere = { byCompany: new Map(), byTracker: new Map() };
+let forgotten = false;
 
 // ---------- small DOM helpers ----------
 
@@ -60,6 +140,30 @@ function h(tag, props = {}, ...children) {
     if (child !== null && child !== undefined && child !== false) node.append(child); // strings become text
   }
   return node;
+}
+
+function icon(name) {
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(NS, "svg");
+  for (const [key, value] of Object.entries({
+    viewBox: "0 0 24 24",
+    width: "24",
+    height: "24",
+    fill: "none",
+    stroke: "currentColor",
+    "stroke-width": "2",
+    "stroke-linecap": "round",
+    "stroke-linejoin": "round",
+    "aria-hidden": "true",
+  })) {
+    svg.setAttribute(key, value);
+  }
+  for (const d of ICONS[name]) {
+    const path = document.createElementNS(NS, "path");
+    path.setAttribute("d", d);
+    svg.append(path);
+  }
+  return svg;
 }
 
 function safeHref(url) {
@@ -84,12 +188,32 @@ function time(iso) {
   return Number.isNaN(date.getTime()) ? "an unknown time" : date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
-/** Replace the content, keeping open rows open (the popup re-renders when Gemini finishes). */
+/** A claim in plain words. A *starred* phrase is the part to notice. Text nodes only. */
+const say = (text) => text.split(/\*([^*]+)\*/).map((part, i) => (i % 2 ? h("strong", {}, part) : part));
+
+const count = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+
+/** "a, b and c", or "a, b, c and 4 more" past `max`. */
+function listOf(items, max = 4) {
+  const shown = items.length > max ? [...items.slice(0, max), `${items.length - max} more`] : items;
+  return shown.length < 2 ? shown.join("") : `${shown.slice(0, -1).join(", ")} and ${shown.at(-1)}`;
+}
+
+/** Replace the content, keeping open rows open and focus where it was (the popup re-renders when
+ *  Gemini finishes). */
 function show(...nodes) {
   const open = new Set([...main.querySelectorAll("details[open][data-key]")].map((d) => d.dataset.key));
+  const active = main.contains(document.activeElement) ? document.activeElement : null;
+  const focusKey = active?.dataset.focusKey ?? active?.closest("details[data-key]")?.dataset.key ?? null;
   main.replaceChildren(...nodes.flat().filter(Boolean));
   for (const details of main.querySelectorAll("details[data-key]")) {
     if (open.has(details.dataset.key)) details.open = true;
+  }
+  if (focusKey) {
+    const again = [...main.querySelectorAll("[data-focus-key], details[data-key]")].find(
+      (node) => (node.dataset.focusKey ?? node.dataset.key) === focusKey,
+    );
+    (again?.matches("details") ? again.querySelector("summary") : again)?.focus();
   }
 }
 
@@ -97,27 +221,42 @@ function announce(text) {
   if (statusLine.textContent !== text) statusLine.textContent = text;
 }
 
+/** The header: the site's name and first letter (tinted by its risk), and a line under it. */
+function setHeader(site, sub, risk = null) {
+  siteLabel.textContent = site ?? "Dossier";
+  siteSub.textContent = sub;
+  if (site) avatar.replaceChildren(site.charAt(0));
+  else avatar.replaceChildren(...mark);
+  if (risk) avatar.dataset.risk = risk;
+  else delete avatar.dataset.risk;
+}
+
 // ---------- states ----------
 
-// The status line now, and the shape of the result (it fades in only if the wait passes 150 ms).
+// The verdict card says what's happening now; the tiles and rows below it fade in as shapes only
+// if the wait passes 150 ms.
 function renderLoading(text) {
   shown = "";
   show(
     h(
       "section",
-      { class: "loading" },
-      h("p", { class: "working" }, h("span", { class: "spinner", "aria-hidden": "true" }), text),
+      { class: "hero hero--loading" },
+      h("span", { class: "disc" }, h("span", { class: "spinner", "aria-hidden": "true" })),
+      h("p", { class: "hero-summary" }, text),
+    ),
+    h(
+      "div",
+      { class: "skeleton", "aria-hidden": "true" },
       h(
-        "div",
-        { class: "skeleton", "aria-hidden": "true" },
-        h("span", { class: "skeleton-item skeleton-item--verdict" }),
-        h("span", { class: "skeleton-item skeleton-item--line" }),
-        h("span", { class: "skeleton-item" }),
-        h("span", { class: "skeleton-item" }),
-        h("span", { class: "skeleton-item" }),
+        "span",
+        { class: "skeleton-tiles" },
+        TILES.map(() => h("span", { class: "skeleton-item skeleton-item--tile" })),
       ),
+      h("span", { class: "skeleton-item" }),
+      h("span", { class: "skeleton-item" }),
     ),
   );
+  siteSub.textContent = "Checking…";
   announce(text);
 }
 
@@ -127,29 +266,44 @@ function busy(button) {
   button.setAttribute("aria-busy", "true");
 }
 
-function renderMessage(title, text, ...extra) {
+function renderMessage(iconName, title, text, ...extra) {
   shown = "";
-  show(h("section", { class: "message" }, h("h1", {}, title), text ? h("p", {}, text) : null, ...extra));
+  show(
+    h(
+      "section",
+      { class: "hero" },
+      h("span", { class: "disc" }, icon(iconName)),
+      h("h1", {}, title),
+      text ? h("p", { class: "hero-summary" }, text) : null,
+      ...extra,
+    ),
+  );
   announce(title);
 }
 
 function renderOffline() {
+  siteSub.textContent = "Not checked";
   renderMessage(
+    "power",
     "Start Dossier on this laptop",
     "The extension checks privacy policies with the Dossier backend on your own computer, and it isn't running. Start it from the repo:",
     h("pre", { class: "code" }, "cd backend\nuvicorn app.main:app"),
     h(
-      "button",
-      {
-        class: "button",
-        type: "button",
-        onclick: (event) => {
-          busy(event.currentTarget);
-          announce("Trying again…");
-          start();
+      "div",
+      { class: "actions" },
+      h(
+        "button",
+        {
+          class: "button button--primary",
+          type: "button",
+          onclick: (event) => {
+            busy(event.currentTarget);
+            announce("Trying again…");
+            start();
+          },
         },
-      },
-      "Try again",
+        "Try again",
+      ),
     ),
   );
 }
@@ -171,9 +325,14 @@ const riskRow = (risk) =>
       { "data-key": `risk:${risk.title}` },
       h("summary", {}, h("span", { class: "level" }, LEVEL[risk.level]), h("span", { class: "row-title" }, risk.title)),
       h("p", { class: "detail" }, risk.detail),
-      risk.quote
-        ? quote(risk.quote)
-        : h("p", { class: "detail" }, risk.evidence?.length ? `Evidence: ${risk.evidence.join(", ")}` : "Seen on this page."),
+      // A quote, what was seen on the page, or both (a promise in the policy against the page's trackers).
+      risk.quote ? quote(risk.quote) : null,
+      risk.evidence?.length ? h("p", { class: "detail" }, `Evidence: ${risk.evidence.join(", ")}`) : null,
+      risk.how
+        ? h("p", { class: "how" }, h("strong", {}, "How Dossier knows: "), risk.how)
+        : !risk.quote && !risk.evidence?.length
+          ? h("p", { class: "detail" }, "Seen on this page.")
+          : null,
     ),
   );
 
@@ -211,8 +370,15 @@ const clauseRow = (clause) =>
     ),
   );
 
-function section(title, count, ...body) {
-  return h("section", {}, h("h2", {}, h("span", {}, title), count ? h("span", {}, count) : null), ...body);
+const empty = (text) => h("p", { class: "empty" }, text);
+const lead = (text) => h("p", { class: "lead" }, text);
+
+/** Why a policy tile has nothing to show. */
+function policyMissing(result) {
+  return {
+    no_policy: "Couldn't find this site's privacy policy, so there's nothing to show here.",
+    unreadable: "Couldn't read this site's privacy policy, so there's nothing to show here.",
+  }[result.status] ?? "Dossier hasn't read this site's privacy policy yet.";
 }
 
 function sharing(result) {
@@ -220,9 +386,7 @@ function sharing(result) {
   if (result.clauses.length) body.push(h("ul", { class: "rows" }, result.clauses.map(clauseRow)));
   else {
     body.push(
-      h(
-        "p",
-        { class: "muted" },
+      empty(
         result.llm === "running"
           ? "Nothing found yet. Gemini is still reading."
           : "Found nothing in the policy about selling or sharing your data.",
@@ -282,14 +446,15 @@ function details(result) {
   }
   lines.push(
     h(
-      "div",
-      { class: "actions" },
-      h(
-        "button",
-        { class: "button", type: "button", title: "Read the privacy policy open in this tab", onclick: () => checkThisPage() },
-        "Check this page",
-      ),
-      h("button", { class: "button", type: "button", onclick: () => run({ deep: true, refresh: true }) }, "Re-check"),
+      "button",
+      {
+        class: "button",
+        type: "button",
+        title: "Read the privacy policy open in this tab",
+        "data-focus-key": "check-page",
+        onclick: () => checkThisPage(),
+      },
+      "Check this page",
     ),
   );
   return h("section", { class: "info" }, ...lines);
@@ -317,7 +482,59 @@ function pageRow(key, summary, ...body) {
   return h("li", { class: "row" }, h("details", { "data-key": key }, h("summary", {}, ...summary), ...body));
 }
 
-function adsRow(ads) {
+/**
+ * What a bidder in an ad auction on this page can be sent about you: the OpenRTB 2.6 bid request,
+ * filled in from this browser. Built and shown here, sent nowhere. What only the ad exchange knows
+ * (your IP address and where it puts you, its ID for you) stays a labeled placeholder, never a guess.
+ */
+function bidRequest(site) {
+  const uad = navigator.userAgentData;
+  const mobile = uad ? uad.mobile : /Mobi|Android|iPhone/i.test(navigator.userAgent);
+  const fromIp = "<from your IP address>";
+  return {
+    id: "<a new ID for each auction>",
+    at: 1,
+    tmax: 120,
+    imp: [{ id: "1", banner: { w: 300, h: 250 } }],
+    site: { domain: site, page: "<the full address of the page you're on>", ref: "<the page you came from>" },
+    device: {
+      ua: navigator.userAgent,
+      ip: "<your IP address>",
+      geo: { type: 2, country: fromIp, region: fromIp, city: fromIp, zip: fromIp, utcoffset: -new Date().getTimezoneOffset() },
+      devicetype: mobile ? 4 : 2, // 4 phone, 2 computer
+      os: uad?.platform || undefined,
+      w: screen.width,
+      h: screen.height,
+      pxratio: window.devicePixelRatio,
+      language: (navigator.language || "en").split("-")[0],
+      js: 1,
+    },
+    user: {
+      id: "<the ad exchange's ID for this browser>",
+      buyeruid: "<each bidder's own ID for you>",
+      data: [{ name: "<a data company>", segment: [{ name: "<interests and traits it has linked to you>" }] }],
+    },
+  };
+}
+
+function receipt(site) {
+  return h(
+    "details",
+    { class: "receipt", "data-key": "receipt" },
+    h("summary", {}, "See what each bidder can be sent"),
+    h(
+      "p",
+      { class: "fine" },
+      "If this page auctions its ad space, every bidder can get a message like this one, in the OpenRTB format ad " +
+        "auctions use. Dossier filled it in from your browser just now and sends it nowhere. The ad exchange fills in " +
+        "the parts in angle brackets.",
+    ),
+    h("pre", { class: "code" }, JSON.stringify(bidRequest(site), null, 2)),
+    h("p", { class: "fine" }, "Bidders that lose the auction can keep what they were sent. It's one way data companies learn where you go online."),
+  );
+}
+
+function adsRow(ads, site) {
   if (ads.status === "running") {
     return h("li", { class: "row" }, h("p", { class: "plain" }, h("span", { class: "spinner", "aria-hidden": "true" }), "Reading its ads.txt…"));
   }
@@ -331,18 +548,52 @@ function adsRow(ads) {
     [h("span", { class: "tag" }, "Ad sellers"), h("span", { class: "row-title" }, `${ads.count} ad companies may sell its ads`)],
     h("p", { class: "detail" }, `Its ads.txt names ${ads.companies.join(", ")}${others}. Each ad auction can pass details about your visit to them.`),
     ads.url ? h("p", { class: "detail" }, "From ", link(ads.url), ".") : null,
+    receipt(site),
   );
 }
 
-function pageSection(result) {
+/**
+ * The visit in plain words, above the rows: which companies learned you were here, and the one
+ * Dossier saw on the most other sites you opened. Only what was seen; "can", never "does".
+ */
+function visitClaims(result) {
+  const companies = [...new Set(result.trackers.map((t) => t.company))];
+  if (!companies.length) return null;
+  const lines = [
+    `Loading this page told *${count(companies.length, "company", "companies")}* you were here: ${listOf(companies)}.`,
+  ];
+  // Ties go to the company listed first, which is the strongest kind of tracker on the page.
+  const top = companies
+    .map((company) => ({ company, sites: elsewhere.byCompany.get(company)?.size ?? 0 }))
+    .reduce((best, next) => (next.sites > best.sites ? next : best));
+  if (top.sites) {
+    const follows = result.trackers.some((t) => t.company === top.company && FOLLOWS.has(t.category));
+    lines.push(
+      `Dossier also saw *${top.company}* on *${count(top.sites, "other site", "other sites")}* you opened since the ` +
+        `browser started. ${follows ? "That's how ad tech can follow you from site to site." : `Each of those visits reached ${top.company} too.`}`,
+    );
+  }
+  return h("div", { class: "claims" }, lines.map((line) => h("p", { class: "claim" }, ...say(line))));
+}
+
+/** What the page itself does: the visit in plain words, then its trackers, forms and ad sellers. */
+function pagePanel(result) {
   const rows = result.trackers.map((tracker) => {
     const [tag, help] = TRACKER[tracker.category];
-    const strong = tracker.category === "session_recording" || tracker.category === "data_broker";
+    const strong = tracker.category === "data_broker"; // red only for what Dossier exists to fight
+    const others = [...(elsewhere.byTracker.get(tracker.name) ?? [])];
     return pageRow(
       `tracker:${tracker.name}`,
-      [h("span", { class: strong ? "tag tag--sensitive" : "tag" }, tag), h("span", { class: "row-title" }, tracker.name)],
+      [
+        h("span", { class: strong ? "tag tag--sensitive" : "tag" }, tag),
+        h("span", { class: "row-title" }, tracker.name),
+        others.length ? h("span", { class: "seen" }, `also on ${count(others.length, "site", "sites")}`) : null,
+      ],
       h("p", { class: "detail" }, `${help} Run by ${tracker.company}.`),
       h("p", { class: "detail" }, `Loaded from ${tracker.hosts.join(", ")}.`),
+      others.length
+        ? h("p", { class: "detail" }, `Dossier also saw it on ${listOf(others, 3)}, since the browser started.`)
+        : null,
     );
   });
   if (result.asks_for.length) {
@@ -360,9 +611,84 @@ function pageSection(result) {
       ),
     );
   }
-  if (result.ad_sellers) rows.push(adsRow(result.ad_sellers));
-  if (!rows.length) return null;
-  return section("What this page does", null, h("ul", { class: "rows" }, rows));
+  if (result.ad_sellers) rows.push(adsRow(result.ad_sellers, result.site));
+  if (!rows.length) return [empty("No known trackers on this page, and no forms that ask for personal data.")];
+  return [visitClaims(result), h("ul", { class: "rows" }, rows)];
+}
+
+function panelFor(result, key) {
+  const read = result.status === "ok";
+  if (key === "risks") {
+    return result.risks.length
+      ? [h("ul", { class: "rows" }, result.risks.map(riskRow))]
+      : [empty(read ? "Nothing concerning found." : "Nothing concerning seen on this page.")];
+  }
+  if (key === "page") return pagePanel(result);
+  if (!read) return [empty(policyMissing(result))];
+  if (key === "collects") {
+    return result.collected.length
+      ? [lead("What its privacy policy says it collects."), h("ul", { class: "rows" }, result.collected.map(collectedRow))]
+      : [empty("Found nothing in the policy about what it collects.")];
+  }
+  return [lead("What its privacy policy says about selling and sharing your data."), ...sharing(result)];
+}
+
+/** How many of each a tile counts. Null: the policy wasn't read, so nobody knows. */
+function tileCount(result, key) {
+  const read = result.status === "ok";
+  return {
+    risks: result.risks.length,
+    page: result.trackers.length,
+    collects: read ? result.collected.length : null,
+    shares: read ? result.clauses.length : null,
+  }[key];
+}
+
+/** The four tiles and the panel they pick. They're tabs: arrow keys move between them. */
+function tilesAndPanel(result) {
+  if (!tab) tab = TILES.find(({ key }) => tileCount(result, key) > 0)?.key ?? "risks";
+  const panel = h("div", { class: "panel", role: "tabpanel", id: "panel" });
+  const buttons = TILES.map(({ key, icon: name, label }) => {
+    const n = tileCount(result, key);
+    return h(
+      "button",
+      {
+        type: "button",
+        class: "tile",
+        role: "tab",
+        id: `tile-${key}`,
+        "aria-controls": "panel",
+        "data-focus-key": `tile:${key}`,
+        "data-tile": key,
+        "aria-label": n === null ? `${label}: policy not read` : null,
+        onclick: () => choose(key),
+      },
+      icon(name),
+      h("span", { class: "tile-count" }, n === null ? "–" : String(n)),
+      h("span", { class: "tile-label" }, label),
+    );
+  });
+  function choose(key, focus = false) {
+    tab = key;
+    for (const button of buttons) {
+      const on = button.dataset.tile === key;
+      button.setAttribute("aria-selected", String(on));
+      button.tabIndex = on ? 0 : -1;
+      if (on && focus) button.focus();
+    }
+    panel.setAttribute("aria-labelledby", `tile-${key}`);
+    panel.replaceChildren(...panelFor(result, key).filter(Boolean));
+  }
+  const list = h("div", { class: "tiles", role: "tablist", "aria-label": "Evidence" }, buttons);
+  list.addEventListener("keydown", (event) => {
+    const at = TILES.findIndex(({ key }) => key === tab);
+    const to = { ArrowRight: at + 1, ArrowLeft: at - 1, Home: 0, End: TILES.length - 1 }[event.key];
+    if (to === undefined) return;
+    event.preventDefault();
+    choose(TILES[(to + TILES.length) % TILES.length].key, true);
+  });
+  choose(tab);
+  return [list, panel];
 }
 
 function render(result) {
@@ -375,32 +701,84 @@ function render(result) {
     result.status === "ok" && !result.risks.length
       ? "Nothing concerning found"
       : (VERDICT[result.risk] ?? (result.status === "ok" ? "Checked" : unread));
+  const discIcon = result.risk ? DISC[result.risk] : result.status === "ok" ? "shield" : "question";
   const optOut = safeHref(result.opt_out_url);
+  setHeader(result.site, `Checked at ${time(result.checked_at)}`, result.risk);
   show(
     h(
       "section",
-      { class: `verdict verdict--${result.risk ?? "unknown"}` },
-      h("p", { class: "verdict-label" }, verdict),
-      h("p", { class: "verdict-summary" }, result.summary),
+      { class: `hero hero--${result.risk ?? "unknown"}` },
+      h("span", { class: "disc" }, icon(discIcon)),
+      h("h1", {}, verdict),
+      result.summary ? h("p", { class: "hero-summary" }, result.summary) : null,
+      optOut
+        ? h(
+            "div",
+            { class: "actions" },
+            h(
+              "a",
+              { class: "button button--primary", href: optOut, target: "_blank", rel: "noopener noreferrer" },
+              "Opt out of sale and sharing",
+            ),
+            h("p", { class: "fine" }, `Opens ${shortUrl(optOut)}`), // say where it goes before anyone types in it
+          )
+        : null,
     ),
     result.broker ? brokerCard(result.broker) : null,
     result.status === "unreadable" || result.status === "no_policy" ? unreadableHelp(result) : null,
-    result.risks.length ? section("Risks", null, h("ul", { class: "rows" }, result.risks.map(riskRow))) : null,
-    pageSection(result),
-    result.collected.length
-      ? section("What it says it collects", String(result.collected.length), h("ul", { class: "rows" }, result.collected.map(collectedRow)))
-      : null,
-    result.status === "ok" ? section("Selling and sharing", null, ...sharing(result)) : null,
-    optOut
-      ? h(
-          "a",
-          { class: "button button--primary", href: optOut, target: "_blank", rel: "noopener noreferrer" },
-          `Opt out of sale and sharing on ${bareHost(optOut)}`, // say where it goes before anyone types in it
-        )
-      : null,
+    tilesAndPanel(result),
     details(result),
   );
   announce(`${verdict} on ${result.site}.${result.llm === "done" ? " Gemini check done." : ""}`);
+}
+
+// ---------- Sites you opened ----------
+
+function siteSummary(result) {
+  const bits = [
+    count(result.risks?.length ?? 0, "risk", "risks"),
+    count(result.trackers?.length ?? 0, "tracker", "trackers"),
+  ];
+  if (result.status !== "ok") bits.push({ no_policy: "no policy found", unreadable: "policy unreadable" }[result.status] ?? "policy not read");
+  return bits.join(", ");
+}
+
+async function renderSites() {
+  const sites = await visitedSites();
+  if (!sites.length) {
+    siteList.replaceChildren(
+      h(
+        "li",
+        { class: "empty" },
+        autoBox.checked
+          ? "No sites yet. They appear here as you browse."
+          : "No sites yet. Turn on “Check every site I visit” in Settings, or open this popup on a site.",
+      ),
+    );
+    return;
+  }
+  siteList.replaceChildren(
+    ...sites.map(({ site, result }) =>
+      h(
+        "li",
+        { class: `row site-row risk--${result.risk ?? "none"}` },
+        h("span", { class: "avatar", "data-risk": result.risk ?? null, "aria-hidden": "true" }, site.charAt(0)),
+        h("div", { class: "site-row-text" }, h("p", { class: "site-row-name" }, site), h("p", { class: "site-row-sub" }, siteSummary(result))),
+        result.risk ? h("span", { class: "level" }, LEVEL[result.risk]) : null,
+      ),
+    ),
+  );
+}
+
+// ---------- views ----------
+
+function goTo(name) {
+  for (const [key, view] of Object.entries(views)) view.hidden = key !== name;
+  for (const button of tabButtons) {
+    if (button.dataset.view === name) button.setAttribute("aria-current", "page");
+    else button.removeAttribute("aria-current");
+  }
+  if (name === "sites") renderSites();
 }
 
 // ---------- flow ----------
@@ -410,6 +788,7 @@ async function run(options) {
   if (options.refresh) renderLoading("Reading this site's privacy policy again…");
   try {
     const result = await checkPage(page, options);
+    if (forgotten) return; // "Forget" was pressed while this was on its way: don't store it again
     // Text from a page that isn't a policy doesn't replace the site's result.
     if (!(options.pageText && result.status !== "ok")) {
       await rememberResult(page.origin, result);
@@ -421,15 +800,23 @@ async function run(options) {
     }
   } catch (error) {
     if (error instanceof Offline) renderOffline();
-    else renderMessage("Couldn't check this site", error.message);
+    else renderMessage("alert", "Couldn't check this site", error.message);
   }
+}
+
+async function recheck() {
+  goTo("main");
+  busy(recheckButton);
+  await run({ deep: true, refresh: true });
+  recheckButton.removeAttribute("aria-busy");
+  recheckButton.disabled = forgotten;
 }
 
 async function checkThisPage() {
   renderLoading("Reading the policy on this page…");
   const pageText = await readPage(tabId);
   if (!pageText) {
-    renderMessage("Couldn't read this page", "Reload the page and try again.");
+    renderMessage("question", "Couldn't read this page", "Reload the page and try again.");
     return;
   }
   await run({ deep: true, pageText });
@@ -437,36 +824,75 @@ async function checkThisPage() {
 
 async function start() {
   clearTimeout(pollTimer);
+  tab = null;
   // Debugging aid: popup.html?tab=<id>, opened as a page, shows the check for that tab.
   const forced = Number(new URLSearchParams(location.search).get("tab"));
-  const [tab] = forced ? [{ id: forced }] : await chrome.tabs.query({ active: true, currentWindow: true });
-  tabId = tab?.id ?? null;
+  const [current] = forced ? [{ id: forced }] : await chrome.tabs.query({ active: true, currentWindow: true });
+  tabId = current?.id ?? null;
   const key = `tab:${tabId}`;
   page = tabId === null ? null : ((await chrome.storage.session.get(key))[key] ?? null);
   // activeTab lets the popup see the tab's address. If the extension hasn't heard from this page
   // (Back from the cache, a PDF, a browser page), don't show the last site's result.
-  if (page && tab?.url) {
+  if (page && current?.url) {
     try {
-      if (new URL(tab.url).origin !== page.origin) page = null;
+      if (new URL(current.url).origin !== page.origin) page = null;
     } catch {
       page = null;
     }
   }
   if (!page) {
-    renderMessage("Nothing to check here", "Dossier checks public websites. If this is one, reload the page so the extension can see it.");
+    setHeader(null, "Privacy check");
+    renderMessage("shield", "Nothing to check here", "Dossier checks public websites. If this is one, reload the page so the extension can see it.");
     return;
   }
-  siteLabel.textContent = new URL(page.origin).hostname.replace(/^www\./, "");
+  setHeader(new URL(page.origin).hostname.replace(/^www\./, ""), "Privacy check");
   if (!isCheckable(page.origin)) {
-    renderMessage("Nothing to check here", "Dossier checks public websites, not this computer or your local network.");
+    renderMessage("shield", "Nothing to check here", "Dossier checks public websites, not this computer or your local network.");
     return;
   }
+  elsewhere = await sightings(page.origin);
   const cached = await cachedResult(page.origin);
   if (cached) render(cached);
   else renderLoading("Reading this site's privacy policy…");
   const pageText = page.isPolicyPage ? await readPage(tabId) : null;
   await run({ deep: true, pageText });
+  recheckButton.disabled = forgotten; // once the first check has answered
 }
+
+/** Forget every site, here and in the backend, then say exactly what was and wasn't cleared. */
+async function forget() {
+  busy(forgetButton);
+  forgotten = true;
+  recheckButton.disabled = true;
+  clearTimeout(pollTimer);
+  const { sites, backend, detail } = await forgetSites();
+  elsewhere = { byCompany: new Map(), byTracker: new Map() };
+  const here = sites
+    ? `Cleared ${count(sites, "site", "sites")} from this browser.`
+    : "This browser held no sites.";
+  const there = {
+    cleared: " The backend dropped its results and its log entries for them.",
+    // Its results live only in memory, so a backend that isn't running holds none.
+    offline: " The backend didn't answer. It keeps results only in memory, so if it isn't running it holds none.",
+    failed: ` The backend didn't clear its copy: ${detail}`,
+  }[backend];
+  const outcome = `${here}${there} Requests already made can't be recalled.`;
+  renderMessage(
+    backend === "failed" ? "alert" : "check",
+    backend === "failed" ? "Forgotten in this browser only" : "Dossier forgot the sites you've visited",
+    `${outcome} Open the popup again to check this site.`,
+  );
+  forgetResult.textContent = outcome;
+  forgetResult.hidden = false;
+  forgetButton.removeAttribute("aria-busy");
+  forgetButton.textContent = "Forgotten";
+  await renderSites();
+}
+
+for (const slot of document.querySelectorAll("[data-icon]")) slot.replaceWith(icon(slot.dataset.icon));
+document.getElementById("open-app").href = APP_URL;
+for (const button of tabButtons) button.addEventListener("click", () => goTo(button.dataset.view));
+recheckButton.addEventListener("click", recheck);
 
 chrome.storage.local.get(["auto", "readPolicies"]).then(({ auto = true, readPolicies = false }) => {
   autoBox.checked = auto;
@@ -474,5 +900,6 @@ chrome.storage.local.get(["auto", "readPolicies"]).then(({ auto = true, readPoli
 });
 autoBox.addEventListener("change", () => chrome.storage.local.set({ auto: autoBox.checked }));
 readBox.addEventListener("change", () => chrome.storage.local.set({ readPolicies: readBox.checked }));
+forgetButton.addEventListener("click", forget);
 
 start();

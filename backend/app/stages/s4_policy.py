@@ -56,8 +56,26 @@ _CATEGORY_EVIDENCE = {
     "data_broker": re.compile(r"broker", re.I),
 }
 _ABOUT_DATA = re.compile(r"personal|\bdata\b|information", re.I)
+# A denial: "we do not sell", "we don’t share" (most typeset policies use the curly apostrophe),
+# "doesn't", "won't", "we never sell", "we do not currently sell", "we do not, and will not, sell",
+# "is not sold". A sentence that denies it is never evidence that the company does it.
+_NEGATION = r"(?:(?:do|does|did|will|shall|would|have|has)\s+not|(?:don|doesn|didn|won|haven|hasn)['’]?t|never)"
+_NEGATION_HEDGE = (
+    r"(?:\s*,?\s*(?:and|or)\s+(?:will|shall|do|does|have|has)\s+not\s*,?"
+    r"|\s+(?:currently|knowingly|ever|otherwise|directly|intentionally))*"
+)
 _DENIAL = re.compile(
-    r"\b(do|does|will|shall|did) not (sell|share|disclose|rent)|\bdon'?t (sell|share)|\bnever (sell|share)", re.I
+    rf"\b{_NEGATION}{_NEGATION_HEDGE}\s+(?:sell|sold|share|shared|disclose|rent|rented|trade|exchange)\b"
+    r"|\bneither sells?\b|\b(?:is|are|will be)\s+(?:not|never)\s+(?:be\s+)?(?:sold|rented|shared|disclosed)\b",
+    re.I,
+)
+# Sharing the user asks for ("if you link your account with a third-party service, we share the
+# information you authorize") is the user's choice, not the company handing data out. California
+# law doesn't count it as a sale either.
+_USER_DIRECTED = re.compile(
+    r"\bif you (choose to )?(link|connect|authori[sz]e|direct|ask|instruct)\b|\byou (authori[sz]e|direct|instruct)\b|"
+    r"\bat your (direction|request|instruction)\b|\bthat you (link|connect|authori[sz]e)\b",
+    re.I,
 )
 # Standard clauses about the company itself being bought or merged: not selling your data.
 _CORPORATE_DEAL = re.compile(
@@ -154,6 +172,8 @@ def passes_checks(quote: str, category: str, company: str = "") -> bool:
     if category != "advertising" and not _ABOUT_DATA.search(quote):
         return False
     if _DENIAL.search(quote) or _CORPORATE_DEAL.search(quote) or _DEFINITION.search(quote):
+        return False
+    if _USER_DIRECTED.search(quote):
         return False
     if _SERVICE_PROVIDER.search(quote) and not _OUTSIDERS.search(quote):
         return False

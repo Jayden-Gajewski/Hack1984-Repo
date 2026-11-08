@@ -9,10 +9,11 @@
     <script type="module" src="popup.js"></script>
   </head>
   <body>
+    <!-- The site in this tab, like an account header: who you're looking at, and two actions. -->
     <header class="top">
-      <span class="brand">
-        <!-- The app's mark: a file folder with a keyhole. -->
-        <svg width="24" height="24" viewBox="0 0 26 26" aria-hidden="true">
+      <span id="avatar" class="avatar" aria-hidden="true">
+        <!-- The app's mark until a site is known: a file folder with a keyhole. -->
+        <svg width="22" height="22" viewBox="0 0 26 26">
           <path
             d="M3 8a2.5 2.5 0 0 1 2.5-2.5h4.6l2.2 2.5h8.2A2.5 2.5 0 0 1 23 10.5v8A2.5 2.5 0 0 1 20.5 21h-15A2.5 2.5 0 0 1 3 18.5Z"
             fill="none"
@@ -23,48 +24,91 @@
           <circle cx="13" cy="13.4" r="1.9" fill="currentColor" />
           <path d="M12.2 14.6h1.6l.5 2.8h-2.6Z" fill="currentColor" />
         </svg>
-        Dossier
       </span>
-      <span class="local-badge">Local analysis</span>
+      <div class="identity">
+        <p id="site" class="site">Dossier</p>
+        <p id="site-sub" class="site-sub">Privacy check</p>
+      </div>
+      <button type="button" class="icon-button" id="recheck" aria-label="Check this site again" title="Check again" disabled>
+        <span data-icon="refresh"></span>
+      </button>
+      <a class="icon-button" id="open-app" target="_blank" rel="noopener noreferrer" aria-label="Open the Dossier app" title="Open the Dossier app">
+        <span data-icon="open"></span>
+      </a>
     </header>
-    <div class="page-heading">
-      <h1>Privacy check</h1>
-      <p id="site" class="site">Current tab</p>
-    </div>
     <p id="status" class="visually-hidden" aria-live="polite"></p>
-    <main id="main">
-      <section class="loading">
-        <p class="working"><span class="spinner" aria-hidden="true"></span>Checking this site…</p>
-        <div class="skeleton" aria-hidden="true">
-          <span class="skeleton-item skeleton-item--verdict"></span>
-          <span class="skeleton-item skeleton-item--line"></span>
-          <span class="skeleton-item"></span>
-          <span class="skeleton-item"></span>
-          <span class="skeleton-item"></span>
-        </div>
+
+    <!-- This site: the verdict, then the evidence by kind. -->
+    <main id="main" class="view">
+      <section class="hero hero--loading">
+        <span class="disc"><span class="spinner" aria-hidden="true"></span></span>
+        <p class="hero-summary">Checking this site…</p>
       </section>
+      <div class="skeleton" aria-hidden="true">
+        <span class="skeleton-tiles">
+          <span class="skeleton-item skeleton-item--tile"></span>
+          <span class="skeleton-item skeleton-item--tile"></span>
+          <span class="skeleton-item skeleton-item--tile"></span>
+          <span class="skeleton-item skeleton-item--tile"></span>
+        </span>
+        <span class="skeleton-item"></span>
+        <span class="skeleton-item"></span>
+      </div>
     </main>
-    <footer class="foot">
-      <h2>Browsing preferences</h2>
-      <div class="preference">
-        <label class="toggle"><input type="checkbox" id="auto" /> Check every site I visit</label>
-        <p class="fine">Uses only what your browser already loaded. It contacts no site.</p>
+
+    <!-- The sites you opened since the browser started, from session storage. -->
+    <section id="sites" class="view" aria-labelledby="sites-title" hidden>
+      <div class="view-head">
+        <h1 id="sites-title">Sites you opened</h1>
+        <p class="fine">Since the browser started. Kept in this browser's memory, and gone when it closes.</p>
       </div>
-      <div class="preference">
-        <label class="toggle"><input type="checkbox" id="read-policies" /> Also read each site's policy automatically</label>
-        <p class="fine">
-          Reading a policy sends one request from this computer straight to the site, outside any VPN
-          or proxy that's only in your browser, and the request says it's from Dossier. Opening this
-          popup always reads it.
+      <ul id="site-list" class="rows"></ul>
+      <div class="forget">
+        <p id="forget-result" class="notice" aria-live="polite" hidden></p>
+        <button type="button" class="button" id="forget">Forget the sites I've visited</button>
+        <p class="fine" id="forget-note">
+          Clears which sites you've opened from the extension and the Dossier backend, including the
+          backend's log of requests for them. It can't recall requests already made: each site saw its
+          policy being read, and for each popup you opened, Gemini got the site's name and sentences
+          from its policy.
         </p>
       </div>
-      <details class="privacy-note">
-        <summary>How your data is handled</summary>
+    </section>
+
+    <!-- Browsing preferences, and how the data is handled. -->
+    <section id="settings" class="view" aria-labelledby="settings-title" hidden>
+      <div class="view-head">
+        <h1 id="settings-title">Settings</h1>
+      </div>
+      <ul class="rows">
+        <li class="row preference">
+          <label class="toggle"><input type="checkbox" id="auto" /> Check every site I visit</label>
+          <p class="fine">Uses only what your browser already loaded. It contacts no site.</p>
+        </li>
+        <li class="row preference">
+          <label class="toggle"><input type="checkbox" id="read-policies" /> Also read each site's policy automatically</label>
+          <p class="fine">
+            Reading a policy sends one request from this computer straight to the site, outside any VPN
+            or proxy that's only in your browser, and the request says it's from Dossier. Opening this
+            popup always reads it.
+          </p>
+        </li>
+      </ul>
+      <section class="card">
+        <h2>How your data is handled</h2>
         <p class="fine">
-          Policies are checked by fixed rules on this laptop and by Google's Gemini, never by a search
-          engine. Form fields are judged by their labels, not by what's in them.
+          Policies are checked by fixed rules on this laptop. When you open this popup, the policy's
+          selling and sharing sentences also go to Google's Gemini, with the site's name. Nothing goes
+          to a search engine. Form fields are judged by their labels, not by what's in them.
         </p>
-      </details>
-    </footer>
+        <p class="fine">Every request Dossier makes is listed in the outbound log in the Dossier app.</p>
+      </section>
+    </section>
+
+    <nav class="tabbar" aria-label="Dossier">
+      <button type="button" data-view="main" aria-current="page"><span data-icon="shield"></span>This site</button>
+      <button type="button" data-view="sites"><span data-icon="clock"></span>Sites</button>
+      <button type="button" data-view="settings"><span data-icon="sliders"></span>Settings</button>
+    </nav>
   </body>
 </html>

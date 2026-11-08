@@ -23,11 +23,11 @@ const SHOWS = [
   },
   {
     title: "What the policy allows",
-    body: "What the site says it collects, and whether it sells or shares it, with the exact sentence from its policy.",
+    body: "What the site says it collects, and whether it sells or shares it, with the exact sentence from its policy. When it promises not to sell but loads ad trackers, you see both side by side.",
   },
   {
     title: "Who's watching",
-    body: "Ad trackers, session-recording tools and data brokers the page loaded, each with the address it came from.",
+    body: "Ad trackers, session-recording tools and data brokers the page loaded, and the other sites you opened where each one showed up too.",
   },
   {
     title: "What a form asks for",
@@ -39,7 +39,7 @@ const SHOWS = [
   },
   {
     title: "Who sells its ads",
-    body: "How many ad companies the site's ads.txt lets sell its ad space, and the names it lists most.",
+    body: "How many ad companies the site's ads.txt lets sell its ad space, and the message an ad auction can send them about you, filled in from your own browser.",
   },
 ];
 
@@ -48,6 +48,7 @@ const GUARANTEES = [
   "Trackers are matched by hostname. The rest of a tracker's address, where account IDs hide, is dropped.",
   "Checking each site you visit contacts no site. Opening the popup reads that site's own policy and ads.txt, and logs each request.",
   "Nothing goes to a search engine or a Dossier server. Opening the popup sends the policy's selling and sharing sentences to Google's Gemini, and that's logged too.",
+  "One button forgets the sites you've visited, in the extension and on the backend, and tells you what it can't recall.",
 ];
 
 const RECEIPT = [
@@ -126,11 +127,11 @@ export default function ExtensionPage() {
                 <div className="ext-popup">
                   <Image
                     src="/extension/popup.png"
-                    width={760}
-                    height={2874}
+                    width={800}
+                    height={1200}
                     sizes="380px"
                     priority
-                    alt="The Dossier popup on a sample store's site. High risk. Main risk: it may sell your personal information. Below it, each risk with the policy sentence behind it."
+                    alt="The Dossier popup on a sample store's site. High risk. Main risk: it may sell your personal information. A button to opt out of sale and sharing, then tiles counting 5 risks, 5 trackers, 5 kinds of data it collects and 2 selling and sharing clauses."
                   />
                 </div>
               </div>

@@ -80,7 +80,10 @@ def public_https(url: str) -> str | None:
 
 
 class _TextParser(HTMLParser):
-    """Visible text, one line per block element. Scripts, styles and the <title> are skipped."""
+    """Visible text, one line per block element. Scripts, styles and the <title> are skipped.
+    Line breaks in the HTML source are spaces, as in a browser (except in <pre>): many sites wrap
+    their source mid-sentence, and keeping those breaks cut "We don't sell your data to third /
+    parties" in two."""
 
     SKIP = {"script", "style", "noscript", "template", "svg", "title", "iframe", "canvas", "select", "textarea"}
     BLOCK = {
@@ -93,22 +96,26 @@ class _TextParser(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.parts: list[str] = []
         self.skipping = 0
+        self.pre = 0
 
     def handle_starttag(self, tag: str, attrs: list) -> None:
         if tag in self.SKIP:
             self.skipping += 1
         elif tag in self.BLOCK:
             self.parts.append("\n")
+            self.pre += tag == "pre"
 
     def handle_endtag(self, tag: str) -> None:
         if tag in self.SKIP:
             self.skipping = max(0, self.skipping - 1)
         elif tag in self.BLOCK:
             self.parts.append("\n")
+            if tag == "pre":
+                self.pre = max(0, self.pre - 1)
 
     def handle_data(self, data: str) -> None:
         if not self.skipping:
-            self.parts.append(data)
+            self.parts.append(data if self.pre else re.sub(r"\s+", " ", data))
 
 
 def html_to_text(html: str) -> str:

@@ -1,8 +1,11 @@
 /* Dossier Privacy Check popup. Locally bundled type, no remote assets.
-   The tokens mirror frontend/app/globals.css — keep in sync. Same rules as the site:
-   spacing only from --space-*, type only from the --text-* / --leading-* pairs (weights 400, 500,
-   600), --radius for rectangles, --radius-full for pills you read, --radius-sm for a segment
-   inside a control, and shadows only on layers above the page. */
+   The shared tokens mirror frontend/app/globals.css — keep in sync. The popup adds a few of its
+   own (marked "popup only") for its app-shell layout: a fixed 400 × 600 window with the site in a
+   header, the content scrolling in between, and a tab bar at the bottom.
+   Rules: spacing only from --space-*, type only from the --text-* / --leading-* pairs (weights 400,
+   500, 600). Shapes: a block you look at (card, row, tile) is --radius-lg, a well inside a block is
+   --radius, a button you press is a pill, and so is a label you read. No borders on blocks: fills
+   separate them. Shadows only on layers above the page (the popup has none). */
 
 @font-face {
   font-family: Geist;
@@ -40,10 +43,8 @@
 
   --radius-sm: 4px;
   --radius: 8px;
+  --radius-lg: 16px; /* popup only: cards, rows and tiles */
   --radius-full: 999px;
-
-  --shadow-raise: 0 4px 16px rgb(0 0 0 / 0.32);
-  --shadow-float: 0 16px 48px rgb(0 0 0 / 0.44), 0 2px 8px rgb(0 0 0 / 0.24);
 
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
@@ -54,6 +55,8 @@
   --bg: #060b1a;
   --surface: #0f1b38;
   --sunken: #0a1430;
+  --raised: #17244a; /* popup only: a control or chosen tile on a card */
+  --raised-hover: #1f2e5a; /* popup only */
   --text: #eef2fb;
   --muted: #a3b0c8;
   --border: #22325a;
@@ -61,7 +64,9 @@
   --accent: #6a5af9;
   --accent-hover: #7b6dff;
   --accent-ink: #a99fff;
+  --accent-ink-hover: #bdb5ff; /* popup only: the primary button's hover */
   --on-accent: #ffffff;
+  --on-accent-ink: #060b1a; /* popup only: text on an --accent-ink fill */
   --proven: #3ddc97;
   --likely: #ffb547;
   --possible: #b69cff;
@@ -83,11 +88,14 @@
   --sans: Geist, system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "Geist Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
   color-scheme: dark;
-  scrollbar-color: var(--border) var(--bg);
 }
 
 * {
   box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
 }
 
 html,
@@ -95,9 +103,14 @@ body {
   margin: 0;
 }
 
+/* The window: header, the view that scrolls, and the tab bar. */
 body {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   width: 400px;
   max-width: 100vw;
+  height: 600px;
+  overflow: hidden;
   background: var(--bg);
   color: var(--text);
   font-family: var(--sans);
@@ -108,6 +121,11 @@ body {
 }
 
 p {
+  margin: 0;
+}
+
+h1,
+h2 {
   margin: 0;
 }
 
@@ -132,6 +150,9 @@ a {
 :focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
+}
+
+a:focus-visible {
   border-radius: var(--radius-sm);
 }
 
@@ -144,154 +165,226 @@ a {
   white-space: nowrap;
 }
 
-/* ---------- Header: the mark, and where the analysis runs ---------- */
+svg {
+  display: block;
+  flex: none;
+}
+
+/* ---------- Header: the site in this tab, and two actions ---------- */
 
 .top {
-  position: sticky;
-  top: 0;
-  z-index: 1;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: var(--space-3);
-  padding: var(--space-3) var(--space-5);
-  background: var(--bg);
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
   border-bottom: 1px solid var(--border);
 }
 
-.brand {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: var(--text-base);
-  line-height: var(--leading-base);
-  font-weight: 600;
-}
-
-.brand svg {
+/* The site's first letter, tinted by its risk once it's known. */
+.avatar {
+  display: grid;
   flex: none;
-  width: 24px;
-  height: 24px;
-}
-
-/* A fact about the tool, read-only: a pill. */
-.local-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: 0 var(--space-2);
-  color: var(--muted);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-full);
-  font-size: var(--text-xs);
-  line-height: var(--leading-sm);
-  font-weight: 500;
-}
-
-.local-badge::before {
-  content: "";
-  flex: none;
-  width: 6px;
-  height: 6px;
-  background: var(--proven);
+  place-items: center;
+  width: var(--space-10);
+  height: var(--space-10);
+  color: var(--text);
+  background: var(--raised);
   border-radius: 50%;
-}
-
-/* ---------- Page heading: what this is and which site it's about ---------- */
-
-.page-heading {
-  padding: var(--space-5) var(--space-5) var(--space-4);
-}
-
-.page-heading h1 {
-  margin: 0;
-  font-size: var(--text-2xl);
-  line-height: var(--leading-2xl);
+  font-size: var(--text-lg);
+  line-height: var(--leading-lg);
   font-weight: 600;
-  letter-spacing: -0.02em;
+  text-transform: uppercase;
+}
+
+.avatar[data-risk="high"] {
+  color: var(--high);
+  background: var(--high-bg);
+}
+.avatar[data-risk="medium"] {
+  color: var(--medium);
+  background: var(--medium-bg);
+}
+.avatar[data-risk="low"] {
+  color: var(--low);
+  background: var(--low-bg);
+}
+
+.identity {
+  flex: 1;
+  min-width: 0;
 }
 
 .site {
-  margin: var(--space-1) 0 0;
-  color: var(--muted);
-  font-family: var(--mono);
-  font-size: var(--text-xs);
-  line-height: var(--leading-xs);
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  font-size: var(--text-base);
+  line-height: var(--leading-base);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* ---------- Content ---------- */
+.site-sub {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
-main {
+/* Round, borderless icon buttons. */
+.icon-button {
   display: grid;
-  gap: var(--space-6);
-  padding: 0 var(--space-5) var(--space-6);
+  flex: none;
+  place-items: center;
+  width: var(--space-10);
+  height: var(--space-10);
+  padding: 0;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) ease;
+}
+
+.icon-button svg {
+  width: 20px;
+  height: 20px;
+}
+
+.icon-button:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.icon-button:disabled {
+  color: var(--border-strong);
+  cursor: default;
+}
+
+/* Checking again: the arrow turns until the result lands. */
+.icon-button[aria-busy="true"] {
+  color: var(--accent-ink);
+  cursor: progress;
+}
+
+.icon-button[aria-busy="true"] svg {
+  animation: spin 700ms linear infinite;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .icon-button:hover:not(:disabled) {
+    background: var(--surface);
+  }
+}
+
+/* ---------- Views: the content between the header and the tab bar ---------- */
+
+.view {
+  display: grid;
+  align-content: start;
+  gap: var(--space-4);
+  min-height: 0;
+  padding: var(--space-4);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none; /* the cut-off card shows there's more; wheel, keys and touch scroll */
 }
 
 section {
   min-width: 0;
 }
 
-/* Section headings: sentence case, with an optional count pill. */
-h2 {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  margin: 0 0 var(--space-2);
-  font-size: var(--text-sm);
-  line-height: var(--leading-sm);
-  font-weight: 600;
-}
-
-h2 > span + span {
-  padding: 0 var(--space-2);
-  color: var(--accent-ink);
-  background: color-mix(in srgb, var(--accent) 16%, var(--bg));
-  border-radius: var(--radius-full);
-  font-size: var(--text-xs);
-  line-height: var(--leading-sm);
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-}
-
-/* Messages: offline, nothing to check, errors, and the loading state. */
-.message {
-  padding: var(--space-5);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-}
-
-.message h1 {
-  margin: 0 0 var(--space-2);
-  font-size: var(--text-lg);
-  line-height: var(--leading-lg);
-  font-weight: 600;
-}
-
-.message > p {
-  margin: 0 0 var(--space-2);
-  color: var(--muted);
-}
-
-.message > :last-child {
-  margin-bottom: 0;
-}
-
-.working {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  color: var(--muted);
-}
-
-/* While a check runs: the shape of the result, so the popup doesn't jump when it lands. */
-.loading {
+.view-head {
   display: grid;
-  gap: var(--space-4);
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-1) 0;
 }
 
+.view-head h1 {
+  font-size: var(--text-2xl);
+  line-height: var(--leading-2xl);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+/* ---------- The verdict card, also used for messages and while loading ---------- */
+
+.hero {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-2);
+  padding: var(--space-6) var(--space-5) var(--space-5);
+  text-align: center;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+}
+
+.disc {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin-bottom: var(--space-2);
+  color: var(--accent-ink);
+  background: var(--raised);
+  border-radius: 50%;
+}
+
+.disc svg {
+  width: 28px;
+  height: 28px;
+}
+
+.hero--high .disc {
+  color: var(--high);
+  background: var(--high-bg);
+}
+.hero--medium .disc {
+  color: var(--medium);
+  background: var(--medium-bg);
+}
+.hero--low .disc {
+  color: var(--low);
+  background: var(--low-bg);
+}
+
+.hero h1 {
+  font-size: var(--text-2xl);
+  line-height: var(--leading-2xl);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.hero-summary {
+  max-width: 36ch;
+  color: var(--muted);
+  text-wrap: pretty;
+  overflow-wrap: anywhere;
+}
+
+.hero .actions {
+  width: 100%;
+  margin-top: var(--space-3);
+}
+
+/* The start command when the backend is off. */
+.hero .code {
+  justify-self: stretch;
+  margin: var(--space-2) 0 0;
+  text-align: left;
+}
+
+.hero--loading {
+  align-content: center;
+  min-height: 200px;
+}
+
+/* While a check runs: the shape of the result, so the popup doesn't jump when it lands. It fades
+   in only if the wait passes 150 ms. */
 .skeleton {
   display: grid;
   gap: var(--space-2);
@@ -300,22 +393,22 @@ h2 > span + span {
     skeleton-pulse 1.4s ease-in-out 350ms infinite;
 }
 
+.skeleton-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
 .skeleton-item {
-  height: var(--space-10);
-  background: var(--sunken);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  display: block;
+  height: var(--space-12);
+  background: var(--surface);
+  border-radius: var(--radius-lg);
 }
 
-.skeleton-item--verdict {
-  height: 88px;
-}
-
-.skeleton-item--line {
-  width: 40%;
-  height: var(--space-3);
-  border: 0;
-  border-radius: var(--radius-sm);
+.skeleton-item--tile {
+  height: 100px;
 }
 
 @keyframes skeleton-in {
@@ -330,65 +423,23 @@ h2 > span + span {
   }
 }
 
-/* The verdict: the loudest thing in the popup, tinted by risk. */
-.verdict {
-  padding: var(--space-4);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-}
-
-.verdict-label {
-  font-size: var(--text-xl);
-  line-height: var(--leading-xl);
-  font-weight: 600;
-}
-
-.verdict-summary {
-  margin-top: var(--space-1);
-  color: var(--muted);
-}
-
-.verdict--high {
-  background: var(--high-bg);
-  border-color: color-mix(in srgb, var(--high) 40%, transparent);
-}
-.verdict--high .verdict-label {
-  color: var(--high);
-}
-.verdict--medium {
-  background: var(--medium-bg);
-  border-color: color-mix(in srgb, var(--medium) 40%, transparent);
-}
-.verdict--medium .verdict-label {
-  color: var(--medium);
-}
-.verdict--low {
-  background: var(--low-bg);
-  border-color: color-mix(in srgb, var(--low) 40%, transparent);
-}
-.verdict--low .verdict-label {
-  color: var(--low);
-}
-
 /* A people-search site: what it is, and the two ways out. */
 .broker {
   display: grid;
   gap: var(--space-2);
-  padding: var(--space-4);
-  background: var(--surface);
-  border: 1px solid color-mix(in srgb, var(--high) 40%, transparent);
-  border-radius: var(--radius);
+  padding: var(--space-5);
+  background: var(--high-bg);
+  border-radius: var(--radius-lg);
 }
 
 .broker-title {
   color: var(--high);
+  font-size: var(--text-base);
+  line-height: var(--leading-base);
   font-weight: 600;
 }
 
-/* Stacked, so neither label wraps at 400px. */
 .broker .actions {
-  display: grid;
   margin-top: var(--space-2);
 }
 
@@ -397,34 +448,119 @@ h2 > span + span {
   gap: var(--space-2);
   padding: var(--space-4);
   background: var(--surface);
-  border: 1px dashed var(--border-strong);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
 }
 
-/* ---------- Rows: risks, what it collects, what the page does, selling and sharing ---------- */
+/* ---------- Tiles: the evidence by kind, with counts. They're the tabs for the panel below. ---------- */
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.tile {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-1);
+  color: var(--muted);
+  font: inherit;
+  background: var(--surface);
+  border: 0;
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) ease;
+}
+
+.tile svg {
+  width: 24px;
+  height: 24px;
+  color: var(--accent-ink);
+}
+
+.tile-count {
+  color: var(--text);
+  font-size: var(--text-lg);
+  line-height: var(--leading-lg);
+  font-weight: 600;
+}
+
+.tile-label {
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  font-weight: 500;
+}
+
+.tile[aria-selected="true"] {
+  color: var(--text);
+  background: var(--raised);
+  box-shadow: inset 0 0 0 1.5px var(--accent-ink);
+}
+
+.tile:active {
+  transform: scale(0.97);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .tile:hover {
+    background: var(--raised);
+  }
+}
+
+.panel {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* What the panel shows, in a line, when the tile's word needs it. */
+.lead {
+  padding: 0 var(--space-1);
+  color: var(--muted);
+}
+
+.empty {
+  padding: var(--space-5) var(--space-4);
+  color: var(--muted);
+  text-align: center;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+}
+
+/* ---------- Rows: one card each ---------- */
 
 .rows {
+  display: grid;
+  gap: var(--space-2);
   margin: 0;
   padding: 0;
-  overflow: hidden;
   list-style: none;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
 }
 
-.row + .row {
-  border-top: 1px solid var(--border);
+.row {
+  min-width: 0;
+  overflow: hidden;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
 }
 
 summary {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-3);
+  gap: var(--space-3);
+  min-height: var(--space-12);
+  padding: var(--space-3) var(--space-4);
   cursor: pointer;
   list-style: none;
   transition: background-color var(--dur-fast) ease;
+}
+
+summary:focus-visible {
+  outline-offset: -2px; /* the row clips anything outside it */
+  border-radius: var(--radius-lg);
 }
 
 summary::-webkit-details-marker {
@@ -450,7 +586,10 @@ details[open] > summary::after {
 
 @media (hover: hover) and (pointer: fine) {
   .rows summary:hover {
-    background: var(--sunken);
+    background: var(--raised);
+  }
+  .rows .receipt summary:hover {
+    background: none;
   }
 }
 
@@ -463,8 +602,9 @@ details[open] > summary::after {
 .plain {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-3);
+  gap: var(--space-3);
+  min-height: var(--space-12);
+  padding: var(--space-3) var(--space-4);
   color: var(--muted);
 }
 
@@ -499,9 +639,9 @@ details[open] > summary::after {
 
 .tag {
   max-width: 116px;
-  color: var(--muted);
-  background: var(--sunken);
   overflow: hidden;
+  color: var(--muted);
+  background: var(--raised);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -512,14 +652,14 @@ details[open] > summary::after {
 }
 
 .detail {
-  margin: 0 var(--space-3) var(--space-3);
+  margin: 0 var(--space-4) var(--space-3);
   color: var(--muted);
   overflow-wrap: anywhere;
 }
 
 /* A quote from the policy, in a well inside the row. */
 .quote {
-  margin: 0 var(--space-3) var(--space-3);
+  margin: 0 var(--space-4) var(--space-3);
   padding: var(--space-2) var(--space-3);
   background: var(--sunken);
   border-radius: var(--radius);
@@ -540,7 +680,9 @@ details[open] > summary::after {
 .also {
   display: grid;
   gap: var(--space-2);
-  margin-top: var(--space-3);
+  padding: var(--space-4);
+  background: var(--surface);
+  border-radius: var(--radius-lg);
 }
 
 .also > p {
@@ -572,16 +714,89 @@ details[open] > summary::after {
   color: var(--medium);
 }
 
-/* ---------- How the check was made, and the re-check buttons ---------- */
+/* The visit in plain words, above the page's rows. The starred phrase is the part to notice. */
+.claims {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+}
+
+.claim {
+  overflow-wrap: anywhere;
+}
+
+.claim strong {
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+/* Where else a tracker was seen, at the end of its row. */
+.seen {
+  flex: none;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+/* How Dossier knows, under a risk's evidence. */
+.how {
+  margin: 0 var(--space-4) var(--space-3);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  overflow-wrap: anywhere;
+}
+
+.how strong {
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* The bid request an ad auction can send: a receipt inside the ad sellers row. */
+.receipt {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0 var(--space-4) var(--space-3);
+}
+
+.receipt summary {
+  min-height: 0;
+  padding: 0;
+  color: var(--accent-ink);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  font-weight: 500;
+}
+
+.receipt summary::after {
+  margin-left: var(--space-2);
+  border-color: var(--accent-ink);
+}
+
+.receipt summary:focus-visible {
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.receipt .code {
+  max-height: 240px;
+  margin: 0;
+  overflow: auto;
+}
+
+/* ---------- How the check was made ---------- */
 
 .info {
   display: grid;
   gap: var(--space-2);
-  padding-top: var(--space-4);
-  border-top: 1px solid var(--border);
+  padding: var(--space-2) var(--space-1) 0;
 }
 
 .notes summary {
+  min-height: 0;
   padding: 0;
   color: var(--muted);
   font-size: var(--text-xs);
@@ -590,6 +805,11 @@ details[open] > summary::after {
 
 .notes summary::after {
   margin-left: var(--space-1);
+}
+
+.notes summary:focus-visible {
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
 }
 
 .notes ul {
@@ -601,59 +821,58 @@ details[open] > summary::after {
 }
 
 .actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   gap: var(--space-2);
+}
+
+.info .button {
   margin-top: var(--space-2);
 }
 
-.actions > .button {
-  flex: 1;
-}
-
-/* ---------- Buttons: rectangles you press ---------- */
+/* ---------- Buttons: pills you press ---------- */
 
 .button {
   position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 40px;
-  padding: var(--space-2) var(--space-4);
+  min-height: var(--space-12);
+  padding: var(--space-3) var(--space-5);
   color: var(--text);
   font: inherit;
   font-weight: 600;
   text-align: center;
   text-decoration: none;
   overflow-wrap: anywhere;
-  background: transparent;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius);
+  background: var(--raised);
+  border: 0;
+  border-radius: var(--radius-full);
   cursor: pointer;
   transition:
     transform var(--dur-fast) var(--ease-out),
-    background-color var(--dur-fast) ease,
-    border-color var(--dur-fast) ease;
+    background-color var(--dur-fast) ease;
 }
 
-.button:active {
+.button:active:not(:disabled) {
   transform: scale(0.97);
 }
 
+.button:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
 .button--primary {
-  width: 100%;
-  color: var(--on-accent);
-  background: var(--accent);
-  border-color: var(--accent);
+  color: var(--on-accent-ink);
+  background: var(--accent-ink);
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .button:hover {
-    background: var(--surface);
+  .button:hover:not(:disabled) {
+    background: var(--raised-hover);
   }
-  .button--primary:hover {
-    background: var(--accent-hover);
-    border-color: var(--accent-hover);
+  .button--primary:hover:not(:disabled) {
+    background: var(--accent-ink-hover);
   }
 }
 
@@ -677,7 +896,7 @@ details[open] > summary::after {
 }
 
 .button--primary[aria-busy="true"]::after {
-  border-color: var(--on-accent);
+  border-color: var(--on-accent-ink);
   border-right-color: transparent;
 }
 
@@ -688,7 +907,6 @@ details[open] > summary::after {
   font-size: var(--text-xs);
   line-height: var(--leading-xs);
   background: var(--sunken);
-  border: 1px solid var(--border);
   border-radius: var(--radius);
   white-space: pre-wrap;
 }
@@ -704,6 +922,12 @@ details[open] > summary::after {
   animation: spin 700ms linear infinite;
 }
 
+.disc .spinner {
+  width: 24px;
+  height: 24px;
+  border-width: 2.5px;
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -716,26 +940,61 @@ details[open] > summary::after {
   }
 }
 
-/* ---------- Footer: the two settings, and how the data stays local ---------- */
+/* ---------- Sites you opened ---------- */
 
-.foot {
-  padding: var(--space-5);
-  background: var(--bg);
-  border-top: 1px solid var(--border);
+.site-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
 }
 
-.foot h2 {
-  margin-bottom: 0;
+.site-row .avatar {
+  width: var(--space-8);
+  height: var(--space-8);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
 }
+
+.site-row-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.site-row-name {
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.site-row-sub {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+}
+
+.forget {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.forget > .fine {
+  padding: 0 var(--space-1);
+}
+
+.notice {
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+}
+
+/* ---------- Settings ---------- */
 
 .preference {
   display: grid;
   gap: var(--space-1);
-  padding: var(--space-3) 0;
-}
-
-.preference + .preference {
-  border-top: 1px solid var(--border);
+  padding: var(--space-3) var(--space-4);
 }
 
 .toggle {
@@ -754,23 +1013,21 @@ details[open] > summary::after {
   appearance: none;
   position: relative;
   flex: none;
-  width: 32px;
+  width: 36px;
   height: 20px;
   margin: 0;
-  background: var(--border);
-  border: 1px solid var(--border-strong);
+  background: var(--raised);
   border-radius: var(--radius-full);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
   cursor: pointer;
-  transition:
-    background-color var(--dur-fast) ease,
-    border-color var(--dur-fast) ease;
+  transition: background-color var(--dur-fast) ease;
 }
 
 .toggle input::before {
   content: "";
   position: absolute;
-  top: 2px;
-  left: 2px;
+  top: 3px;
+  left: 3px;
   width: 14px;
   height: 14px;
   background: var(--muted);
@@ -781,13 +1038,31 @@ details[open] > summary::after {
 }
 
 .toggle input:checked {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--accent-ink);
+  box-shadow: none;
 }
 
 .toggle input:checked::before {
-  background: var(--on-accent);
-  transform: translateX(12px);
+  background: var(--on-accent-ink);
+  transform: translateX(16px);
+}
+
+.toggle input:focus-visible {
+  border-radius: var(--radius-full);
+}
+
+.card {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+}
+
+.card h2 {
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  font-weight: 600;
 }
 
 .fine {
@@ -796,25 +1071,53 @@ details[open] > summary::after {
   line-height: var(--leading-xs);
 }
 
-.privacy-note {
+/* ---------- Tab bar ---------- */
+
+.tabbar {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  background: var(--bg);
   border-top: 1px solid var(--border);
 }
 
-.privacy-note summary {
-  padding: var(--space-3) 0 0;
-  color: var(--accent-ink);
+.tabbar button {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2) 0;
+  color: var(--muted);
+  font: inherit;
   font-size: var(--text-xs);
   line-height: var(--leading-xs);
   font-weight: 500;
+  background: none;
+  border: 0;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition:
+    color var(--dur-fast) ease,
+    transform var(--dur-fast) var(--ease-out);
 }
 
-.privacy-note summary::after {
-  margin-left: var(--space-2);
-  border-color: var(--accent-ink);
+.tabbar svg {
+  width: 24px;
+  height: 24px;
 }
 
-.privacy-note .fine {
-  margin-top: var(--space-2);
+.tabbar button[aria-current="page"] {
+  color: var(--accent-ink);
+}
+
+.tabbar button:active {
+  transform: scale(0.97);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .tabbar button:hover:not([aria-current="page"]) {
+    color: var(--text);
+  }
 }
 
 /* ---------- Reduced motion and forced colors ---------- */
@@ -822,11 +1125,17 @@ details[open] > summary::after {
 @media (prefers-reduced-motion: reduce) {
   summary::after,
   .button,
+  .icon-button,
+  .tile,
+  .tabbar button,
   .toggle input,
   .toggle input::before {
     transition: none;
   }
-  .button:active {
+  .button:active:not(:disabled),
+  .icon-button:active:not(:disabled),
+  .tile:active,
+  .tabbar button:active {
     transform: none;
   }
   .skeleton {
@@ -835,6 +1144,7 @@ details[open] > summary::after {
   }
   /* Keep a sign of life without movement. */
   .spinner,
+  .icon-button[aria-busy="true"] svg,
   .button[aria-busy="true"]::after {
     animation: spinner-still 1.2s ease-in-out infinite;
   }
@@ -849,5 +1159,14 @@ details[open] > summary::after {
   }
   .button[aria-busy="true"] {
     color: ButtonText;
+  }
+  .tile[aria-selected="true"] {
+    outline: 2px solid Highlight;
+  }
+  .row,
+  .hero,
+  .card,
+  .tile {
+    border: 1px solid CanvasText;
   }
 }
