@@ -8,7 +8,7 @@ Every date carries a source label. A missing date is null with source "unknown",
 
 import re
 from datetime import date
-from typing import Annotated, Literal, get_args
+from typing import Literal, get_args
 from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -279,8 +279,13 @@ class SitePolicyRequest(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
     origin: str = Field(max_length=300)  # "https://www.example.com"
-    policy_urls: list[Annotated[str, Field(max_length=2000)]] = Field(default=[], max_length=5)
-    opt_out_url: str | None = Field(default=None, max_length=2000)  # a "Do Not Sell or Share" link on the page
+    # Links from the page. An over-long one is dropped rather than failing the request, so a hostile
+    # page can't make the whole check fail with one silly link.
+    policy_urls: list[str] = Field(default=[], max_length=5)
+    opt_out_url: str | None = None  # a "Do Not Sell or Share" link on the page
+    # False for the automatic check on each visit: it then uses only what the browser already saw
+    # and contacts no site. The popup sends True (opening it is the user asking).
+    read_policy: bool = True
     # The text of the policy page open in the browser, sent instead of fetching it. Then
     # policy_urls[0] is that page's URL, and nothing leaves the laptop at all.
     page_text: str | None = Field(default=None, max_length=500_000)
@@ -289,9 +294,19 @@ class SitePolicyRequest(BaseModel):
     # Read from the page in the browser, never from what's typed: the hostnames (only the hostnames)
     # of other sites the page loaded things from, and the kinds of personal data its form fields
     # ask for, as fixed words.
-    third_party_hosts: list[Annotated[str, Field(max_length=253)]] = Field(default=[], max_length=200)
+    third_party_hosts: list[str] = Field(default=[], max_length=200)
     asks_for: list[FormField] = Field(default=[], max_length=len(FORM_FIELDS))
     insecure_fields: list[FormField] = Field(default=[], max_length=len(FORM_FIELDS))  # asked for without https
+
+    @field_validator("policy_urls")
+    @classmethod
+    def _drop_long_links(cls, v: list[str]) -> list[str]:
+        return [u for u in v if len(u) <= 2000]
+
+    @field_validator("opt_out_url")
+    @classmethod
+    def _drop_long_link(cls, v: str | None) -> str | None:
+        return v if v and len(v) <= 2000 else None
 
     @field_validator("third_party_hosts")
     @classmethod
@@ -353,7 +368,8 @@ class AdSellers(BaseModel):
 
 class SitePolicyResponse(BaseModel):
     site: str  # "example.com"
-    status: Literal["ok", "no_policy", "unreadable"]
+    # "not_read": the automatic check, which contacts no site, had no policy result to reuse yet.
+    status: Literal["ok", "no_policy", "unreadable", "not_read"]
     policy_url: str | None = None
     # "site": this laptop fetched it from the site itself. "browser": the user's browser sent the
     # text of the policy page it had open.

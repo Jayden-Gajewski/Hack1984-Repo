@@ -1,13 +1,19 @@
-// Dossier service worker. When a page loads, content.js reports the site's privacy links; this
-// asks the Dossier backend on this laptop for the quick check and sets the toolbar badge. The
-// local LLM pass runs only when you open the popup, so browsing doesn't keep the model busy.
+// Dossier service worker. When a page loads, content.js reports what it saw; this asks the Dossier
+// backend on this laptop for a check and sets the toolbar badge.
+//
+// The automatic check contacts no site: it judges what the browser already loaded (trackers, form
+// fields, people-search sites), plus any policy result the user already asked for. Reading a
+// site's policy is a request from this computer's own connection, outside any VPN or proxy set up
+// only in the browser, so it waits until the popup opens, unless the user turns on "Also read each
+// site's policy automatically". The local LLM pass also runs only from the popup.
 import { checkPage, isCheckable, readPage, rememberResult, setBadge } from "./shared.js";
 
 chrome.runtime.onMessage.addListener((message, sender) => {
   // manifest.json keeps the extension out of incognito windows; this is a second guard.
-  if (message?.type === "page" && sender.tab?.id !== undefined && sender.frameId === 0 && !sender.tab.incognito) {
-    onPage(sender.tab.id, message);
-  }
+  if (message?.type !== "page" || sender.tab?.id === undefined || sender.frameId !== 0 || sender.tab.incognito) return;
+  // The browser says which site sent the message; use that rather than what the message claims.
+  const origin = sender.origin && sender.origin !== "null" ? sender.origin : message.origin;
+  onPage(sender.tab.id, { ...message, origin });
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {
@@ -18,22 +24,23 @@ async function onPage(tabId, page) {
   const key = `tab:${tabId}`;
   const before = (await chrome.storage.session.get(key))[key];
   await chrome.storage.session.set({ [key]: page });
-  const { auto = true } = await chrome.storage.local.get("auto");
+  const { auto = true, readPolicies = false } = await chrome.storage.local.get(["auto", "readPolicies"]);
   if (!auto || !isCheckable(page.origin)) {
     await setBadge(tabId, null);
     return;
   }
   // content.js reports each page twice (again once trackers have loaded): don't flash "…" twice.
-  if (before?.origin !== page.origin) await setBadge(tabId, "checking");
+  if (readPolicies && before?.origin !== page.origin) await setBadge(tabId, "checking");
   let state;
   try {
+    // A policy page open in the tab is read from the screen: that contacts no site either.
     const pageText = page.isPolicyPage ? await readPage(tabId) : null;
-    state = await checkPage(page, { pageText });
+    state = await checkPage(page, { pageText, readPolicy: readPolicies });
     await rememberResult(page.origin, state);
   } catch {
     state = "offline";
   }
-  // The tab may have moved on to another site while the policy was read.
+  // The tab may have moved on to another site while the check ran.
   const current = (await chrome.storage.session.get(key))[key];
   if (current?.origin === page.origin) await setBadge(tabId, state);
 }

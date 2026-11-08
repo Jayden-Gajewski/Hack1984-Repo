@@ -27,7 +27,7 @@ export function isCheckable(origin) {
  * pageText: {text, url} when the policy is the page open in the browser (then nothing is
  * fetched from the site). Resolves to the backend's SitePolicyResponse (backend/app/models.py).
  */
-export async function checkPage(page, { deep = false, refresh = false, pageText = null } = {}) {
+export async function checkPage(page, { deep = false, refresh = false, pageText = null, readPolicy = true } = {}) {
   const body = {
     origin: page.origin,
     policy_urls: pageText ? [pageText.url] : (page.policyUrls ?? []),
@@ -35,6 +35,8 @@ export async function checkPage(page, { deep = false, refresh = false, pageText 
     page_text: pageText?.text ?? null,
     deep,
     refresh,
+    read_policy: readPolicy, // false: contact no site, judge only what the browser saw
+
     third_party_hosts: page.thirdPartyHosts ?? [],
     asks_for: page.asksFor ?? [],
     insecure_fields: page.insecureFields ?? [],
@@ -91,10 +93,11 @@ export async function cachedResult(origin) {
   return (await chrome.storage.session.get(key))[key] ?? null;
 }
 
+// Only real concerns get a badge. Finding nothing isn't proof a site is safe, so it shows no
+// green "OK", just the tooltip.
 const BADGES = {
   high: { text: "!!", color: "#b42318", words: "high privacy risk" },
   medium: { text: "!", color: "#8a5300", words: "some privacy risk" },
-  low: { text: "OK", color: "#17663f", words: "low privacy risk" },
 };
 
 /** state: a SitePolicyResponse, "checking", "offline" or null (no badge). */
@@ -112,9 +115,13 @@ export async function setBadge(tabId, state) {
     if (badge) {
       ({ text, color } = badge);
       title = `Dossier: ${badge.words} on ${state.site}`;
-    } else {
+    } else if (state.status === "unreadable" || state.status === "no_policy") {
       text = "?";
       title = `Dossier: couldn't read ${state.site}'s privacy policy`;
+    } else if (state.status === "not_read") {
+      title = `Dossier: nothing concerning seen on ${state.site}. Open to read its privacy policy.`;
+    } else {
+      title = `Dossier: nothing concerning found on ${state.site}`;
     }
   }
   try {

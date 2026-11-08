@@ -85,7 +85,7 @@ Details for each stage are in `backend/app/stages/CLAUDE.md`.
 
 `extension/` checks every site you visit (`POST /api/site-policy`, `app/site_policy.py`). It shows what the privacy policy says the company collects and sells or shares, and what the page itself does: known trackers (`data/trackers.json`), the kinds of personal data its forms ask for, whether it's a people-search site, and its `ads.txt` ad sellers. It keeps the same rules:
 - The extension talks only to the backend on localhost. From the page it sends only hostnames and fixed field-kind words, never what's typed or a full tracker URL.
-- Only the visited site is contacted: its policy, and its `ads.txt` when the popup opens. The backend fetches both straight from the site through `outbound.py`, and doesn't follow links or redirects to other sites. No search API is used.
+- The automatic check on each visit contacts no site. When the popup opens, only the visited site is contacted, for its policy and its `ads.txt`. The backend fetches both straight from the site through `outbound.py`, and doesn't follow links or redirects to other sites. No search API is used.
 - The analysis runs on Ollama.
 - Results stay in memory, because the sites you visit are browsing history.
 

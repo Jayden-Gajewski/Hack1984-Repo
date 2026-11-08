@@ -26,19 +26,20 @@ const TRACKER = {
 const FIELD_LABEL = {
   email: "email address",
   phone: "phone number",
-  address: "home address",
+  address: "street address",
   birthdate: "date of birth",
   password: "password",
   card: "card number",
   bank_account: "bank account number",
   ssn: "Social Security number",
-  government_id: "passport or driver's license number",
+  government_id: "government ID number",
 };
 
 const main = document.getElementById("main");
 const siteLabel = document.getElementById("site");
 const statusLine = document.getElementById("status");
 const autoBox = document.getElementById("auto");
+const readBox = document.getElementById("read-policies");
 
 let tabId = null;
 let page = null;
@@ -207,7 +208,7 @@ function unreadableHelp(result) {
     "section",
     { class: "help" },
     h("p", {}, text),
-    result.policy_url ? h("p", {}, link(result.policy_url, "Open the privacy policy ↗")) : null,
+    result.policy_url ? h("p", {}, link(result.policy_url, `Open the privacy policy on ${bareHost(result.policy_url)} ↗`)) : null,
   );
 }
 
@@ -334,7 +335,8 @@ function render(result) {
   const json = JSON.stringify(result);
   if (json === shown) return; // polling: nothing new yet
   shown = json;
-  const unread = result.status === "no_policy" ? "No privacy policy found" : "Couldn't read the policy";
+  const unread =
+    { no_policy: "No privacy policy found", not_read: "Nothing concerning seen yet" }[result.status] ?? "Couldn't read the policy";
   const verdict =
     result.status === "ok" && !result.risks.length
       ? "Nothing concerning found"
@@ -348,7 +350,7 @@ function render(result) {
       h("p", { class: "verdict-summary" }, result.summary),
     ),
     result.broker ? brokerCard(result.broker) : null,
-    result.status !== "ok" ? unreadableHelp(result) : null,
+    result.status === "unreadable" || result.status === "no_policy" ? unreadableHelp(result) : null,
     result.risks.length ? section("Risks", null, h("ul", { class: "rows" }, result.risks.map(riskRow))) : null,
     pageSection(result),
     result.collected.length
@@ -407,6 +409,15 @@ async function start() {
   tabId = tab?.id ?? null;
   const key = `tab:${tabId}`;
   page = tabId === null ? null : ((await chrome.storage.session.get(key))[key] ?? null);
+  // activeTab lets the popup see the tab's address. If the extension hasn't heard from this page
+  // (Back from the cache, a PDF, a browser page), don't show the last site's result.
+  if (page && tab?.url) {
+    try {
+      if (new URL(tab.url).origin !== page.origin) page = null;
+    } catch {
+      page = null;
+    }
+  }
   if (!page) {
     renderMessage("Nothing to check here", "Dossier checks public websites. If this is one, reload the page so the extension can see it.");
     return;
@@ -423,9 +434,11 @@ async function start() {
   await run({ deep: true, pageText });
 }
 
-chrome.storage.local.get("auto").then(({ auto = true }) => {
+chrome.storage.local.get(["auto", "readPolicies"]).then(({ auto = true, readPolicies = false }) => {
   autoBox.checked = auto;
+  readBox.checked = readPolicies;
 });
 autoBox.addEventListener("change", () => chrome.storage.local.set({ auto: autoBox.checked }));
+readBox.addEventListener("change", () => chrome.storage.local.set({ readPolicies: readBox.checked }));
 
 start();

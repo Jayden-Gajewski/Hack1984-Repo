@@ -23,7 +23,7 @@ from fastapi import Cookie, Depends, FastAPI, Header, HTTPException, Query, Requ
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 
-from app import auth, db, explain, footprint, outbound, site_policy
+from app import auth, db, explain, extension_package, footprint, outbound, site_policy
 from app.clients import ollama
 from app.companies import add_company, all_companies
 from app.config import LOCAL_HOSTS, get_settings
@@ -371,6 +371,18 @@ async def inbox_check():
     """Stage 7: runs locally on the mock inbox, no search."""
     session.alias_hits = await _call("Stage 7 (inbox check)", s7_aliases.check_inbox)
     return session.alias_hits
+
+
+@app.get("/api/extension.zip")
+async def extension_download():
+    """The browser extension, zipped from extension/ for Chrome's "Load unpacked". Signed-in
+    accounts only during the beta (require_session covers this route)."""
+    data = await asyncio.to_thread(extension_package.zip_extension)
+    return Response(
+        data,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{extension_package.FILENAME}"'},
+    )
 
 
 @app.post("/api/site-policy", response_model=SitePolicyResponse)

@@ -85,7 +85,8 @@ _STRONG = re.compile(
 # also names partners, advertisers, brokers, affiliates or "other third parties".
 _SERVICE_PROVIDER = re.compile(r"service providers?|vendors?|on (our|its) behalf|support services|perform(s)? (services|functions)", re.I)
 _OUTSIDERS = re.compile(r"partner|advertis|marketing|broker|affiliat|other third[- ]part", re.I)
-_MD_LINK = re.compile(r"\[([^\]]+)\]\([^)]*\)")
+# Bounded, so a page full of "[" can't make this take minutes (each try stops within a few hundred characters).
+_MD_LINK = re.compile(r"\[([^\[\]\n]{1,300})\]\([^()\s]{0,500}\)")
 _LIGATURE = re.compile(r"(?<=[a-z]) (ffi|ffl|fi|fl|ff) (?=[a-z])")
 SAME_OPENING_CHARS = 80  # quotes that start the same are one clause (snippets repeat and truncate)
 _BANNED = re.compile(r"leak", re.I)

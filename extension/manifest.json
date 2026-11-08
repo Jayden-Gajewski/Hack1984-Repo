@@ -6,7 +6,7 @@
   "description": "See what each site's privacy policy says it collects and shares. Checked on your laptop by the local Dossier backend.",
   "minimum_chrome_version": "116",
   "incognito": "not_allowed",
-  "permissions": ["storage"],
+  "permissions": ["storage", "activeTab"],
   "host_permissions": ["http://127.0.0.1:8000/*"],
   "background": {
     "service_worker": "background.js",

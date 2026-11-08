@@ -22,10 +22,14 @@ privacy-policy links it found on the page, and any "Do Not Sell or Share" link. 
    (data/brokers.json), and, when no policy was found, that it collects data without one. None of
    this sends anything anywhere.
 
-Results stay in memory, per hostname, for CACHE_SECONDS, and a policy's text is dropped once the
-LLM pass is done. The page's trackers and form fields aren't kept at all: they're judged on each
-request. The sites you visit are browsing history, so nothing here is written to disk or
-Postgres, or named in the console log.
+The automatic check on each visit (`read_policy: false`) contacts no site at all: it reuses a result
+the user already asked for, or judges only what the browser saw. Reading a policy is a request from
+this computer's own connection, so it happens when the user opens the popup.
+
+Results stay in memory, per hostname, for CACHE_SECONDS. Of a policy's text only its sale and sharing
+sentences are kept, and only until the LLM pass. The page's trackers and form fields aren't kept at
+all: they're judged on each request. The sites you visit are browsing history, so nothing here is
+written to disk or Postgres, or named in the console log.
 """
 
 import asyncio
@@ -42,7 +46,7 @@ from urllib.parse import urljoin, urlsplit
 
 from app import prompts
 from app.clients import ollama, website
-from app.companies import registrable
+from app.companies import registrable as _list_registrable
 from app.data import load_json
 from app.models import (
     AdSellers,
@@ -167,6 +171,20 @@ SELLS_OR_SHARES = ("sale", "data_broker", "sharing", "advertising")
 
 
 # ---------- pure helpers (unit-tested) ----------
+
+# Generic second-level labels under a country code (gov.au, com.cn, co.il): the domain a site owns
+# is one label longer. companies.registrable() knows only a short list of these, and a domain
+# guessed too short would send requests to, and credit results from, someone else's site.
+_GENERIC_SLD = re.compile(r"^(ac|co|com|edu|go|gob|gouv|gov|govt|k12|ltd|mil|ne|net|nic|nhs|or|org|plc|sch)\.[a-z]{2}$")
+
+
+def registrable(host: str) -> str:
+    """The domain a site owns: www.ato.gov.au -> ato.gov.au, shop.example.com -> example.com."""
+    domain = _list_registrable(host)
+    labels = host.lower().strip(".").removeprefix("www.").split(".")
+    if _GENERIC_SLD.match(domain) and len(labels) > 2:
+        return ".".join(labels[-3:])
+    return domain
 
 
 def _voice(company: str) -> re.Pattern[str]:
@@ -309,6 +327,8 @@ def summary_line(status: str, risks: list[SiteRisk], collected: list[DataCollect
     main_risk = f" Main risk: {main.title[0].lower()}{main.title[1:]}." if main else ""
     if status == "no_policy":
         return f"Couldn't find this site's privacy policy.{main_risk}"
+    if status == "not_read":
+        return f"Open Dossier to read this site's privacy policy.{main_risk}"
     if status == "unreadable":
         return f"Found the privacy policy but couldn't read it.{main_risk}"
     kinds = f" It says it collects {len(collected)} kinds of data." if collected else ""
@@ -342,16 +362,18 @@ TRACKER_ORDER = {
 FIELD_LABEL = {
     "email": "email address",
     "phone": "phone number",
-    "address": "home address",
+    "address": "street address",
     "birthdate": "date of birth",
     "password": "password",
     "card": "card number",
     "bank_account": "bank account number",
     "ssn": "Social Security number",
-    "government_id": "passport or driver's license number",
+    "government_id": "government ID number",
 }
 SENSITIVE_FIELDS = ("password", "card", "bank_account", "ssn", "government_id")
 VERY_SENSITIVE_FIELDS = ("bank_account", "ssn", "government_id")
+# Personal information that California's online privacy law (CalOPPA) covers.
+CALOPPA_FIELDS = ("email", "phone", "address", "birthdate", "card", "bank_account", "ssn", "government_id")
 NO_POLICY_TITLE = "Couldn't find a privacy policy"
 MAX_ADS_LINES = 20_000
 # An ads.txt record: "adsystem.com, account id, DIRECT|RESELLER[, certification id]".
@@ -364,14 +386,15 @@ def _tracker_data() -> dict[str, Any]:
 
 
 def match_trackers(hosts: list[str], domain: str) -> list[TrackerFound]:
-    """Known trackers among the hostnames a page loaded, strongest category first. Hosts on the
-    site's own domain don't count: Meta's pixel on facebook.com is just Facebook."""
+    """Known trackers among the hostnames a page loaded, strongest category first. A company's own
+    sites don't count: facebook.net resources on facebook.com, or Google's on youtube.com."""
+    owners = _tracker_data()["owners"]
     found: dict[str, TrackerFound] = {}
     for host in hosts:
         for tracker in _tracker_data()["trackers"]:
             if any(host == d or host.endswith("." + d) for d in tracker["domains"]):
-                if registrable(host) == domain:
-                    break  # the site's own host
+                if registrable(host) == domain or domain in owners.get(tracker["company"], []):
+                    break  # the site's own host, or one of the tracker company's own sites
                 hit = found.setdefault(
                     tracker["id"],
                     TrackerFound(name=tracker["name"], company=tracker["company"], category=tracker["category"], hosts=[]),
@@ -435,23 +458,24 @@ def page_risks(
 
     if broker:
         risks.append(SiteRisk(
-            level="high", title="It sells profiles of people",
-            detail=f"{broker.name} is a people-search site. Sites like this publish and sell profiles with home "
-            "addresses, phone numbers and relatives. Check whether it lists you.",
+            level="high", title="It publishes profiles of people",
+            detail=f"{broker.name} is a people-search site. Sites like this publish profiles of people, often with "
+            "home addresses, phone numbers and relatives. Check whether it lists you.",
             evidence=["On Dossier's list of people-search sites"],
         ))
     if insecure:
         risks.append(SiteRisk(
             level="high" if any(f in SENSITIVE_FIELDS for f in insecure) else "medium",
             title=f"It asks for your {_names([FIELD_LABEL[f] for f in insecure])} without encryption",
-            detail="This page isn't protected by https, so what you type here can be read by others on your "
-            "network or Wi-Fi.",
+            detail="This page or its form doesn't use https, so what you type here can be read by others on "
+            "your network or Wi-Fi.",
             evidence=fields(insecure),
         ))
     if "session_recording" in by_cat:
         risks.append(SiteRisk(
-            level="high", title="It records what you do on this page",
-            detail=f"{named('session_recording')} can capture your clicks, scrolling and typing here.",
+            level="high", title="It loads a session-recording tool",
+            detail=f"{named('session_recording')} can record clicks, scrolling and typing on this page, depending "
+            "on how the site set it up.",
             evidence=seen("session_recording"),
         ))
     if "data_broker" in by_cat:
@@ -480,17 +504,23 @@ def page_risks(
         if tracked:
             what.append(f"sends your visit to {_names([t.company for t in tracked])}")
         if what:
+            law = (
+                " California requires commercial websites that collect personal information like this from "
+                "Californians to post one."
+                if any(f in CALOPPA_FIELDS for f in asks_for)
+                else ""
+            )
             risks.append(SiteRisk(
                 level="high" if very or "card" in asks_for else "medium", title=NO_POLICY_TITLE,
-                detail=f"This page {' and '.join(what)}, but no privacy policy was found saying how that's used. "
-                "California requires most sites that collect personal information from Californians to post one.",
+                detail=f"This page {' and '.join(what)}, but no privacy policy was found saying how that's used.{law}",
                 evidence=fields(asks_for) + [host for t in tracked for host in t.hosts],
             ))
     if ads and ads.status == "done" and ads.count:
         companies = f"{ads.count} ad compan{'y' if ads.count == 1 else 'ies'}"
         risks.append(SiteRisk(
-            level="medium", title=f"It sells ad space through {companies}",
-            detail=f"Its ads.txt file names {companies} allowed to sell its ads, such as {_names(ads.companies[:3])}. "
+            level="medium",
+            title=f"{companies[0].upper()}{companies[1:]} {'is' if ads.count == 1 else 'are'} allowed to sell its ad space",
+            detail=f"Its ads.txt file names {companies} that may sell its ads, such as {_names(ads.companies[:3])}. "
             "Ad auctions can pass details about your device, rough location and this visit to many of them.",
             evidence=[ads.url] if ads.url else [],
         ))
@@ -514,7 +544,7 @@ class _Site:
     status: str
     policy_url: str | None
     read_from: str | None
-    text: str  # dropped once the LLM pass is done
+    sentences: list[str]  # the policy's sale and sharing sentences, kept for the LLM pass, then dropped
     text_hash: str | None  # set when the text came from the browser
     links: tuple[str, ...]  # the page's policy links this result considered
     collected: list[DataCollected]
@@ -626,18 +656,30 @@ async def _read_and_check(site: str, domain: str, req: SitePolicyRequest) -> _Si
         status = "unreadable" if links or req.page_text is not None else "no_policy"
         if status == "no_policy":
             errors.append("No privacy-policy link was found on this page, and the site has none at /privacy-policy or /privacy.")
-        return _Site(
-            **found, status=status, read_from=None, text="", collected=[], clauses=[], no_sale_quote=None,
-            errors=errors, checked_at=datetime.now(timezone.utc).isoformat(),
-        )
+        return _not_read(**found, status=status, errors=errors)
 
-    sentences = s4.candidate_sentences(text)
+    # Off the event loop: a long or hostile page mustn't stall every other request while it's read.
+    sentences, collected, clauses, no_sale = await asyncio.to_thread(_analyze, text, company)
     return _Site(
-        **found, status="ok", read_from=read_from, text=text, collected=collected_data(text, company),
-        clauses=s4.merge_clauses(not_legal_only(s4.pattern_clauses(sentences, company))),
-        no_sale_quote=no_sale_quote(sentences, company), errors=errors,
-        checked_at=datetime.now(timezone.utc).isoformat(),
+        **found, status="ok", read_from=read_from, sentences=sentences, collected=collected, clauses=clauses,
+        no_sale_quote=no_sale, errors=errors, checked_at=datetime.now(timezone.utc).isoformat(),
     )
+
+
+def _analyze(text: str, company: str) -> tuple[list[str], list[DataCollected], list[PolicyClause], str | None]:
+    """The quick pass over a policy's text. Only its sale and sharing sentences are kept afterwards."""
+    sentences = s4.candidate_sentences(text)
+    clauses = s4.merge_clauses(not_legal_only(s4.pattern_clauses(sentences, company)))
+    return sentences, collected_data(text, company), clauses, no_sale_quote(sentences, company)
+
+
+def _not_read(**found: Any) -> _Site:
+    """A result with no policy in it: not found, unreadable, or not read yet."""
+    defaults = dict(
+        policy_url=None, read_from=None, sentences=[], text_hash=None, links=(), collected=[], clauses=[],
+        no_sale_quote=None, errors=[], checked_at=datetime.now(timezone.utc).isoformat(),
+    )
+    return _Site(**{**defaults, **found})
 
 
 async def _deep_pass(entry: _Site, read_ads: bool) -> None:
@@ -674,14 +716,15 @@ async def _llm_pass(entry: _Site) -> None:
     """Stage 4's local LLM pass over the policy's sale and sharing sentences. The model only picks
     sentence numbers and every pick passes Stage 4's checks, so quotes stay verbatim."""
     try:
-        groups = s4.batches(s4.candidate_sentences(entry.text))
+        groups = s4.batches(entry.sentences)
         answers = await asyncio.gather(
             *(
                 ollama.ask_json(
                     prompts.policy_prompt(entry.site, s4.numbered(group)),
                     system=prompts.POLICY_SYSTEM,
-                    purpose=f"Browser extension: flag sale and sharing clauses in {entry.site}'s policy "
-                    f"on this laptop (part {i} of {len(groups)})",
+                    # No site name here: a failed call's purpose is printed to the console.
+                    purpose=f"Browser extension: flag sale and sharing clauses in a site's policy, on this "
+                    f"laptop (part {i} of {len(groups)})",
                 )
                 for i, group in enumerate(groups, 1)
             )
@@ -698,14 +741,17 @@ async def _llm_pass(entry: _Site) -> None:
             if answer
             for clause in s4.parse_clauses(answer, group, entry.company)
         ]
-        entry.clauses = s4.merge_clauses(not_legal_only(picked) + entry.clauses)  # the model's picks win ties, as in Stage 4
+        # The model can add clauses but never weaken one: for a sentence flagged twice, the more
+        # serious category comes first and is the one kept.
+        merged = sorted(not_legal_only(picked) + entry.clauses, key=lambda c: s4.CATEGORY_ORDER[c.category])
+        entry.clauses = s4.merge_clauses(merged)
         entry.llm = "done"
     except Exception as exc:
         log.exception("A site policy LLM pass failed")  # no site name: the console isn't for browsing history
         entry.errors.append(f"The local LLM check failed: {exc}")
         entry.llm = "failed"
     finally:
-        entry.text = ""  # only this pass needed it
+        entry.sentences = []  # only this pass needed them
 
 
 def _response(entry: _Site, req: SitePolicyRequest) -> SitePolicyResponse:
@@ -728,7 +774,7 @@ def _response(entry: _Site, req: SitePolicyRequest) -> SitePolicyResponse:
         site=entry.site, status=entry.status, policy_url=entry.policy_url, read_from=entry.read_from,
         collected=entry.collected, clauses=entry.clauses, no_sale_quote=entry.no_sale_quote,
         risks=risks, risk=overall, summary=summary_line(entry.status, risks, entry.collected),
-        opt_out_url=opt_out, llm=entry.llm, checked_at=entry.checked_at, errors=list(dict.fromkeys(entry.errors)),
+        opt_out_url=own_opt_out, llm=entry.llm, checked_at=entry.checked_at, errors=list(dict.fromkeys(entry.errors)),
         trackers=trackers, asks_for=asks_for, insecure_fields=insecure, broker=broker, ad_sellers=entry.ads,
     )
 
@@ -746,6 +792,14 @@ async def check_site(req: SitePolicyRequest) -> SitePolicyResponse:
     if req.page_text is not None and (not req.policy_urls or _host(req.policy_urls[0]) != host):
         raise CantCheck("The page text has to come from the site being checked.")
     site = host.removeprefix("www.")
+    if not req.read_policy and req.page_text is None:
+        # The automatic check on each visit contacts no site: it reuses a result the user already
+        # asked for, or judges only what the browser saw on the page.
+        entry = _cache.get(site)
+        if entry is None or time.monotonic() - entry.created > CACHE_SECONDS:
+            domain = registrable(host)
+            entry = _not_read(site=site, domain=domain, company=domain.split(".")[0], status="not_read")
+        return _response(entry, req)
     async with _locks.setdefault(site, asyncio.Lock()):  # two tabs on one site read its policy once
         entry = _cached(site, req)
         if entry is None:

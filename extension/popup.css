@@ -133,6 +133,10 @@ a {
   font-size: 11.5px;
 }
 
+.fine + .toggle {
+  margin-top: 12px;
+}
+
 /* ---------- content ---------- */
 
 main {

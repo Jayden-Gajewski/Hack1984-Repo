@@ -77,7 +77,9 @@ def fake_web(request: httpx.Request, *, policy: httpx.Response | None = None) ->
 
 
 def _use(monkeypatch, handler=fake_web):
-    monkeypatch.setattr(outbound, "_client", httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    monkeypatch.setattr(outbound, "_client", client)
+    monkeypatch.setattr(outbound, "_site_client", client)  # website fetches use their own client
     monkeypatch.setattr(ollama, "_generate_slots", asyncio.Semaphore(1))
     outbound.clear_log()
 
@@ -173,7 +175,7 @@ def test_deep_pass_runs_the_local_llm_in_the_background(monkeypatch):
     assert "It shares your data with other companies" in [r.title for r in done.risks]
     # Its free-text explanations ("x") are replaced by fixed wording, and the policy text is dropped.
     assert all(c.explanation == s4.DEFAULT_EXPLANATION[c.category] for c in done.clauses)
-    assert site_policy._cache["shopco.example"].text == ""
+    assert site_policy._cache["shopco.example"].sentences == []
     # Opening the popup also read the site's ads.txt.
     assert first.ad_sellers.status == "running"
     assert (done.ad_sellers.status, done.ad_sellers.count) == ("done", 4)
@@ -349,7 +351,7 @@ def test_a_redirect_to_the_home_page_is_not_a_policy(monkeypatch):
 def test_only_the_sites_own_opt_out_link_counts_as_evidence(monkeypatch):
     _use(monkeypatch)
     res = _check(policy_urls=[POLICY_URL], opt_out_url="https://evil.example/do-not-sell")
-    assert res.opt_out_url == "https://evil.example/do-not-sell"  # still shown, with its host, in the popup
+    assert res.opt_out_url is None  # never offered as the opt-out button either
     assert "It shows a “Do Not Sell or Share” link" not in [r.title for r in res.risks]
 
 
@@ -384,6 +386,7 @@ def test_tracker_list_is_well_formed():
         assert set(tracker) == {"id", "name", "company", "category", "domains"}
         assert tracker["category"] in categories
         assert all(d == d.lower() and "." in d and "/" not in d for d in tracker["domains"])
+    assert {t["company"] for t in data["trackers"]} >= set(data["owners"])  # owners name real tracker companies
     assert all(k == k.lower() for k in data["ad_systems"])
 
 
@@ -410,12 +413,12 @@ def test_trackers_and_form_fields_are_judged_without_any_request(monkeypatch):
     )
     assert [(t.name, t.category, t.hosts) for t in res.trackers] == [
         ("Hotjar", "session_recording", ["static.hotjar.com"]),
-        ("Meta Pixel", "advertising", ["connect.facebook.net"]),
+        ("Meta (Facebook)", "advertising", ["connect.facebook.net"]),
         ("Google Tag Manager", "tag_manager", ["www.googletagmanager.com"]),
     ]  # the site's own cdn.shopco.example isn't a tracker
     risks = {r.title: r for r in res.risks}
-    assert risks["It records what you do on this page"].evidence == ["static.hotjar.com"]
-    assert risks["It records what you do on this page"].level == "high"
+    assert risks["It loads a session-recording tool"].evidence == ["static.hotjar.com"]
+    assert risks["It loads a session-recording tool"].level == "high"
     assert "It sends your visit to ad companies" in risks
     assert risks["It asks for your Social Security number"].evidence == ["Social Security number field"]
     assert outbound.get_log() == []  # nothing was fetched for any of it
@@ -453,7 +456,7 @@ def test_people_search_sites_come_from_the_checked_in_list():
     assert site_policy.broker_for("spokeo.com").name == "Spokeo"
     assert site_policy.broker_for("shopco.example") is None
     [risk] = site_policy.page_risks("ok", [], [], [], site_policy.broker_for("spokeo.com"), None)
-    assert risk.title == "It sells profiles of people" and "Check whether it lists you" in risk.detail
+    assert risk.title == "It publishes profiles of people" and "Check whether it lists you" in risk.detail
 
 
 def test_ads_txt_records_are_counted_by_company():
@@ -532,3 +535,112 @@ def test_a_fetch_that_runs_out_of_time_is_logged_as_cancelled(monkeypatch):
     with pytest.raises(website.PageError, match="took too long"):
         asyncio.run(website.read_page(POLICY_URL, purpose="test"))
     assert outbound.get_log()[0].error == "Cancelled: it took too long."
+
+
+# ---------- the second privacy review ----------
+
+
+def test_the_automatic_check_contacts_no_site(monkeypatch):
+    _use(monkeypatch)
+    first = _check(policy_urls=[POLICY_URL], read_policy=False, third_party_hosts=["connect.facebook.net"])
+    assert (first.status, first.risk) == ("not_read", "medium")  # the tracker alone
+    assert outbound.get_log() == []
+    _check(policy_urls=[POLICY_URL])  # the user opens the popup: now the policy is read
+    again = _check(policy_urls=[POLICY_URL], read_policy=False)
+    assert (again.status, again.read_from) == ("ok", "site")  # reused, not fetched again
+    assert len(outbound.get_log()) == 1
+
+
+def test_stacked_compression_is_refused_and_one_layer_is_capped(monkeypatch):
+    import gzip
+
+    bomb = gzip.compress(b"a" * 20_000_000)  # 20 MB of text in about 20 KB
+
+    async def chunks(data):  # streamed like a real download, so the capped decoder does the work
+        for i in range(0, len(data), 4096):
+            yield data[i:i + 4096]
+
+    def handler(request):
+        encoding = "gzip, gzip" if request.url.path == "/stacked" else "gzip"
+        body = gzip.compress(bomb) if request.url.path == "/stacked" else bomb
+        return httpx.Response(200, headers={"Content-Type": "text/plain", "Content-Encoding": encoding}, content=chunks(body))
+
+    _use(monkeypatch, handler)
+    with pytest.raises(website.PageError):
+        asyncio.run(website.read_page(f"{ORIGIN}/stacked", purpose="test"))
+    _, text = asyncio.run(website.read_page(f"{ORIGIN}/one", purpose="test"))
+    assert len(text) == website.MAX_BYTES
+
+
+def test_a_page_full_of_brackets_is_read_quickly():
+    import time
+
+    started = time.perf_counter()
+    s4.candidate_sentences("[" * 200_000 + "\n" + "[a" * 100_000)
+    assert time.perf_counter() - started < 2
+
+
+def test_a_companys_own_site_isnt_tracking_by_that_company():
+    assert site_policy.match_trackers(["connect.facebook.net", "static.xx.fbcdn.net"], "facebook.com") == []
+    assert [t.name for t in site_policy.match_trackers(["connect.facebook.net"], "shopco.example")] == ["Meta (Facebook)"]
+
+
+def test_domains_under_country_codes_are_not_cut_too_short():
+    assert site_policy.registrable("www.ato.gov.au") == "ato.gov.au"
+    assert site_policy.registrable("shop.store.com.cn") == "store.com.cn"
+    assert site_policy.registrable("news.bbc.co.uk") == "bbc.co.uk"
+    assert site_policy.registrable("www.shopco.example") == "shopco.example"
+
+
+def test_the_model_can_add_clauses_but_never_weaken_one(monkeypatch):
+    def handler(request):
+        if request.url.host in ("localhost", "127.0.0.1"):  # the model calls every sentence "affiliates"
+            numbers = re.findall(r"^\[(\d+)\]", json.loads(request.content)["prompt"], re.M)
+            picks = [{"sentence": int(n), "category": "affiliates", "explanation": "x"} for n in numbers]
+            return httpx.Response(200, json={"response": json.dumps({"clauses": picks})})
+        return fake_web(request)
+
+    _use(monkeypatch, handler)
+
+    async def run():
+        await site_policy.check_site(_req(policy_urls=[POLICY_URL], deep=True))
+        await site_policy._cache["shopco.example"].task
+        return await site_policy.check_site(_req(policy_urls=[POLICY_URL]))
+
+    res = asyncio.run(run())
+    sale = next(c for c in res.clauses if c.quote.startswith("We sell"))
+    assert sale.category == "sale" and res.risks[0].title == "It may sell your personal information"
+
+
+def test_the_california_law_is_cited_only_for_personal_information(monkeypatch):
+    _use(monkeypatch, lambda r: httpx.Response(404, text="Not found"))
+    trackers_only = _check(third_party_hosts=["connect.facebook.net"])
+    asks_email = _check(asks_for=["email"])
+    detail = lambda res: next(r.detail for r in res.risks if r.title == "Couldn't find a privacy policy")  # noqa: E731
+    assert "California" not in detail(trackers_only)
+    assert "California requires commercial websites" in detail(asks_email)
+
+
+def test_overlong_links_and_hosts_are_dropped_not_fatal():
+    req = SitePolicyRequest(
+        origin=ORIGIN, policy_urls=["https://shopco.example/" + "a" * 3000, POLICY_URL],
+        opt_out_url="https://shopco.example/" + "b" * 3000, third_party_hosts=["a" * 300 + ".example", "cdn.example.com"],
+    )
+    assert (req.policy_urls, req.opt_out_url, req.third_party_hosts) == ([POLICY_URL], None, ["cdn.example.com"])
+
+
+# ---------- the download on the website ----------
+
+
+def test_the_extension_download_is_for_signed_in_accounts(client):
+    import io
+    import zipfile
+
+    res = client.get("/api/extension.zip")
+    assert res.status_code == 200 and res.headers["content-type"] == "application/zip"
+    names = zipfile.ZipFile(io.BytesIO(res.content)).namelist()
+    assert "dossier-privacy-check/manifest.json" in names
+    assert "dossier-privacy-check/content.js" in names
+    assert all(name.startswith("dossier-privacy-check/") for name in names)
+    client.cookies.clear()
+    assert client.get("/api/extension.zip").status_code == 401

@@ -4,7 +4,7 @@
     {"id": "google_analytics", "name": "Google Analytics", "company": "Google", "category": "analytics", "domains": ["google-analytics.com", "analytics.google.com"]},
     {"id": "google_tag_manager", "name": "Google Tag Manager", "company": "Google", "category": "tag_manager", "domains": ["googletagmanager.com"]},
     {"id": "youtube_embed", "name": "YouTube embed", "company": "Google", "category": "social", "domains": ["youtube.com"]},
-    {"id": "meta_pixel", "name": "Meta Pixel", "company": "Meta", "category": "advertising", "domains": ["facebook.net", "facebook.com"]},
+    {"id": "meta_pixel", "name": "Meta (Facebook)", "company": "Meta", "category": "advertising", "domains": ["facebook.net", "facebook.com"]},
     {"id": "instagram_embed", "name": "Instagram embed", "company": "Meta", "category": "social", "domains": ["instagram.com", "cdninstagram.com"]},
     {"id": "tiktok_pixel", "name": "TikTok Pixel", "company": "TikTok", "category": "advertising", "domains": ["analytics.tiktok.com"]},
     {"id": "x_ads", "name": "X (Twitter) ads", "company": "X", "category": "advertising", "domains": ["ads-twitter.com", "analytics.twitter.com"]},
@@ -28,7 +28,6 @@
     {"id": "adobe_audience_manager", "name": "Adobe Audience Manager", "company": "Adobe", "category": "advertising", "domains": ["demdex.net"]},
     {"id": "sharethis", "name": "ShareThis", "company": "ShareThis", "category": "advertising", "domains": ["sharethis.com"]},
     {"id": "liveramp", "name": "LiveRamp", "company": "LiveRamp", "category": "data_broker", "domains": ["rlcdn.com"]},
-    {"id": "oracle_bluekai", "name": "Oracle BlueKai", "company": "Oracle", "category": "data_broker", "domains": ["bluekai.com"]},
     {"id": "lotame", "name": "Lotame", "company": "Lotame", "category": "data_broker", "domains": ["crwdcntrl.net"]},
     {"id": "tapad", "name": "Tapad", "company": "Experian", "category": "data_broker", "domains": ["tapad.com"]},
     {"id": "hotjar", "name": "Hotjar", "company": "Hotjar", "category": "session_recording", "domains": ["hotjar.com", "hotjar.io"]},
@@ -49,6 +48,21 @@
     {"id": "yandex_metrica", "name": "Yandex Metrica", "company": "Yandex", "category": "analytics", "domains": ["mc.yandex.ru", "mc.yandex.com"]},
     {"id": "disqus", "name": "Disqus comments", "company": "Disqus", "category": "social", "domains": ["disqus.com", "disquscdn.com"]}
   ],
+  "owners": {
+    "Google": ["google.com", "youtube.com", "gmail.com", "blogger.com", "android.com"],
+    "Meta": ["facebook.com", "instagram.com", "messenger.com", "whatsapp.com", "threads.net", "meta.com"],
+    "Microsoft": ["microsoft.com", "bing.com", "linkedin.com", "live.com", "msn.com", "office.com", "outlook.com", "github.com"],
+    "LinkedIn": ["linkedin.com"],
+    "X": ["x.com", "twitter.com"],
+    "TikTok": ["tiktok.com"],
+    "Amazon": ["amazon.com", "twitch.tv", "imdb.com"],
+    "Pinterest": ["pinterest.com"],
+    "Snap": ["snapchat.com", "snap.com"],
+    "Reddit": ["reddit.com"],
+    "Yandex": ["yandex.ru", "yandex.com"],
+    "Adobe": ["adobe.com"],
+    "Disqus": ["disqus.com"]
+  },
   "ad_systems": {
     "google.com": "Google",
     "appnexus.com": "Xandr (Microsoft)",
