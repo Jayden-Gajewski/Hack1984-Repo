@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import AuthForm from "../components/AuthForm";
 
-export const metadata: Metadata = { title: "Create your Dossier account" };
+export const metadata: Metadata = {
+  title: "Create an account",
+  description: "Create a Dossier account. It is saved in the database on this laptop and never sent anywhere.",
+};
 
 export default async function SignupPage({ searchParams }: { searchParams: Promise<{ next?: string | string[] }> }) {
   const { next } = await searchParams;
