@@ -7,6 +7,7 @@ import AliasPanel from "../components/AliasPanel";
 import AuthGate from "../components/AuthGate";
 import DraftModal from "../components/DraftModal";
 import ExposureCard from "../components/ExposureCard";
+import FootprintPanel from "../components/FootprintPanel";
 import OutboundLog from "../components/OutboundLog";
 import ScanForm from "../components/ScanForm";
 import StarGlobe from "../components/StarGlobe";
@@ -15,11 +16,12 @@ import Tabs, { type Tab } from "../components/Tabs";
 
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
-type TabId = "scan" | "accounts" | "aliases";
+type TabId = "scan" | "accounts" | "aliases" | "footprint";
 const TABS: Tab<TabId>[] = [
   { id: "scan", label: "Scan" },
   { id: "accounts", label: "Accounts" },
   { id: "aliases", label: "Aliases" },
+  { id: "footprint", label: "Footprint" },
 ];
 const isTab = (v: string): v is TabId => TABS.some((t) => t.id === v);
 
@@ -224,6 +226,10 @@ export default function ScannerPage() {
 
         <div className="tabpanel" role="tabpanel" id="panel-aliases" aria-labelledby="tab-aliases" hidden={tab !== "aliases"}>
           <AliasPanel onChecked={refreshLeads} />
+        </div>
+
+        <div className="tabpanel" role="tabpanel" id="panel-footprint" aria-labelledby="tab-footprint" hidden={tab !== "footprint"}>
+          <FootprintPanel />
         </div>
       </div>
 
