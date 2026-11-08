@@ -1,4 +1,4 @@
-"""The /api/monitor routes end to end, with HIBP, SMTP and the local LLM faked."""
+"""The /api/monitor routes end to end, with HIBP, SMTP and Gemini faked."""
 
 import time
 
@@ -86,27 +86,21 @@ def test_email_without_smtp_is_added_but_cannot_be_verified(api):
     assert api.delete(f"/api/monitor/emails/{email_id}").status_code == 404
 
 
-def test_analyze_needs_the_local_llm(api, monkeypatch):
+def test_analyze_needs_gemini(api, monkeypatch):
     api.post("/api/monitor/companies", json={"name": "ShopCo"})
     api.post("/api/monitor/refresh", json={})
     wait_for_refresh(api)
 
-    async def down():
-        return False, False
-
-    monkeypatch.setattr(service.ollama, "status", down)
+    monkeypatch.setattr(service.gemini, "ready", lambda: False)
     res = api.post("/api/monitor/incidents/hibp-shopco/analyze")
-    assert res.status_code == 503 and "local LLM" in res.json()["detail"]
-
-    async def up():
-        return True, True
+    assert res.status_code == 503 and "GEMINI_API_KEY" in res.json()["detail"]
 
     async def ask_json(prompt, *, system, purpose):
         return {"summary": "ShopCo had 120,000 accounts exposed in 2021.", "impact": "Reused passwords are at risk.",
                 "guidance": "Reset passwords.", "uncertainty": "", "severity_explanation": "High: passwords."}
 
-    monkeypatch.setattr(service.ollama, "status", up)
-    monkeypatch.setattr(service.analysis.ollama, "ask_json", ask_json)
+    monkeypatch.setattr(service.gemini, "ready", lambda: True)
+    monkeypatch.setattr(service.analysis.gemini, "ask_json", ask_json)
     explained = api.post("/api/monitor/incidents/hibp-shopco/analyze").json()["analysis"]
     assert explained["summary"].startswith("ShopCo had 120,000") and explained["stale"] is False
     assert api.post("/api/monitor/incidents/nope/analyze").status_code == 404

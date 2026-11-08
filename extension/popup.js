@@ -84,7 +84,7 @@ function time(iso) {
   return Number.isNaN(date.getTime()) ? "an unknown time" : date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
-/** Replace the content, keeping open rows open (the popup re-renders when the local AI finishes). */
+/** Replace the content, keeping open rows open (the popup re-renders when Gemini finishes). */
 function show(...nodes) {
   const open = new Set([...main.querySelectorAll("details[open][data-key]")].map((d) => d.dataset.key));
   main.replaceChildren(...nodes.flat().filter(Boolean));
@@ -224,7 +224,7 @@ function sharing(result) {
         "p",
         { class: "muted" },
         result.llm === "running"
-          ? "Nothing found yet. The local AI is still reading."
+          ? "Nothing found yet. Gemini is still reading."
           : "Found nothing in the policy about selling or sharing your data.",
       ),
     );
@@ -252,11 +252,11 @@ function details(result) {
     const llm = {
       running: [
         h("span", { class: "spinner", "aria-hidden": "true" }),
-        "The local AI is reading the policy on this laptop for more selling and sharing clauses…",
+        "Gemini is reading the policy for more selling and sharing clauses…",
       ],
-      done: ["Checked by fixed rules and by the local AI, on this laptop."],
-      failed: ["The local AI didn't answer (is Ollama running?), so this is the rules-based check."],
-      off: ["Rules-based check. The local AI check starts when you open this popup."],
+      done: ["Checked by fixed rules on this laptop and by Gemini."],
+      failed: ["Gemini didn't answer, so this is the rules-based check."],
+      off: ["Rules-based check. The Gemini check starts when you open this popup."],
     }[result.llm];
     lines.push(h("p", { class: `llm llm--${result.llm}` }, ...llm));
   }
@@ -265,7 +265,7 @@ function details(result) {
       result.read_from === "browser"
         ? " Read from the page open in your browser, so nothing was fetched."
         : result.read_from === "site"
-          ? ` Fetched straight from ${bareHost(result.policy_url)}, not through a search engine or cloud AI.`
+          ? ` Fetched straight from ${bareHost(result.policy_url)}, not through a search engine.`
           : "";
     lines.push(h("p", { class: "source" }, "Policy: ", link(result.policy_url), `.${how}`));
   }
@@ -400,7 +400,7 @@ function render(result) {
       : null,
     details(result),
   );
-  announce(`${verdict} on ${result.site}.${result.llm === "done" ? " Local AI check done." : ""}`);
+  announce(`${verdict} on ${result.site}.${result.llm === "done" ? " Gemini check done." : ""}`);
 }
 
 // ---------- flow ----------

@@ -14,7 +14,7 @@ from tests.monitor_fixtures import CATALOG, EMAIL, SHOPCO, use_settings
 
 @pytest.fixture
 def world(monkeypatch):
-    """HIBP's breach list, an optional email range answer, Stage 3 and Ollama, all fake."""
+    """HIBP's breach list, an optional email range answer, Stage 3 and Gemini, all fake."""
     use_settings(monkeypatch, hibp_api_key="k", tavily_api_key="t")
     state = {"catalog": CATALOG, "catalog_error": None, "range": [], "news": [], "catalog_calls": 0}
 
@@ -30,13 +30,10 @@ def world(monkeypatch):
     async def timelines(ids):
         return [e for e in state["news"] if e.company_id in ids], []
 
-    async def status():
-        return True, True
-
     monkeypatch.setattr(hibp, "breaches", breaches)
     monkeypatch.setattr(hibp, "range_search", range_search)
     monkeypatch.setattr(service.s3_breaches, "breach_timelines", timelines)
-    monkeypatch.setattr(service.ollama, "status", status)
+    monkeypatch.setattr(service.gemini, "ready", lambda: True)
     return state
 
 
@@ -128,7 +125,7 @@ def test_news_about_a_known_hibp_breach_adds_sources_without_an_alert(world):
     assert "https://ag.example/notice" in [s.url for s in views()["hibp-shopco"].sources]
 
 
-def test_news_search_is_skipped_without_keys_or_the_local_llm(world, monkeypatch):
+def test_news_search_is_skipped_without_keys_or_gemini(world, monkeypatch):
     add()
     use_settings(monkeypatch, hibp_api_key="k")  # no Tavily or Exa key
     status = refresh(include_news=True)
@@ -136,12 +133,9 @@ def test_news_search_is_skipped_without_keys_or_the_local_llm(world, monkeypatch
 
     use_settings(monkeypatch, hibp_api_key="k", exa_api_key="e")
 
-    async def down():
-        return False, False
-
-    monkeypatch.setattr(service.ollama, "status", down)
+    monkeypatch.setattr(service.gemini, "ready", lambda: False)
     status = refresh(include_news=True)
-    assert any("local LLM" in e for e in status.errors)
+    assert any("GEMINI_API_KEY" in e for e in status.errors)
 
 
 def _verified(monkeypatch):

@@ -289,7 +289,7 @@ class SitePolicyRequest(BaseModel):
     # The text of the policy page open in the browser, sent instead of fetching it. Then
     # policy_urls[0] is that page's URL, and nothing leaves the laptop at all.
     page_text: str | None = Field(default=None, max_length=500_000)
-    deep: bool = False  # also run the local LLM pass, in the background (poll until llm is "done")
+    deep: bool = False  # also run the Gemini pass, in the background (poll until llm is "done")
     refresh: bool = False  # read the policy again instead of using the in-memory result
     # Read from the page in the browser, never from what's typed: the hostnames (only the hostnames)
     # of other sites the page loaded things from, and the kinds of personal data its form fields
@@ -397,9 +397,10 @@ class SitePolicyResponse(BaseModel):
 
 class StatusResponse(BaseModel):
     keys: dict[str, bool]  # which API keys are set, never their values
-    ollama_running: bool
-    ollama_model: str
-    model_pulled: bool
+    # The LLM is Gemini now. These keep their old names so the API contract doesn't change.
+    ollama_running: bool  # GEMINI_API_KEY is set
+    ollama_model: str  # GEMINI_MODEL
+    model_pulled: bool  # same as ollama_running
     database: bool
 
 
@@ -492,7 +493,7 @@ class RoleUpdate(BaseModel):
 # ---------- Threat monitor (app/monitor/) ----------
 # Severity, confidence and involvement are separate on purpose: a serious breach can be
 # "critical" while the user's involvement is still "unconfirmed". Rules in code set all three;
-# the local LLM only explains them.
+# Gemini only explains them.
 
 Severity = Literal["critical", "high", "medium", "low"]
 SEVERITIES: tuple[str, ...] = get_args(Severity)  # strongest first
@@ -531,7 +532,7 @@ class VerifyCodeRequest(BaseModel):
 
 class RefreshRequest(BaseModel):
     company_id: str | None = None  # one monitored company; None checks everything
-    include_news: bool = False  # also search news and official notices (Tavily/Exa credits, local LLM time)
+    include_news: bool = False  # also search news and official notices (Tavily/Exa credits, Gemini calls)
 
 
 class ActionUpdate(BaseModel):
@@ -601,7 +602,7 @@ class SecurityAction(BaseModel):
 
 
 class ThreatAnalysis(BaseModel):
-    """The local LLM's plain-English explanation, after evidence checks in code."""
+    """Gemini's plain-English explanation, after evidence checks in code."""
 
     summary: str
     impact: str
@@ -695,7 +696,7 @@ class MonitorConfig(BaseModel):
     hibp_email_key: bool  # HIBP_API_KEY (hashed email search; Pro or High RPM plan)
     smtp: bool  # SMTP_HOST and SMTP_FROM, for ownership codes
     news_search: bool  # TAVILY_API_KEY or EXA_API_KEY
-    local_llm: bool  # Ollama running with OLLAMA_MODEL pulled
+    local_llm: bool  # GEMINI_API_KEY is set (named before the switch to Gemini)
     local_llm_model: str
 
 
@@ -711,7 +712,7 @@ class MonitorDashboard(BaseModel):
     scan_loaded: bool  # an exposure scan is loaded, so related listings can be shown
 # ---------- Digital footprint: companies you track and your data requests to them ----------
 # Local Postgres only, scoped to the signed-in account. None of it is sent to Exa, Tavily or
-# Ollama, and Dossier never sends a request or changes a company's settings for the user.
+# Gemini, and Dossier never sends a request or changes a company's settings for the user.
 
 RequestKind = Literal["access", "deletion"]
 RequestStatus = Literal["draft", "ready_to_send", "sent", "response_received", "completed", "unable_to_complete"]

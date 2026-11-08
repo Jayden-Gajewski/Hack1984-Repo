@@ -43,7 +43,7 @@ function linkLabel(link: string): string {
 
 // One threat: a row you can read at a glance (who, what was exposed, how bad, whether it's you,
 // how far along your steps are) that opens into boxes for each question. Everything comes from
-// HIBP, public reports or the local LLM, so it renders as text, and links go through safeHref().
+// HIBP, public reports or Gemini, so it renders as text, and links go through safeHref().
 export default function IncidentCard(props: Props) {
   const { incident, arrived, llm, scanLoaded, hasVerifiedEmail, onToggle, onAnalyze, onLoadScan, onVerifyEmail } = props;
   // Optimistic: a step flips on click and only reverts if saving it fails.
@@ -288,7 +288,7 @@ export default function IncidentCard(props: Props) {
                 </li>
               </ul>
               <p className="muted small">
-                Written by {analysis.model} on this laptop, {localTime(analysis.analyzed_at)}, from the evidence above.
+                Written by {analysis.model}, {localTime(analysis.analyzed_at)}, from the evidence above.
                 {analysis.removed_sentences > 0 &&
                   ` ${analysis.removed_sentences} sentence${analysis.removed_sentences === 1 ? " was" : "s were"} removed because the evidence didn't support ${analysis.removed_sentences === 1 ? "it" : "them"}.`}
               </p>
@@ -297,7 +297,7 @@ export default function IncidentCard(props: Props) {
               )}
             </div>
           ) : (
-            <p className="muted small">A short explanation written by the local AI from the evidence above.</p>
+            <p className="muted small">A short explanation written by Gemini from the evidence above.</p>
           )}
           <div className="row mt">
             <button type="button" className="secondary" onClick={analyze} disabled={analyzing || !llm.ready} aria-busy={analyzing || undefined}>
@@ -306,10 +306,10 @@ export default function IncidentCard(props: Props) {
             {!analyzing && (
               <span className="muted small">
                 {!llm.ready
-                  ? "Start Ollama to use the local AI."
+                  ? "Add GEMINI_API_KEY to .env to use Gemini."
                   : readsNotice
-                    ? `Runs on this laptop with ${llm.model}. It may first read the official notice through Tavily (one public URL, shown in the outbound log).`
-                    : `Runs on this laptop with ${llm.model}. Nothing is sent out.`}
+                    ? `Sends the evidence above to Gemini (${llm.model}). It may first read the official notice through Tavily (one public URL). Both show in the outbound log.`
+                    : `Sends the evidence above to Gemini (${llm.model}). It shows in the outbound log.`}
               </span>
             )}
           </div>
@@ -319,7 +319,7 @@ export default function IncidentCard(props: Props) {
                 <span className="elapsed" aria-hidden="true">
                   {elapsed} s
                 </span>
-                <span>Explaining on this laptop. The local model can take up to a minute.</span>
+                <span>Asking Gemini. This usually takes a few seconds.</span>
               </p>
               <div className="stripe" aria-hidden="true" />
             </div>

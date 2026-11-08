@@ -13,7 +13,7 @@ import "./extension.css";
 export const metadata: Metadata = {
   title: "Browser extension",
   description:
-    "See what every site's privacy policy allows, which trackers it loads and what its forms ask for. Checked on your computer.",
+    "See what every site's privacy policy allows, which trackers it loads and what its forms ask for.",
 };
 
 const SHOWS = [
@@ -47,13 +47,13 @@ const GUARANTEES = [
   "It never reads what you type. Form fields are judged by their labels.",
   "Trackers are matched by hostname. The rest of a tracker's address, where account IDs hide, is dropped.",
   "Checking each site you visit contacts no site. Opening the popup reads that site's own policy and ads.txt, and logs each request.",
-  "Nothing goes to a search engine, a cloud AI or a Dossier server. The analysis runs on your computer.",
+  "Nothing goes to a search engine or a Dossier server. Opening the popup sends the policy's selling and sharing sentences to Google's Gemini, and that's logged too.",
 ];
 
 const RECEIPT = [
   { service: "Website", local: false, method: "GET", url: "shopco.example/legal/privacy", note: "No cookies sent. Read straight from the site.", status: "200" },
   { service: "Website", local: false, method: "GET", url: "shopco.example/ads.txt", note: "Who may sell its ads.", status: "200" },
-  { service: "Ollama", local: true, method: "POST", url: "localhost:11434/api/generate", note: "Policy sentences, read by the AI on this computer.", status: "200" },
+  { service: "Gemini", local: false, method: "POST", url: "generativelanguage.googleapis.com/…:generateContent", note: "Policy sentences, read by Google's Gemini.", status: "200" },
 ];
 
 export default function ExtensionPage() {
@@ -86,7 +86,7 @@ export default function ExtensionPage() {
             <h1 className="hero-title">A privacy check on every site you visit</h1>
             <p className="hero-lede">
               Dossier for Chrome and Edge shows what a site&apos;s privacy policy allows, which trackers the page
-              loads and what its forms ask for. It runs on your computer and never reads what you type.
+              loads and what its forms ask for. It never reads what you type.
             </p>
             <ExtensionDownload>
               <a href="#install" className="btn btn-ghost btn-lg">
@@ -233,8 +233,7 @@ export default function ExtensionPage() {
               <div className="demo-log-head">
                 <span className="demo-log-title">Opening the popup on shopco.example</span>
                 <span className="demo-log-count">
-                  <span>2 left this computer</span>
-                  <span className="demo-log-count-local">1 stayed here</span>
+                  <span>3 left this computer</span>
                 </span>
               </div>
               <ol className="demo-log-rows">

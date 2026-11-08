@@ -3,13 +3,13 @@
 For each company the user picked (ids from app.companies: the checked-in list plus added ones):
 1. Policy URL: privacy_url from companies.json, else a Tavily search restricted to the
    company's domains (company name only).
-2. Tavily Extract with depth="advanced". The policy text stays here: it goes only to the
-   local LLM.
+2. Tavily Extract with depth="advanced". The policy text goes only to Gemini, never back to
+   a search API.
 3. Pull out the sentences that mention selling, sharing, disclosing, third parties,
    affiliates, advertising or brokers, number them, and pack them into batches (at most
    MAX_BATCHES of about 6k chars). The rest of the policy (cookies, security...) never
    reaches the model, which keeps it fast.
-4. The local LLM picks which numbered sentences say the company sells or shares personal
+4. Gemini picks which numbered sentences say the company sells or shares personal
    data. The quote is the sentence itself, so it's verbatim by construction: this is the
    "this wasn't a hack, they sold it" evidence.
 5. The code double-checks each pick: a "sale" must say sell/sold/sale, data categories
@@ -31,7 +31,7 @@ import re
 from typing import Any
 
 from app import prompts
-from app.clients import ollama, tavily
+from app.clients import gemini, tavily
 from app.companies import all_companies
 from app.models import PolicyClause, PolicyResult
 
@@ -286,16 +286,16 @@ async def _check(company: dict[str, Any], errors: list[str]) -> PolicyResult:
     groups = batches(candidate_sentences(text))
     answers = await asyncio.gather(
         *(
-            ollama.ask_json(
+            gemini.ask_json(
                 prompts.policy_prompt(name, numbered(group)),
                 system=prompts.POLICY_SYSTEM,
-                purpose=f"Flag sale and sharing clauses in {name}'s policy on this laptop (part {i} of {len(groups)})",
+                purpose=f"Ask Gemini to flag sale and sharing clauses in {name}'s policy (part {i} of {len(groups)})",
             )
             for i, group in enumerate(groups, 1)
         )
     )
     if groups and not any(answers):
-        errors.append(f"The local LLM didn't answer for {name}'s policy, so it wasn't checked.")
+        errors.append(f"Gemini didn't answer for {name}'s policy, so it wasn't checked.")
     clauses = [c for group, answer in zip(groups, answers) if answer for c in parse_clauses(answer, group, name)]
     clauses += pattern_clauses([s for group in groups for s in group], name)  # model's picks win on ties
     return result.model_copy(update={"clauses": merge_clauses(clauses)})

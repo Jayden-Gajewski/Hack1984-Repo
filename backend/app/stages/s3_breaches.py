@@ -5,7 +5,7 @@ name only; nothing about the person is sent:
 1. Gather sources: Tavily news search (10 years back), Tavily restricted to the state
    attorney general domains in data/breach_sources.json, and Exa with a start date.
 2. Drop results that don't mention the company, and keep at most MAX_SOURCES.
-3. The local LLM merges them into breach events, citing each one by result number (so it
+3. Gemini merges them into breach events, citing each one by result number (so it
    can't invent a URL).
 4. The code checks the answer: the source number must exist, a date is kept only if its
    year appears in that source, and a data type is kept only if that source mentions it
@@ -25,7 +25,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from app import prompts
-from app.clients import exa, ollama, tavily
+from app.clients import exa, gemini, tavily
 from app.companies import all_companies
 from app.data import load_json
 from app.models import BreachEvent
@@ -288,13 +288,13 @@ async def _timeline(company: dict[str, Any], errors: list[str]) -> list[BreachEv
     sources = await _gather_sources(company, errors)
     if not sources:
         return []
-    answer = await ollama.ask_json(
+    answer = await gemini.ask_json(
         prompts.breach_prompt(company["name"], format_sources(sources)),
         system=prompts.BREACH_SYSTEM,
-        purpose=f"Build {company['name']}'s breach timeline on this laptop",
+        purpose=f"Ask Gemini to build {company['name']}'s breach timeline",
     )
     if not answer:
-        errors.append(f"The local LLM didn't answer for {company['name']}, so its breaches weren't summarized.")
+        errors.append(f"Gemini didn't answer for {company['name']}, so its breaches weren't summarized.")
         return []
     return parse_breaches(answer, company, sources)
 

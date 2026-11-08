@@ -25,7 +25,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 
 from app import auth, db, explain, extension_package, footprint, outbound, site_policy
-from app.clients import ollama
+from app.clients import gemini
 from app.companies import add_company, all_companies
 from app.config import LOCAL_HOSTS, get_settings
 from app.data import load_json
@@ -143,7 +143,7 @@ def _require_scan() -> ScanRequest:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    get_settings()  # refuses to start if OLLAMA_URL isn't localhost
+    get_settings()  # refuses to start if DATABASE_URL isn't localhost
     try:
         await asyncio.to_thread(db.init_schema)
     except Exception as exc:  # the app still runs without Postgres; scans just aren't saved
@@ -218,14 +218,13 @@ async def require_session(request: Request, call_next):
 @app.get("/api/status", response_model=StatusResponse)
 async def status():
     settings = get_settings()
-    (running, pulled), database = await asyncio.gather(
-        ollama.status(), asyncio.to_thread(db.ping)
-    )
+    database = await asyncio.to_thread(db.ping)
+    ready = gemini.ready()
     return StatusResponse(
         keys={"exa": bool(settings.exa_api_key), "tavily": bool(settings.tavily_api_key)},
-        ollama_running=running,
-        ollama_model=settings.ollama_model,
-        model_pulled=pulled,
+        ollama_running=ready,
+        ollama_model=settings.gemini_model,
+        model_pulled=ready,
         database=database,
     )
 

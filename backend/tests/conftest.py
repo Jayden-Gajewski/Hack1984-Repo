@@ -8,6 +8,18 @@ TEST_USER = "00000000-0000-4000-8000-0000000000aa"
 TEST_SESSION = "test-session"
 
 
+@pytest.fixture(autouse=True)
+def _no_real_gemini_key(monkeypatch):
+    """Tests never see the real GEMINI_API_KEY from .env, so nothing can reach Google with it.
+    Tests that exercise Gemini set a fake key and answer through a MockTransport."""
+    from app.config import get_settings
+
+    monkeypatch.setenv("GEMINI_API_KEY", "")
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
 @pytest.fixture
 def client(monkeypatch):
     """The API with Postgres stubbed out and a fresh in-memory session, signed in as TEST_USER.
@@ -34,6 +46,5 @@ def _monitor_state(tmp_path, monkeypatch):
 
     monkeypatch.setattr(store, "STORE_PATH", tmp_path / "monitor.json")
     monkeypatch.setattr(service, "_catalog", None)
-    monkeypatch.setattr(service, "_llm_status", None)
     monkeypatch.setattr(service, "_status", RefreshStatus())
     monkeypatch.setattr(service, "_task", None)

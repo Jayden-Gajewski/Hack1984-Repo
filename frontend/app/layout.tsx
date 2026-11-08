@@ -8,7 +8,7 @@ const sans = localFont({ src: "./fonts/Geist-Variable.woff2", variable: "--font-
 const mono = localFont({ src: "./fonts/GeistMono-Variable.woff2", variable: "--font-mono", weight: "100 900" });
 
 const DESCRIPTION =
-  "Dossier finds your listings on people-search sites, shows the likely source with its evidence, and drafts the opt-out. The analysis runs on your laptop, and every request that leaves it is logged.";
+  "Dossier finds your listings on people-search sites, shows the likely source with its evidence, and drafts the opt-out. Every request it sends is logged, including what Gemini reads.";
 
 export const metadata: Metadata = {
   // Dossier runs on this laptop, so absolute URLs (the Open Graph image) point at localhost.

@@ -1,5 +1,5 @@
 """Browser extension backend (app/site_policy.py and clients/website.py), against a fake site and
-a fake local LLM. Nothing here touches the network."""
+a fake Gemini. Nothing here touches the network."""
 
 import asyncio
 import json
@@ -9,7 +9,7 @@ import httpx
 import pytest
 
 from app import outbound, site_policy
-from app.clients import ollama, website
+from app.clients import gemini, website
 from app.companies import registrable
 from app.models import PolicyClause, SitePolicyRequest
 from app.stages import s4_policy as s4
@@ -65,14 +65,14 @@ def fake_web(request: httpx.Request, *, policy: httpx.Response | None = None) ->
         if path == "/legal/privacy":
             return policy or httpx.Response(200, headers={"Content-Type": "text/html; charset=utf-8"}, text=POLICY_HTML)
         return httpx.Response(404, text="Not found")
-    if host in ("localhost", "127.0.0.1") and path == "/api/generate":  # the local LLM
-        prompt = json.loads(request.content)["prompt"]
+    if host == "generativelanguage.googleapis.com" and path.endswith(":generateContent"):  # Gemini
+        prompt = json.loads(request.content)["contents"][0]["parts"][0]["text"]
         guess = lambda s: "sale" if "sell" in s else "affiliates" if "affiliat" in s else "sharing"  # noqa: E731
         picks = [
             {"sentence": int(n), "category": guess(s), "explanation": "x"}
             for n, s in re.findall(r"^\[(\d+)\] (.*)$", prompt, re.M)
         ]
-        return httpx.Response(200, json={"response": json.dumps({"clauses": picks})})
+        return httpx.Response(200, json={"candidates": [{"content": {"parts": [{"text": json.dumps({"clauses": picks})}]}}]})
     raise AssertionError(f"unexpected request: {request.url}")
 
 
@@ -80,7 +80,11 @@ def _use(monkeypatch, handler=fake_web):
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
     monkeypatch.setattr(outbound, "_client", client)
     monkeypatch.setattr(outbound, "_site_client", client)  # website fetches use their own client
-    monkeypatch.setattr(ollama, "_generate_slots", asyncio.Semaphore(1))
+    monkeypatch.setattr(gemini, "_generate_slots", asyncio.Semaphore(1))
+    monkeypatch.setenv("GEMINI_API_KEY", "test-gemini-key")
+    from app.config import get_settings
+
+    get_settings.cache_clear()
     outbound.clear_log()
 
 
@@ -153,14 +157,14 @@ def test_quick_check_reads_the_policy_straight_from_the_site(monkeypatch):
     assert res.summary.startswith("Main risk: it may sell your personal information.")
     assert "leak" not in res.model_dump_json().lower()
 
-    # Only the site itself was contacted: no search API, no local LLM in the quick pass, no query string.
+    # Only the site itself was contacted: no search API, no Gemini call in the quick pass, no query string.
     log = outbound.get_log()
     assert {e.service for e in log} == {"website"}
     assert {httpx.URL(e.url).host for e in log} == {"www.shopco.example"}
     assert not any("ref=footer" in e.url for e in log)
 
 
-def test_deep_pass_runs_the_local_llm_in_the_background(monkeypatch):
+def test_deep_pass_runs_gemini_in_the_background(monkeypatch):
     _use(monkeypatch)
 
     async def run():
@@ -181,10 +185,10 @@ def test_deep_pass_runs_the_local_llm_in_the_background(monkeypatch):
     assert (done.ad_sellers.status, done.ad_sellers.count) == ("done", 4)
     log = outbound.get_log()
     assert [e.url for e in log if e.service == "website"] == [POLICY_URL, "https://shopco.example/ads.txt"]
-    assert all(e.local for e in log if e.service == "ollama")
+    assert all(e.headers["x-goog-api-key"] == "REDACTED" for e in log if e.service == "gemini")
     for entry in log:
-        if not entry.local:
-            assert "data brokers" not in json.dumps(entry.body)  # policy text never left the laptop
+        if entry.service != "gemini":
+            assert "data brokers" not in json.dumps(entry.body)  # policy text goes only to Gemini
 
 
 def test_browser_text_never_leaves_the_laptop(monkeypatch):
@@ -594,10 +598,10 @@ def test_domains_under_country_codes_are_not_cut_too_short():
 
 def test_the_model_can_add_clauses_but_never_weaken_one(monkeypatch):
     def handler(request):
-        if request.url.host in ("localhost", "127.0.0.1"):  # the model calls every sentence "affiliates"
-            numbers = re.findall(r"^\[(\d+)\]", json.loads(request.content)["prompt"], re.M)
+        if request.url.host == "generativelanguage.googleapis.com":  # the model calls every sentence "affiliates"
+            numbers = re.findall(r"^\[(\d+)\]", json.loads(request.content)["contents"][0]["parts"][0]["text"], re.M)
             picks = [{"sentence": int(n), "category": "affiliates", "explanation": "x"} for n in numbers]
-            return httpx.Response(200, json={"response": json.dumps({"clauses": picks})})
+            return httpx.Response(200, json={"candidates": [{"content": {"parts": [{"text": json.dumps({"clauses": picks})}]}}]})
         return fake_web(request)
 
     _use(monkeypatch, handler)

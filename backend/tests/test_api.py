@@ -3,7 +3,7 @@ import pytest
 as the real stages get built."""
 
 from app import main
-from app.clients import ollama
+from app.clients import gemini
 from app.models import Exposure
 
 PERSON = {"name": "Jane Example", "city": "Springfield", "state": "il", "consent": True}
@@ -116,13 +116,9 @@ def test_a_missing_or_broken_stage_becomes_an_error_string(client, monkeypatch):
 
 
 def test_status_shows_key_presence_not_values(client, monkeypatch):
-    async def fake_status():
-        return True, False
-
-    monkeypatch.setattr(ollama, "status", fake_status)
+    monkeypatch.setattr(gemini, "ready", lambda: True)
     body = client.get("/api/status").json()
-    assert body["ollama_running"] is True
-    assert body["model_pulled"] is False
+    assert body["ollama_running"] is True and body["model_pulled"] is True
     assert body["database"] is False
     assert set(body["keys"]) == {"exa", "tavily"}
     assert all(isinstance(v, bool) for v in body["keys"].values())

@@ -1,5 +1,5 @@
 """Stage 4 tests: the filters that keep "they sold it" honest, and the stage against a fake
-internet. The fake local LLM flags every sentence as a sale, so only the code's checks
+internet. The fake Gemini flags every sentence as a sale, so only the code's checks
 decide what survives."""
 
 import asyncio
@@ -10,7 +10,7 @@ import httpx
 import pytest
 
 from app import outbound
-from app.clients import ollama
+from app.clients import gemini
 from app.stages import s4_policy as s4
 
 SHOPCO = {"id": "shopco", "name": "ShopCo", "domains": ["shopco.example"], "privacy_url": None}
@@ -43,19 +43,20 @@ def fake_web(request: httpx.Request, extract_works: bool = True) -> httpx.Respon
     if host == "api.tavily.com" and path == "/extract":
         content = POLICY if extract_works else None
         return httpx.Response(200, json={"results": [{"url": POLICY_URL, "raw_content": content}], "failed_results": []})
-    if host == "localhost" and path == "/api/generate":
-        numbers = re.findall(r"^\[(\d+)\]", body["prompt"], re.M)
+    if host == "generativelanguage.googleapis.com" and path.endswith(":generateContent"):
+        numbers = re.findall(r"^\[(\d+)\]", body["contents"][0]["parts"][0]["text"], re.M)
         clauses = [{"sentence": int(n), "category": "sale", "explanation": "They sell it."} for n in numbers]
-        return httpx.Response(200, json={"response": json.dumps({"clauses": clauses})})
+        return httpx.Response(200, json={"candidates": [{"content": {"parts": [{"text": json.dumps({"clauses": clauses})}]}}]})
     raise AssertionError(f"unexpected request: {request.url}")
 
 
 def _use(monkeypatch, handler):
     monkeypatch.setenv("TAVILY_API_KEY", "test-key")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-gemini-key")
     from app.config import get_settings
     get_settings.cache_clear()
     monkeypatch.setattr(outbound, "_client", httpx.AsyncClient(transport=httpx.MockTransport(handler)))
-    monkeypatch.setattr(ollama, "_generate_slots", asyncio.Semaphore(2))
+    monkeypatch.setattr(gemini, "_generate_slots", asyncio.Semaphore(2))
     monkeypatch.setattr(s4, "all_companies", lambda: [SHOPCO])
     outbound.clear_log()
 
@@ -80,11 +81,13 @@ def test_stage_keeps_only_real_sale_and_sharing_clauses(monkeypatch):
     # The denial, service providers, merger, opt-out right and table row were all dropped.
 
 
-def test_policy_text_never_leaves_the_laptop(monkeypatch):
+def test_policy_text_goes_only_to_gemini(monkeypatch):
     _use(monkeypatch, fake_web)
     asyncio.run(s4.check_policies(["shopco"]))
-    for entry in outbound.get_log():
-        if not entry.local:
+    log = outbound.get_log()
+    assert any(e.service == "gemini" and "data brokers" in json.dumps(e.body) for e in log)
+    for entry in log:
+        if entry.service != "gemini":
             assert "data brokers" not in json.dumps(entry.body)
     extract = [e for e in outbound.get_log() if e.url.endswith("/extract")]
     assert extract[0].body == {"urls": [POLICY_URL], "extract_depth": "advanced"}

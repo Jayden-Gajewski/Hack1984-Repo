@@ -1,5 +1,5 @@
 """Stage 1 tests. The end-to-end ones run the real stage, clients and outbound log against a
-fake internet (Tavily, Exa and Ollama answered by an httpx MockTransport). Offline, no credits.
+fake internet (Tavily, Exa and Gemini answered by an httpx MockTransport). Offline, no credits.
 The person and every domain are fictional."""
 
 import asyncio
@@ -9,7 +9,7 @@ import httpx
 import pytest
 
 from app import outbound, prompts
-from app.clients import ollama, wayback
+from app.clients import gemini, wayback
 from app.config import get_settings
 from app.models import FieldFinding
 from app.outbound import assert_minimal_query
@@ -44,7 +44,7 @@ PAGES = {
 }
 LISTINGS_SNIPPET = "PAGE-LS Jane Example, 34, Springfield IL. Relatives: John Example."
 
-# What the "local LLM" answers for each page, keyed by a marker in the page text.
+# What Gemini answers for each page, keyed by a marker in the page text.
 ANSWERS = {
     "PAGE-PF": {"is_same_person": True, "confidence": 0.9, "is_people_search_site": True, "fields": [
         {"field": "address", "quote": "12 Elm St, Springfield, IL"},
@@ -103,13 +103,9 @@ def fake_web(request: httpx.Request) -> httpx.Response:
             "results": [{"url": u, "raw_content": PAGES[u]} for u in urls if u in PAGES],
             "failed_results": [{"url": u, "error": "blocked"} for u in urls if u not in PAGES],
         })
-    if host == "localhost" and path == "/api/tags":
-        return httpx.Response(200, json={"models": [{"name": "llama3.1:8b"}]})
-    if host == "localhost" and path == "/api/generate" and not body["prompt"]:
-        return httpx.Response(200, json={"response": "", "done": True})  # warm-up: load only
-    if host == "localhost" and path == "/api/generate":
-        marker = next(m for m in ANSWERS if m in body["prompt"])
-        return httpx.Response(200, json={"response": json.dumps(ANSWERS[marker])})
+    if host == "generativelanguage.googleapis.com" and path.endswith(":generateContent"):
+        marker = next(m for m in ANSWERS if m in body["contents"][0]["parts"][0]["text"])
+        return httpx.Response(200, json={"candidates": [{"content": {"parts": [{"text": json.dumps(ANSWERS[marker])}]}}]})
     if host == "web.archive.org" and path == "/cdx/search/cdx":
         # Stage 2: only the PeopleFinder listing was ever archived.
         if request.url.params["url"] == PEOPLEFINDER_URL:
@@ -124,7 +120,7 @@ SNAPSHOT = "20210315120000"
 def _use_transport(monkeypatch, handler) -> None:
     monkeypatch.setattr(outbound, "_client", httpx.AsyncClient(transport=httpx.MockTransport(handler)))
     # Fresh concurrency limits per test: asyncio semaphores bind to one event loop.
-    monkeypatch.setattr(ollama, "_generate_slots", asyncio.Semaphore(2))
+    monkeypatch.setattr(gemini, "_generate_slots", asyncio.Semaphore(2))
     monkeypatch.setattr(wayback, "_slots", asyncio.Semaphore(4))
     outbound.clear_log()
 
@@ -133,8 +129,7 @@ def _use_transport(monkeypatch, handler) -> None:
 def fake_internet(monkeypatch):
     monkeypatch.setenv("TAVILY_API_KEY", "test-tavily-key")
     monkeypatch.setenv("EXA_API_KEY", "test-exa-key")
-    monkeypatch.setenv("OLLAMA_URL", "http://localhost:11434")
-    monkeypatch.setenv("OLLAMA_MODEL", "llama3.1:8b")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-gemini-key")
     get_settings.cache_clear()
     _use_transport(monkeypatch, fake_web)
     monkeypatch.setattr(s1, "load_json", lambda name: DATA[name])
@@ -185,12 +180,13 @@ def test_scan_finds_grounded_exposures(client, fake_internet):
     assert body["errors"] == []
 
 
-def test_scan_sends_only_name_and_city_and_keeps_page_text_local(client, fake_internet):
+def test_scan_sends_only_name_and_city_to_search_and_page_text_only_to_gemini(client, fake_internet):
     client.post("/api/scan", json=PERSON)
 
     log = outbound.get_log()
-    remote = [e for e in log if not e.local]
-    assert {e.service for e in remote} == {"tavily", "exa", "wayback"}
+    calls = [e for e in log if e.service == "gemini"]
+    remote = [e for e in log if e.service != "gemini"]  # the search and archive APIs
+    assert {e.service for e in remote} == {"tavily", "exa", "wayback"} and calls
     exa_queries = [e.body["query"] for e in remote if e.service == "exa"]
     assert "people search sites like peoplefinder.example" in exa_queries  # broker discovery ran
     for entry in remote:
@@ -204,21 +200,16 @@ def test_scan_sends_only_name_and_city_and_keeps_page_text_local(client, fake_in
                 assert "Example" not in entry.body["query"]  # company-only: no name, no page URL
             else:
                 assert "Jane Example" in entry.body["query"]
-    local = [e for e in log if e.local]
-    assert local and all(e.service == "ollama" for e in local)
-    generates = [e for e in local if e.url.endswith("/api/generate")]
-    assert sum(e.purpose.startswith("Check on this laptop") for e in generates) == 5  # one per candidate
-    [warm] = [e for e in generates if e.purpose.startswith("Load the local LLM")]
-    settings = get_settings()
-    assert warm.body["prompt"] == "" and warm.body["keep_alive"] == settings.ollama_keep_alive
-    # Every call sends the same num_ctx, warm-up included, or Ollama reloads the model.
-    assert {e.body["options"]["num_ctx"] for e in generates} == {settings.ollama_num_ctx}
+    assert sum(e.purpose.startswith("Ask Gemini whether") for e in calls) == 5  # one per candidate
+    for entry in calls:  # the key is redacted in the log, and never in the URL
+        assert entry.headers["x-goog-api-key"] == "REDACTED" and "test-gemini-key" not in entry.url
 
 
 
 def test_scan_stops_before_searching_when_nothing_is_set_up(client, monkeypatch):
     monkeypatch.setenv("TAVILY_API_KEY", "")
     monkeypatch.setenv("EXA_API_KEY", "")
+    monkeypatch.setenv("GEMINI_API_KEY", "")
     get_settings.cache_clear()
 
     def nothing_running(request: httpx.Request) -> httpx.Response:
@@ -232,8 +223,8 @@ def test_scan_stops_before_searching_when_nothing_is_set_up(client, monkeypatch)
 
     assert body["exposures"] == []
     assert any("No search API keys" in e for e in body["errors"])
-    assert any("local LLM isn't running" in e for e in body["errors"])
-    assert all(e.local for e in outbound.get_log())  # nothing left the laptop
+    assert any("Gemini isn't set up" in e for e in body["errors"])
+    assert not outbound.get_log()  # nothing was sent anywhere
 
 
 # ---------- pure helpers ----------

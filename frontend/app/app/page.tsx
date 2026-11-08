@@ -145,7 +145,7 @@ export default function ScannerPage() {
       <div className="work">
         <header>
           <h1>Dossier</h1>
-          <p className="lede">Find where your personal data is exposed. Analysis runs on this laptop.</p>
+          <p className="lede">Find where your personal data is exposed. Every request that leaves this laptop is logged.</p>
           <StatusLine />
         </header>
 
@@ -186,7 +186,7 @@ export default function ScannerPage() {
               )}
               {freshScanning && (
                 <span className="muted small" role="status">
-                  The local LLM can take a few minutes.
+                  This can take a minute.
                 </span>
               )}
             </div>

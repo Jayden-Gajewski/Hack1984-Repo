@@ -1,7 +1,7 @@
 """Threat monitor routes, /api/monitor/*. Included by main.py.
 
 Errors: an unknown id is 404, a request that can't be done as asked is 400 (with a message
-for the UI), a missing service or setting (SMTP, the local LLM) is 503, and a second refresh
+for the UI), a missing service or setting (SMTP, Gemini) is 503, and a second refresh
 while one runs is 409. Personal data (email addresses, codes) goes in POST bodies only.
 """
 
@@ -57,7 +57,7 @@ async def dashboard(request: Request):
 
 @router.get("/refresh", response_model=RefreshStatus)
 async def refresh_status():
-    """Cheap to poll while a check runs (no local LLM status call, unlike the dashboard)."""
+    """Cheap to poll while a check runs."""
     return service.refresh_status()
 
 

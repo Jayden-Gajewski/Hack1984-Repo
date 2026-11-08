@@ -21,12 +21,8 @@ export default function StatusLine() {
       </div>
     );
 
-  const llmOk = status.ollama_running && status.model_pulled;
-  const llm = !status.ollama_running
-    ? "Local LLM not running (start Ollama)"
-    : status.model_pulled
-      ? `Local LLM ready (${status.ollama_model})`
-      : `Local LLM needs the model: ollama pull ${status.ollama_model}`;
+  const llmOk = status.ollama_running; // GEMINI_API_KEY is set (the field is named from before Gemini)
+  const llm = llmOk ? `Gemini ready (${status.ollama_model})` : "Gemini not set up (add GEMINI_API_KEY to .env)";
   const missing = Object.entries(status.keys)
     .filter(([, set]) => !set)
     .map(([name]) => name);

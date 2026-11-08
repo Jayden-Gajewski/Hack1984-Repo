@@ -14,8 +14,8 @@ def _settings() -> Settings:
     return Settings(
         exa_api_key="test-key",
         tavily_api_key="",
-        ollama_url="http://localhost:11434",
-        ollama_model="llama3.1:8b",
+        gemini_api_key="",
+        gemini_model="gemini-3.6-flash",
         alias_domain="alias.local",
         database_url="postgresql://hack:hack@localhost:5432/hack1984",
     )

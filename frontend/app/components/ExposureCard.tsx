@@ -165,7 +165,7 @@ export default function ExposureCard({ exposure, onDraft, removal }: Props) {
           {exposure.title && <li>Page title: {exposure.title}</li>}
           <li>Found with {exposure.found_via ? FOUND_VIA_LABEL[exposure.found_via] : "a search"}</li>
           <li>Read from {exposure.text_source === "extract" ? "the page itself" : "the search snippet"}</li>
-          <li>Checked on this laptop by the local LLM</li>
+          <li>Checked by Gemini</li>
         </ul>
       </details>
 

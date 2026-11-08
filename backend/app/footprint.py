@@ -2,7 +2,7 @@
 
 Dossier only keeps the user's own records here. It never sends a request, never contacts a
 company and never changes a company's settings: the user does those things and records what
-happened. Nothing in this module touches the network, and nothing here goes to Ollama.
+happened. Nothing in this module touches the network, and nothing here goes to Gemini.
 """
 
 import re

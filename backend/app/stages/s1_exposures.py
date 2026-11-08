@@ -10,17 +10,17 @@ Full spec: backend/app/stages/CLAUDE.md. What this does:
      domain, never the page URL); the new domains it returns get a Tavily search
      restricted to them.
 2. Drop candidates whose URL, title and snippet don't mention the last name, and keep at
-   most SCAN_MAX_PAGES (known brokers first): each one costs a local LLM call.
+   most SCAN_MAX_PAGES (known brokers first): each one costs a Gemini call.
 3. Tavily Extract the rest. Blocked or thin pages fall back to the search snippet
-   (text_source="snippet"). The model loads (ollama.warm_up) while the searches run.
-4. The local LLM decides whether the page is this person and which fields it shows
+   (text_source="snippet").
+4. Gemini decides whether the page is this person and which fields it shows
    (prompts.LISTING_FIELDS for brokers, prompts.PROFILE_FIELDS for public profiles). Only
    answers with confidence >= 0.5 and quotes that really appear in the text are kept.
    Pages on unknown domains must also be people-search listings.
 5. Fill broker, broker_id, source_kind and opt_out_url from the site lists.
 
-Before searching anything, it checks that there's a search key and that the local LLM is
-ready, so a scan never spends API credits on pages it can't analyze.
+Before searching anything, it checks that there's a search key and a Gemini key, so a scan
+never spends API credits on pages it can't analyze.
 """
 
 import asyncio
@@ -31,15 +31,14 @@ from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 from app import prompts
-from app.clients import exa, ollama, tavily
+from app.clients import exa, gemini, tavily
 from app.config import get_settings
 from app.data import load_json
 from app.models import Exposure, FieldFinding, ScanRequest
 
 # Pages extracted and analyzed per scan come from SCAN_MAX_PAGES (default 8): each is a
-# local LLM call, and on a CPU-only laptop each takes ~20-40 s.
-# Page text sent to the LLM: a window around the surname. On a CPU the model reads ~17
-# tokens/s, so this is the main cost per page (3000 chars ~ 90 s, 6000 ~ 150 s).
+# Gemini call.
+# Page text sent to Gemini: a window around the surname, not the whole page.
 PAGE_WINDOW_CHARS = 3000
 MIN_CONFIDENCE = 0.5
 MIN_EXTRACT_CHARS = 500  # extracted text shorter than this is almost always a block page
@@ -130,7 +129,7 @@ def window_around(text: str, word: str, size: int = PAGE_WINDOW_CHARS) -> str:
 def mentions_place(text: str, city: str, state: str) -> bool:
     """True if the text names the city (whole words) or the 2-letter state code (as written,
     so "IN" or "OR" don't match ordinary words). Without either, the model can't confirm the
-    page is this person, so it isn't worth a local LLM call."""
+    page is this person, so it isn't worth a Gemini call."""
     return has_word(text, city) or re.search(rf"(?<![A-Za-z]){re.escape(state.upper())}(?![A-Za-z])", text) is not None
 
 
@@ -157,7 +156,7 @@ def select_candidates(
     max_pages: int,
     profiles: list[dict[str, Any]] | None = None,
 ) -> list[Candidate]:
-    """Pages worth a local LLM call: they mention the surname, aren't on a site that can't
+    """Pages worth a Gemini call: they mention the surname, aren't on a site that can't
     be a listing, at most MAX_PER_SITE per site, known brokers first, then public-profile
     sites, then the rest, at most max_pages."""
     profiles = profiles or []
@@ -203,7 +202,7 @@ def parse_analysis(
     surname: str = "",
     allowed_fields: tuple[str, ...] = prompts.LISTING_FIELDS,
 ) -> list[FieldFinding] | None:
-    """Validate the local LLM's answer. Returns the grounded fields if the page is this
+    """Validate Gemini's answer. Returns the grounded fields if the page is this
     person, or None if it isn't (or the answer can't be trusted).
 
     Page text is untrusted and small models drift, so: booleans and confidence are
@@ -418,14 +417,9 @@ async def _preflight() -> list[str]:
         problems.append(
             "No search API keys are set. Add TAVILY_API_KEY and EXA_API_KEY to .env at the repo root."
         )
-    running, pulled = await ollama.status()
-    if not running:
+    if not gemini.ready():
         problems.append(
-            "The local LLM isn't running, so nothing was searched. Start Ollama, then try again."
-        )
-    elif not pulled:
-        problems.append(
-            f"The local LLM model isn't downloaded yet. Run: ollama pull {settings.ollama_model}"
+            "Gemini isn't set up, so nothing was searched. Add GEMINI_API_KEY to .env at the repo root, then try again."
         )
     return problems
 
@@ -438,12 +432,8 @@ async def find_exposures(req: ScanRequest) -> tuple[list[Exposure], list[str]]:
 
     brokers = load_json("brokers.json")
     profiles = load_json("public_profiles.json")
-    warming = asyncio.create_task(ollama.warm_up())  # load the model during the searches
-    try:
-        candidates = await _discover(req, brokers, profiles, errors)
-        texts = await _extract(candidates, errors) if candidates else {}
-    finally:
-        await warming
+    candidates = await _discover(req, brokers, profiles, errors)
+    texts = await _extract(candidates, errors) if candidates else {}
     if not candidates:
         return [], errors
 
@@ -463,12 +453,12 @@ async def find_exposures(req: ScanRequest) -> tuple[list[Exposure], list[str]]:
 
     answers = await asyncio.gather(
         *(
-            ollama.ask_json(
+            gemini.ask_json(
                 prompts.field_extraction_prompt(
                     req.name, req.city, req.state, text, fields=_fields_for(c, brokers, profiles)
                 ),
                 system=prompts.FIELD_EXTRACTION_SYSTEM,
-                purpose=f"Check on this laptop whether the {host_of(c.url)} page is you, and what it shows",
+                purpose=f"Ask Gemini whether the {host_of(c.url)} page is you, and what it shows",
             )
             for c, text, _ in jobs
         )
@@ -507,6 +497,6 @@ async def find_exposures(req: ScanRequest) -> tuple[list[Exposure], list[str]]:
         )
     if unanswered:
         errors.append(
-            f"The local LLM didn't answer for {unanswered} of {len(jobs)} pages, so they weren't checked."
+            f"Gemini didn't answer for {unanswered} of {len(jobs)} pages, so they weren't checked."
         )
     return exposures, errors
