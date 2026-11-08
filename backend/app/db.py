@@ -141,6 +141,17 @@ def create_user(email: str, password_hash: str) -> bool:
     return row is not None
 
 
+def set_password(email: str, password_hash: str) -> bool:
+    """Replace a user's password hash and end their sessions. Returns False if there's no such user."""
+    with connect() as conn:
+        row = conn.execute(
+            "update users set password_hash = %s where email = %s returning id", (password_hash, email)
+        ).fetchone()
+        if row:
+            conn.execute("delete from sessions where user_id = %s", (row[0],))
+    return row is not None
+
+
 def get_user(email: str) -> tuple[str, str] | None:
     """(id, password_hash) for an email, or None."""
     with connect() as conn:
