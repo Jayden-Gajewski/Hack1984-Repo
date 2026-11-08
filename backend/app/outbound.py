@@ -33,6 +33,7 @@ from itertools import count
 from typing import Any
 
 import httpx
+import truststore
 from pydantic import BaseModel
 
 from app.config import LOCAL_HOSTS
@@ -95,10 +96,17 @@ _client: httpx.AsyncClient | None = None
 _site_client: httpx.AsyncClient | None = None
 
 
+def _tls_context() -> ssl.SSLContext:
+    # Verify certificates against the OS trust store (Windows/macOS keychain) instead of
+    # certifi's bundle, so a locally trusted root (e.g. antivirus HTTPS scanning) works.
+    # Verification stays on: never pass verify=False.
+    return truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+
+
 def _get_client() -> httpx.AsyncClient:
     global _client
     if _client is None:
-        _client = httpx.AsyncClient(headers={"User-Agent": USER_AGENT})
+        _client = httpx.AsyncClient(headers={"User-Agent": USER_AGENT}, verify=_tls_context())
     return _client
 
 
@@ -243,7 +251,7 @@ async def request(
 
 
 def _smtp_send(host: str, port: int, username: str, password: str, message: EmailMessage, timeout: float) -> None:
-    context = ssl.create_default_context()
+    context = _tls_context()
     if port == 465:
         server: smtplib.SMTP = smtplib.SMTP_SSL(host, port, timeout=timeout, context=context)
     else:
