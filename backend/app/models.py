@@ -6,7 +6,9 @@ commit message, and tell the UI owner before renaming or removing anything.
 Every date carries a source label. A missing date is null with source "unknown", never a guess.
 """
 
-from typing import Literal, get_args
+import re
+from typing import Annotated, Literal, get_args
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -248,6 +250,128 @@ class AliasHit(BaseModel):
     subject: str
     date: str | None = None
     tier: Literal["proven"] = "proven"
+
+
+# ---------- Browser extension: privacy check for the site you're visiting ----------
+
+# What a privacy policy says the company collects (app/site_policy.py CATEGORIES).
+DataCategory = Literal[
+    "contact", "identifiers", "tracking", "precise_location", "location", "activity", "purchases",
+    "financial", "government_id", "health", "biometric", "sensitive_traits", "contacts",
+    "media", "demographics", "inferences", "from_others",
+]
+# Kinds of personal data a page's form fields ask for, as content.js classifies them from what
+# the page says about each field. Never what's typed in them.
+FormField = Literal[
+    "email", "phone", "address", "birthdate", "password", "card", "bank_account", "ssn", "government_id",
+]
+FORM_FIELDS: tuple[str, ...] = get_args(FormField)
+TrackerCategory = Literal["session_recording", "data_broker", "advertising", "social", "analytics", "tag_manager"]
+_HOSTNAME = re.compile(r"(?=.{4,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{1,62}")
+
+
+class SitePolicyRequest(BaseModel):
+    """Sent by the browser extension (extension/). Only the site's origin and what the user's own
+    browser already loaded: never the full page URL, cookies or browsing history."""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    origin: str = Field(max_length=300)  # "https://www.example.com"
+    policy_urls: list[Annotated[str, Field(max_length=2000)]] = Field(default=[], max_length=5)
+    opt_out_url: str | None = Field(default=None, max_length=2000)  # a "Do Not Sell or Share" link on the page
+    # The text of the policy page open in the browser, sent instead of fetching it. Then
+    # policy_urls[0] is that page's URL, and nothing leaves the laptop at all.
+    page_text: str | None = Field(default=None, max_length=500_000)
+    deep: bool = False  # also run the local LLM pass, in the background (poll until llm is "done")
+    refresh: bool = False  # read the policy again instead of using the in-memory result
+    # Read from the page in the browser, never from what's typed: the hostnames (only the hostnames)
+    # of other sites the page loaded things from, and the kinds of personal data its form fields
+    # ask for, as fixed words.
+    third_party_hosts: list[Annotated[str, Field(max_length=253)]] = Field(default=[], max_length=200)
+    asks_for: list[FormField] = Field(default=[], max_length=len(FORM_FIELDS))
+    insecure_fields: list[FormField] = Field(default=[], max_length=len(FORM_FIELDS))  # asked for without https
+
+    @field_validator("third_party_hosts")
+    @classmethod
+    def _hostnames_only(cls, v: list[str]) -> list[str]:
+        # Bare hostnames only. Anything else (a URL, a path, a query, an email) is dropped, so the
+        # details a tracker URL can carry, like an account id or a hashed email, go no further.
+        hosts = (h.strip().lower().rstrip(".") for h in v)
+        return list(dict.fromkeys(h for h in hosts if _HOSTNAME.fullmatch(h)))
+
+    @field_validator("origin")
+    @classmethod
+    def _origin_only(cls, v: str) -> str:
+        try:
+            parts = urlsplit(v)
+            parts.port  # raises ValueError for a bad port
+        except ValueError:
+            parts = None
+        if parts is None or parts.scheme not in ("http", "https") or not parts.hostname:
+            raise ValueError("origin must look like https://www.example.com")
+        return f"{parts.scheme}://{parts.netloc.rsplit('@', 1)[-1]}"  # drop any path, query or user:password@
+
+
+class DataCollected(BaseModel):
+    category: DataCategory
+    label: str  # "Precise location"
+    sensitive: bool
+    quote: str  # verbatim from the policy
+    section: str = ""  # the heading or lead-in it appeared under, e.g. "Information We Collect"
+
+
+class SiteRisk(BaseModel):
+    level: RiskLevel
+    title: str  # "It may sell your personal information"
+    detail: str
+    quote: str | None = None  # verbatim evidence from the policy; null when the evidence is the page itself
+    evidence: list[str] = []  # what was seen on the page instead: hostnames it loaded, fields it asks for
+
+
+class TrackerFound(BaseModel):
+    name: str  # "Meta Pixel", from data/trackers.json
+    company: str  # "Meta"
+    category: TrackerCategory
+    hosts: list[str]  # the hostnames this page loaded it from: the evidence
+
+
+class BrokerMatch(BaseModel):
+    name: str  # from data/brokers.json
+    opt_out_url: str | None = None
+
+
+class AdSellers(BaseModel):
+    """From the site's ads.txt, which is read only when the popup opens."""
+
+    status: Literal["running", "done", "none", "failed"]
+    url: str | None = None
+    count: int = 0  # ad companies it allows to sell its ad space
+    companies: list[str] = []  # the ones it lists most
+
+
+class SitePolicyResponse(BaseModel):
+    site: str  # "example.com"
+    status: Literal["ok", "no_policy", "unreadable"]
+    policy_url: str | None = None
+    # "site": this laptop fetched it from the site itself. "browser": the user's browser sent the
+    # text of the policy page it had open.
+    read_from: Literal["site", "browser"] | None = None
+    collected: list[DataCollected] = []
+    clauses: list[PolicyClause] = []  # selling and sharing, with Stage 4's checks
+    no_sale_quote: str | None = None  # "We do not sell your personal information."
+    risks: list[SiteRisk] = []  # strongest first
+    risk: RiskLevel | None = None  # overall; null when the policy couldn't be read
+    summary: str = ""
+    opt_out_url: str | None = None
+    llm: Literal["off", "running", "done", "failed"] = "off"
+    checked_at: str  # ISO time this laptop read the policy
+    errors: list[str] = []
+    # What the page itself does, seen in the browser: trackers it loaded and personal data it asks for.
+    trackers: list[TrackerFound] = []
+    asks_for: list[FormField] = []
+    insecure_fields: list[FormField] = []
+    broker: BrokerMatch | None = None  # the site is a people-search site in data/brokers.json
+    ad_sellers: AdSellers | None = None  # null until the popup asks for it
 
 
 # ---------- Status ----------

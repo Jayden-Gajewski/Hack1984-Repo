@@ -13,8 +13,11 @@ Rules:
 - Local LLM calls use local=True. They're logged with long text truncated, and marked
   as staying on this machine.
 - Don't import httpx or requests anywhere else in backend/app or backend/scripts.
+- Pages the browser extension reads straight from websites (service "website") are kept in a
+  separate, smaller log, so a day of browsing can't push a scan's requests out of the main one.
 """
 
+import asyncio
 import copy
 import re
 import time
@@ -29,6 +32,7 @@ from pydantic import BaseModel
 from app.config import LOCAL_HOSTS
 
 MAX_LOG_ENTRIES = 500
+MAX_SITE_LOG_ENTRIES = 200  # service "website": the browser extension's policy fetches
 LOCAL_BODY_CHARS = 300
 REDACTED = "REDACTED"
 USER_AGENT = "hack1984/0.1 (local privacy scanner)"
@@ -79,6 +83,7 @@ class OutboundEntry(BaseModel):
 
 
 _log: deque[OutboundEntry] = deque(maxlen=MAX_LOG_ENTRIES)
+_site_log: deque[OutboundEntry] = deque(maxlen=MAX_SITE_LOG_ENTRIES)
 _ids = count(1)
 _client: httpx.AsyncClient | None = None
 
@@ -131,8 +136,14 @@ async def request(
     json_body: Any = None,
     params: dict[str, Any] | None = None,
     timeout: float = 20.0,
+    send_cookies: bool = True,
+    max_bytes: int | None = None,
 ) -> httpx.Response:
-    """Send one logged HTTP request. `purpose` is shown to the user in the log panel."""
+    """Send one logged HTTP request. `purpose` is shown to the user in the log panel.
+
+    send_cookies=False sends no stored cookies (the browser extension's fetches from websites).
+    max_bytes reads at most that much of the body, decompressed, and never downloads the rest,
+    so a huge page or a compression bomb can't fill memory."""
     for query in guard or []:
         assert_minimal_query(query)
 
@@ -140,6 +151,8 @@ async def request(
     req = client.build_request(
         method.upper(), url, params=params, headers=headers, json=json_body, timeout=timeout
     )
+    if not send_cookies:
+        req.headers.pop("cookie", None)
     if local and req.url.host not in LOCAL_HOSTS:
         # local=True hides the call in the log panel by default, so it must really be local.
         raise ValueError(f"local=True but {req.url.host!r} is not this machine")
@@ -155,13 +168,28 @@ async def request(
         headers=_redact_headers(req.headers),
         body=_truncate(body) if local else body,
     )
-    _log.append(entry)
+    (_site_log if service == "website" else _log).append(entry)
 
     started = time.monotonic()
     try:
-        response = await client.send(req)
+        if max_bytes is None:
+            response = await client.send(req)
+        else:
+            response = await client.send(req, stream=True)
+            content = bytearray()
+            try:
+                async for chunk in response.aiter_bytes():
+                    content += chunk
+                    if len(content) >= max_bytes:
+                        break
+            finally:
+                await response.aclose()
+            response._content = bytes(content[:max_bytes])  # what .text and .json() read
         entry.status = response.status_code
         return response
+    except asyncio.CancelledError:  # e.g. the caller's time limit ran out
+        entry.error = "Cancelled: it took too long."
+        raise
     except Exception as exc:
         entry.error = f"{type(exc).__name__}: {exc}"
         raise
@@ -170,8 +198,10 @@ async def request(
 
 
 def get_log(include_local: bool = True) -> list[OutboundEntry]:
-    return [e for e in _log if include_local or not e.local]
+    entries = sorted([*_log, *_site_log], key=lambda e: e.id)
+    return [e for e in entries if include_local or not e.local]
 
 
 def clear_log() -> None:
     _log.clear()
+    _site_log.clear()

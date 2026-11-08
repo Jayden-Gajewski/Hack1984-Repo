@@ -16,10 +16,10 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Any
 
-from fastapi import Cookie, FastAPI, HTTPException, Query, Response
+from fastapi import Cookie, FastAPI, Header, HTTPException, Query, Response
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 
-from app import auth, db, explain, outbound
+from app import auth, db, explain, outbound, site_policy
 from app.clients import ollama
 from app.companies import add_company, all_companies
 from app.config import get_settings
@@ -41,6 +41,8 @@ from app.models import (
     RescanResponse,
     ScanRequest,
     ScanResponse,
+    SitePolicyRequest,
+    SitePolicyResponse,
     StatusResponse,
     User,
 )
@@ -314,6 +316,21 @@ async def inbox_check():
     """Stage 7: runs locally on the mock inbox, no search."""
     session.alias_hits = await _call("Stage 7 (inbox check)", s7_aliases.check_inbox)
     return session.alias_hits
+
+
+@app.post("/api/site-policy", response_model=SitePolicyResponse)
+async def site_policy_check(req: SitePolicyRequest, origin: str | None = Header(default=None)):
+    """The browser extension (extension/): what the privacy policy of the site you're visiting
+    says it collects and shares, and the risks. The policy is read straight from the site (or
+    sent by the browser) and analyzed on this laptop. Which sites you visit is never saved."""
+    # Only the extension calls this route. A web page can't read the answer, but it could still
+    # send page text to plant a fake verdict, so refuse anything that says it came from a page.
+    if origin and not origin.startswith("chrome-extension://"):
+        raise HTTPException(403, "Only the Dossier browser extension can use this route.")
+    try:
+        return await site_policy.check_site(req)
+    except site_policy.CantCheck as exc:
+        raise HTTPException(400, str(exc)) from None
 
 
 @app.get("/api/outbound-log", response_model=list[OutboundEntry])

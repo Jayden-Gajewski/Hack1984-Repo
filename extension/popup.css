@@ -1,0 +1,505 @@
+/* Same tokens as the app (frontend/app/globals.css), so the popup reads as part of Dossier. */
+:root {
+  --bg: #eff1f0;
+  --surface: #ffffff;
+  --sunken: #e6e9e8;
+  --text: #141a22;
+  --muted: #545c66;
+  --border: #d3d8dc;
+  --accent: #23408e;
+  --on-accent: #ffffff;
+  --high: #b42318;
+  --high-bg: #fbe9e7;
+  --medium: #8a5300;
+  --medium-bg: #f8ecd9;
+  --low: #17663f;
+  --low-bg: #e3f2ea;
+  --focus: #23408e;
+  --mono: ui-monospace, "Cascadia Mono", "SF Mono", Consolas, monospace;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #060b1a;
+    --surface: #0f1b38;
+    --sunken: #040816;
+    --text: #eef2fb;
+    --muted: #a3b0c8;
+    --border: #22325a;
+    --accent: #8f83ff;
+    --on-accent: #060b1a;
+    --high: #ff7a90;
+    --high-bg: color-mix(in srgb, #ff7a90 16%, #0f1b38);
+    --medium: #ffb547;
+    --medium-bg: color-mix(in srgb, #ffb547 16%, #0f1b38);
+    --low: #3ddc97;
+    --low-bg: color-mix(in srgb, #3ddc97 16%, #0f1b38);
+    --focus: #8f83ff;
+    color-scheme: dark;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+}
+
+body {
+  width: 380px;
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+a {
+  color: var(--accent);
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---------- header and footer ---------- */
+
+.top {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.site {
+  max-width: 230px;
+  overflow: hidden;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.foot {
+  padding: 10px 14px 12px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 550;
+  cursor: pointer;
+}
+
+.toggle input {
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.fine {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+/* ---------- content ---------- */
+
+main {
+  display: grid;
+  gap: 14px;
+  padding: 12px 14px 14px;
+}
+
+section {
+  min-width: 0;
+}
+
+h1 {
+  margin: 0 0 4px;
+  font-size: 15px;
+}
+
+h2 {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.message p {
+  margin: 0 0 8px;
+}
+
+.working {
+  color: var(--muted);
+}
+
+.verdict {
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.verdict p {
+  margin: 0;
+}
+
+.verdict-label {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.verdict-summary {
+  margin-top: 2px !important;
+}
+
+.verdict--high {
+  background: var(--high-bg);
+  border-color: color-mix(in srgb, var(--high) 35%, transparent);
+}
+.verdict--high .verdict-label {
+  color: var(--high);
+}
+.verdict--medium {
+  background: var(--medium-bg);
+  border-color: color-mix(in srgb, var(--medium) 35%, transparent);
+}
+.verdict--medium .verdict-label {
+  color: var(--medium);
+}
+.verdict--low {
+  background: var(--low-bg);
+  border-color: color-mix(in srgb, var(--low) 35%, transparent);
+}
+.verdict--low .verdict-label {
+  color: var(--low);
+}
+
+.broker {
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--high) 35%, transparent);
+  border-radius: 10px;
+}
+
+.broker p {
+  margin: 0 0 8px;
+}
+
+.broker-title {
+  color: var(--high);
+  font-weight: 700;
+}
+
+.broker .actions {
+  flex-wrap: wrap;
+  margin-top: 0;
+}
+
+.broker .button--primary {
+  width: auto;
+}
+
+.plain {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 7px 10px;
+  color: var(--muted);
+}
+
+.help {
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+}
+
+.help p {
+  margin: 0;
+}
+
+.help p + p {
+  margin-top: 6px;
+}
+
+.rows {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.row + .row {
+  border-top: 1px solid var(--border);
+}
+
+summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  cursor: pointer;
+  list-style: none;
+}
+
+summary::-webkit-details-marker {
+  display: none;
+}
+
+summary::after {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin-left: auto;
+  content: "";
+  border-right: 1.5px solid var(--muted);
+  border-bottom: 1.5px solid var(--muted);
+  transform: rotate(-45deg);
+  transition: transform 0.15s ease-out;
+}
+
+details[open] > summary::after {
+  transform: rotate(45deg);
+}
+
+summary:hover {
+  background: var(--sunken);
+}
+
+.row-title {
+  min-width: 0;
+}
+
+.level,
+.tag {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.03em;
+}
+
+.level {
+  min-width: 66px; /* fits "Medium", so the titles line up */
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.risk--high .level {
+  color: var(--high);
+  background: var(--high-bg);
+}
+.risk--medium .level {
+  color: var(--medium);
+  background: var(--medium-bg);
+}
+.risk--low .level {
+  color: var(--low);
+  background: var(--low-bg);
+}
+
+.tag {
+  color: var(--muted);
+  background: var(--sunken);
+}
+
+.tag--sensitive {
+  color: var(--high);
+  background: var(--high-bg);
+}
+
+.detail {
+  margin: 0 10px 6px;
+  color: var(--muted);
+}
+
+.quote {
+  margin: 0 10px 10px;
+  padding: 8px 10px;
+  background: var(--sunken);
+  border-radius: 8px;
+}
+
+.quote blockquote {
+  margin: 0;
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+
+.quote figcaption {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.also {
+  margin-top: 8px;
+}
+
+.also p {
+  margin: 0 0 4px;
+  color: var(--low);
+  font-weight: 600;
+}
+
+.also .quote {
+  margin: 0;
+}
+
+.muted,
+.source,
+.llm {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.llm--failed {
+  color: var(--medium);
+}
+
+.info {
+  display: grid;
+  gap: 6px;
+}
+
+.notes summary {
+  padding: 2px 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.notes summary:hover {
+  background: none;
+}
+
+.notes ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 12px;
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: transform 0.1s ease-out;
+}
+
+.button:hover {
+  background: var(--sunken);
+}
+
+.button:active {
+  transform: scale(0.97);
+}
+
+.button--primary {
+  width: 100%;
+  padding: 8px 12px;
+  color: var(--on-accent);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.button--primary:hover {
+  background: var(--accent);
+  filter: brightness(1.1);
+}
+
+.code {
+  margin: 8px 0 10px;
+  padding: 8px 10px;
+  font-family: var(--mono);
+  font-size: 12px;
+  background: var(--sunken);
+  border-radius: 8px;
+}
+
+.spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 6px;
+  vertical-align: -2px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 2.4s;
+  }
+  summary::after,
+  .button {
+    transition: none;
+  }
+}

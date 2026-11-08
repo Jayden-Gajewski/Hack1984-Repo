@@ -40,7 +40,9 @@ backend/
     prompts.py       local LLM prompts
     db.py            PostgreSQL: saved scans, local users and sessions
     auth.py          local accounts: scrypt password hashes, session tokens
-    clients/         exa.py, tavily.py, wayback.py, ollama.py
+    site_policy.py   browser extension: privacy check for the site you're visiting
+    clients/         exa.py, tavily.py, wayback.py, ollama.py,
+                     website.py (reads a policy straight from a site)
     stages/          s1_exposures.py ... s7_aliases.py
     data/            checked-in reference data: brokers.json, companies.json,
                      breach_sources.json, mock_inbox.json, mock_aliases.json
@@ -54,6 +56,7 @@ frontend/
   lib/display.ts     wording rules (tier labels, date sources) and safe links
   next.config.ts     /api proxy to the backend
   proxy.ts           sends /app to /login when there's no session cookie
+extension/           Chrome/Edge extension (Manifest V3, plain JS, no build step)
 docker-compose.yml   local Postgres
 ```
 
@@ -74,6 +77,16 @@ docker-compose.yml   local Postgres
 Details for each stage are in `backend/app/stages/CLAUDE.md`.
 
 **Shared files:** `models.py`, `db.py`, `outbound.py`, the API routes in `main.py`, and `frontend/lib/api.ts` (which mirrors `models.py`) affect everyone. Keep changes to them additive, and call them out in the commit message. Every stage starts as a stub that raises `NotImplementedError`, and its route already exists, so you can usually fill in your stage without touching the shared files.
+
+## Browser extension
+
+`extension/` checks every site you visit (`POST /api/site-policy`, `app/site_policy.py`). It shows what the privacy policy says the company collects and sells or shares, and what the page itself does: known trackers (`data/trackers.json`), the kinds of personal data its forms ask for, whether it's a people-search site, and its `ads.txt` ad sellers. It keeps the same rules:
+- The extension talks only to the backend on localhost. From the page it sends only hostnames and fixed field-kind words, never what's typed or a full tracker URL.
+- Only the visited site is contacted: its policy, and its `ads.txt` when the popup opens. The backend fetches both straight from the site through `outbound.py`, and doesn't follow links or redirects to other sites. No search API is used.
+- The analysis runs on Ollama.
+- Results stay in memory, because the sites you visit are browsing history.
+
+Details and install steps are in `extension/README.md`.
 
 ## Build order
 

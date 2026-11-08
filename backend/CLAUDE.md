@@ -6,7 +6,8 @@ FastAPI app in `app/`. Read the privacy rules in the root `CLAUDE.md` first.
 
 - **Async everywhere.** Run independent calls together with `asyncio.gather(..., return_exceptions=True)`.
 - **Network calls go through `outbound.request(...)` only.** It takes:
-  - `service`: `"exa"`, `"tavily"`, `"wayback"` or `"ollama"`.
+  - `service`: `"exa"`, `"tavily"`, `"wayback"`, `"ollama"`, or `"website"` (a page read straight from a site: the browser extension's policy fetch in `clients/website.py`). Website entries go in their own 200-entry log, so browsing can't push a scan's entries out of the main one.
+  - `send_cookies=False` and `max_bytes=...`: optional, used for website fetches (no stored cookies; stop downloading after that many bytes).
   - `purpose`: a plain-English reason shown in the log panel, e.g. `"Find listings on known people-search sites"`. Write it for a non-technical judge.
   - `guard=[query]`: every search query string. The guard rejects emails, phone numbers, SSNs and birthdates.
   - `local=True`: for Ollama calls. They're logged, with long text truncated, and marked as never leaving the machine.
@@ -14,7 +15,7 @@ FastAPI app in `app/`. Read the privacy rules in the root `CLAUDE.md` first.
 - **Partial failure is normal.** A broker blocks extraction, archive.org times out, a key is missing. Stages collect error strings and return them next to their results. One failed source must not fail the whole scan.
 - **`models.py` is the contract with the frontend.** Add fields; don't rename or remove them without telling the UI owner, who keeps the types in `frontend/lib/api.ts` in sync.
 - **Reference data goes in `app/data/*.json`, and user data in Postgres.** Don't hard-code broker lists or company domains in Python, and don't load reference data into the database.
-- **No CORS.** The browser reaches FastAPI only through the Next.js `/api` rewrite, so don't add `CORSMiddleware` or `allow_origins=["*"]`.
+- **No CORS.** The browser reaches FastAPI only through the Next.js `/api` rewrite, so don't add `CORSMiddleware` or `allow_origins=["*"]`. The browser extension (`extension/`) calls `http://127.0.0.1:8000` directly. That works without CORS because the URL is in the extension's `host_permissions`.
 - **Treat scraped content as untrusted.** It can contain prompt injection aimed at the local LLM. Validate LLM output against enums (e.g. `FIELD_TYPES`, tier names) and drop anything else.
 - **Stubs.** Each stage function raises `NotImplementedError` until its owner builds it. `main.py` turns that into an error string, or HTTP 501 for routes without an errors list, so the app runs end to end from day one. Keep each stub's name and signature when you fill it in.
 - **Reference data:** `from app.data import load_json`, then `load_json("brokers.json")`. Keys are snake_case; `tests/test_data.py` checks them.
@@ -44,6 +45,7 @@ FastAPI app in `app/`. Read the privacy rules in the root `CLAUDE.md` first.
 | GET/POST | `/api/aliases` | `{company}` | aliases / new alias (Stage 7) |
 | GET | `/api/inbox/check` | | `AliasHit[]` from the mock inbox (Stage 7) |
 | GET/DELETE | `/api/outbound-log` | `?include_local=` | log entries / clear |
+| POST | `/api/site-policy` | `{origin, policy_urls, opt_out_url?, page_text?, deep?, refresh?, third_party_hosts?, asks_for?, insecure_fields?}` | `SitePolicyResponse`: what the site's privacy policy says it collects and shares, what the page does (trackers, form fields, people-search site, ads.txt), and the risks. Called by the browser extension (`extension/`). 400 for this computer or the local network, 403 for a web page's origin. Results stay in memory, never in Postgres |
 
 Reject `/api/scan` with HTTP 400 when `consent` is false. Routes that act on the current scan (`/api/optout`, `/api/rescan`) return 409 until a scan has run or been loaded. FastAPI doesn't serve the frontend: it's a separate Next.js app that proxies `/api/*` here.
 
