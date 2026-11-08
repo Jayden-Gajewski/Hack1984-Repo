@@ -23,7 +23,7 @@ from datetime import date
 from typing import Any
 
 from app import db, prompts
-from app.clients import ollama
+from app.clients import gemini
 from app.companies import all_companies
 from app.config import get_settings
 from app.data import load_json
@@ -302,22 +302,22 @@ def clean_explanation(text: Any, facts: list[str]) -> str:
 
 
 async def investigate(address: str) -> AliasInvestigation:
-    """Rules first, then a local LLM explanation when there's unexpected mail to explain."""
+    """Rules first, then Gemini's explanation when there's unexpected mail to explain."""
     alias = await get_alias(address)
     messages = alias_messages(alias, load_mock_inbox())
     result = investigation_facts(alias, messages)
     if result.tier is None:
         return result  # nothing unexpected: the facts say it all, no model call needed
-    answer = await ollama.ask_json(
+    answer = await gemini.ask_json(
         prompts.alias_prompt(
             alias.company, alias.company_domains, result.facts,
             [(m.date or "", m.from_domain, m.subject) for m in messages],
         ),
         system=prompts.ALIAS_SYSTEM,
-        purpose=f"Explain on this laptop the unexpected mail to your {alias.company} alias",
+        purpose=f"Ask Gemini to explain the unexpected mail to your {alias.company} alias",
     )
     if not answer:
-        result.errors.append("The local LLM didn't answer, so only the facts are shown. Is Ollama running?")
+        result.errors.append("Gemini didn't answer, so only the facts are shown.")
         return result
     category = answer.get("category")
     if category in prompts.ALIAS_CATEGORIES and category != "legit":  # rules already ruled out legit

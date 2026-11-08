@@ -419,7 +419,7 @@ async def alias_messages(address: str):
 @app.post("/api/aliases/{address}/investigate", response_model=AliasInvestigation)
 async def investigate_alias(address: str):
     """Who wrote to this alias and what it suggests: rules set the facts and the tier, the
-    local LLM only explains them. Nothing leaves the laptop."""
+    Gemini only explains them."""
     return await _call("Stage 7 (aliases)", s7_aliases.investigate, address)
 
 

@@ -425,7 +425,7 @@ function InvestigationResult({ result }: { result: AliasInvestigation }) {
         <>
           <h4>{ALIAS_CATEGORY_LABEL[result.category]}</h4>
           <p>{result.explanation}</p>
-          <p className="muted small">Explained on this laptop by the local LLM. Checked against the facts above.</p>
+          <p className="muted small">Explained by Gemini. Checked against the facts above.</p>
         </>
       )}
       {result.errors.map((e) => (

@@ -148,7 +148,7 @@ def test_alias_routes_accept_a_url_encoded_address(client):
 # ---------- investigate (Phase 2) ----------
 
 from app import prompts  # noqa: E402
-from app.clients import ollama  # noqa: E402
+from app.clients import gemini  # noqa: E402
 
 
 def _shopco():
@@ -171,7 +171,7 @@ def test_investigation_of_an_alias_with_only_expected_mail_needs_no_model(monkey
     async def boom(*args, **kwargs):
         raise AssertionError("no model call when nothing is unexpected")
 
-    monkeypatch.setattr(ollama, "ask_json", boom)
+    monkeypatch.setattr(gemini, "ask_json", boom)
     fitapp = next(a for a in s7.load_mock_aliases() if a.company == "FitApp")
     monkeypatch.setattr(s7, "get_alias", lambda address: asyncio.sleep(0, fitapp))
     result = asyncio.run(s7.investigate(fitapp.alias))
@@ -210,14 +210,14 @@ def test_clean_explanation_drops_unsupported_sentences():
     assert s7.clean_explanation(None, facts) == ""
 
 
-def test_investigate_uses_the_local_model_and_checks_its_answer(monkeypatch):
+def test_investigate_asks_gemini_and_checks_its_answer(monkeypatch):
     seen = {}
 
     async def fake_ask(prompt, *, system, purpose):
         seen.update(prompt=prompt, purpose=purpose)
         return {"category": "data_sharing", "explanation": "ShopCo may have shared your address. It was leaked by ShopCo."}
 
-    monkeypatch.setattr(ollama, "ask_json", fake_ask)
+    monkeypatch.setattr(gemini, "ask_json", fake_ask)
     shopco = _shopco()
     monkeypatch.setattr(s7, "get_alias", lambda address: asyncio.sleep(0, shopco))
     result = asyncio.run(s7.investigate(shopco.alias))
@@ -226,7 +226,7 @@ def test_investigate_uses_the_local_model_and_checks_its_answer(monkeypatch):
     )
     # The model sees sender domains, never the alias or a full sender address.
     assert shopco.alias not in seen["prompt"] and "offers@" not in seen["prompt"]
-    assert "leadgen-partners.example" in seen["prompt"] and "this laptop" in seen["purpose"]
+    assert "leadgen-partners.example" in seen["prompt"] and seen["purpose"].startswith("Ask Gemini")
 
 
 def test_investigate_rejects_an_unknown_or_legit_category_and_survives_a_silent_model(monkeypatch):
@@ -236,14 +236,14 @@ def test_investigate_rejects_an_unknown_or_legit_category_and_survives_a_silent_
     async def odd(prompt, *, system, purpose):
         return {"category": "legit", "explanation": 42}
 
-    monkeypatch.setattr(ollama, "ask_json", odd)
+    monkeypatch.setattr(gemini, "ask_json", odd)
     result = asyncio.run(s7.investigate(shopco.alias))
     assert (result.category, result.explanation, result.tier) == ("unknown", "", "proven")
 
     async def silent(prompt, *, system, purpose):
         return {}
 
-    monkeypatch.setattr(ollama, "ask_json", silent)
+    monkeypatch.setattr(gemini, "ask_json", silent)
     result = asyncio.run(s7.investigate(shopco.alias))
     assert result.facts and result.errors and result.tier == "proven"
 
@@ -257,7 +257,7 @@ def test_investigate_route(client, monkeypatch):
     async def fake_ask(prompt, *, system, purpose):
         return {"category": "marketing", "explanation": "This looks like marketing from another company."}
 
-    monkeypatch.setattr(ollama, "ask_json", fake_ask)
+    monkeypatch.setattr(gemini, "ask_json", fake_ask)
     res = client.post("/api/aliases/shopco.3f9a1c%40alias.local/investigate")
     assert res.status_code == 200 and res.json()["tier"] == "proven" and res.json()["category"] == "marketing"
     assert client.post("/api/aliases/nobody.000000@alias.local/investigate").status_code == 404

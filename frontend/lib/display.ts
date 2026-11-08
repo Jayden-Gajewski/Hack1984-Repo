@@ -230,7 +230,7 @@ export function websiteHost(url: string): string {
 
 // ---------- Email aliases ----------
 
-// The local LLM's guess about unexpected mail, worded as a guess.
+// Gemini's guess about unexpected mail, worded as a guess.
 export const ALIAS_CATEGORY_LABEL: Record<AliasCategory, string> = {
   legit: "From the company itself",
   marketing: "Looks like marketing from another company",

@@ -318,7 +318,7 @@ class SenderFact(BaseModel):
 
 
 class AliasInvestigation(BaseModel):
-    """Rules decide the facts and the tier; the local LLM only explains them."""
+    """Rules decide the facts and the tier; Gemini only explains them."""
 
     alias: str
     company: str
@@ -326,9 +326,9 @@ class AliasInvestigation(BaseModel):
     facts: list[str]  # plain sentences built in code, each citing its date
     senders: list[SenderFact] = []
     days_to_first_unexpected: int | None = None  # from the alias's creation date
-    category: AliasCategory = "unknown"  # the local LLM's guess, checked against the enum
-    explanation: str = ""  # local LLM, checked sentence by sentence; empty if nothing passed
-    explained_locally: bool = False  # true when the explanation came from the local LLM
+    category: AliasCategory = "unknown"  # Gemini's guess, checked against the enum
+    explanation: str = ""  # Gemini, checked sentence by sentence; empty if nothing passed
+    explained_locally: bool = False  # true when Gemini wrote the explanation (named before the switch)
     errors: list[str] = []
 
 

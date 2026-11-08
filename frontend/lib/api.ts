@@ -181,7 +181,7 @@ export interface SenderFact {
   first_seen: string | null;
 }
 
-// Rules set the facts and the tier; the local LLM only explains them.
+// Rules set the facts and the tier; Gemini only explains them.
 export interface AliasInvestigation {
   alias: string;
   company: string;
