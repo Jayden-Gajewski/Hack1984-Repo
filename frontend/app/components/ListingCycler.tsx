@@ -100,7 +100,7 @@ export default function ListingCycler() {
               <div>
                 <dt>Likely source</dt>
                 <dd>
-                  {l.source} <span className={`tier tier-${l.tier}`}>{TIER_LABEL[l.tier]}</span>
+                  {l.source} <span className={`lp-tier lp-tier-${l.tier}`}>{TIER_LABEL[l.tier]}</span>
                 </dd>
               </div>
             </dl>

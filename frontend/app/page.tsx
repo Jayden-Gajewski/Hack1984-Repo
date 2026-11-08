@@ -150,7 +150,7 @@ export default function Landing() {
           ))}
         </dl>
 
-        <section id="how" className="section">
+        <section id="how" className="lp-section">
           <div className="wrap">
             <h2 className="sec-title" data-reveal="words">
               <Words text="From your name to a sent opt-out" />
@@ -205,7 +205,7 @@ export default function Landing() {
           </div>
         </section>
 
-        <section id="evidence" className="section">
+        <section id="evidence" className="lp-section">
           <div className="wrap ev-grid">
             <div>
               <h2 className="sec-title" data-reveal="words">
@@ -215,11 +215,11 @@ export default function Landing() {
                 Dossier doesn&apos;t guess who&apos;s to blame. Each lead says how strong its evidence is and links
                 to it.
               </p>
-              <dl className="tiers" data-reveal="stagger" style={delay(250)}>
+              <dl className="lp-tiers" data-reveal="stagger" style={delay(250)}>
                 {TIERS.map((t, n) => (
-                  <div className="tier-row" key={t.tier} style={order(n)}>
+                  <div className="lp-tier-row" key={t.tier} style={order(n)}>
                     <dt>
-                      <span className={`tier tier-${t.tier}`}>{t.label}</span>
+                      <span className={`lp-tier lp-tier-${t.tier}`}>{t.label}</span>
                     </dt>
                     <dd>{t.body}</dd>
                   </div>
