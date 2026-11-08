@@ -39,7 +39,8 @@ backend/
     models.py        pydantic models = the API contract with the frontend
     prompts.py       local LLM prompts
     db.py            PostgreSQL: saved scans, local users and sessions
-    auth.py          local accounts: scrypt password hashes, session tokens
+    auth.py          local accounts: scrypt password hashes, hashed session tokens, roles,
+                     login throttling, admin-issued password reset codes
     site_policy.py   browser extension: privacy check for the site you're visiting
     clients/         exa.py, tavily.py, wayback.py, ollama.py, hibp.py,
                      website.py (reads a policy straight from a site)

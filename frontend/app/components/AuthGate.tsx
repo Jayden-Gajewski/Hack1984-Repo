@@ -2,9 +2,18 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { api, type User } from "@/lib/api";
 import Logo from "./Logo";
+
+const SignedIn = createContext<User | null>(null);
+
+/** The signed-in account (email, id, role), for components inside AuthGate. */
+export function useSignedInUser(): User {
+  const user = useContext(SignedIn);
+  if (!user) throw new Error("useSignedInUser must be used inside AuthGate");
+  return user;
+}
 
 // The signed-in app renders only after the backend confirms the session cookie.
 export default function AuthGate({ children }: { children: React.ReactNode }) {
@@ -56,6 +65,9 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
           <Link href="/app/monitor" aria-current={pathname.startsWith("/app/monitor") ? "page" : undefined}>
             Threat monitor
           </Link>
+          <Link href="/app/account" aria-current={pathname.startsWith("/app/account") ? "page" : undefined}>
+            Account
+          </Link>
         </nav>
         <div className="app-bar-user">
           <span>{user.email}</span>
@@ -64,7 +76,7 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
           </button>
         </div>
       </header>
-      {children}
+      <SignedIn.Provider value={user}>{children}</SignedIn.Provider>
     </>
   );
 }

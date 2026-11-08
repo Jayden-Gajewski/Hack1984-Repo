@@ -7,7 +7,7 @@ import { api } from "@/lib/api";
 import Logo from "./Logo";
 import { Lock } from "./icons";
 
-type Mode = "login" | "signup";
+type Mode = "login" | "signup" | "reset";
 
 const COPY = {
   login: {
@@ -25,6 +25,15 @@ const COPY = {
     submit: "Create account",
     busy: "Creating account…",
     switchText: "Already have an account?",
+    switchLink: "Log in",
+    switchHref: "/login",
+  },
+  reset: {
+    title: "Reset your password",
+    sub: "Enter the one-time code an admin on this laptop gave you, then choose a new password.",
+    submit: "Set new password",
+    busy: "Saving…",
+    switchText: "Remembered it?",
     switchLink: "Log in",
     switchHref: "/login",
   },
@@ -51,6 +60,8 @@ export default function AuthForm({ mode, next }: { mode: Mode; next?: string }) 
     setError(null);
     try {
       if (mode === "signup") await api.signup({ email, password });
+      else if (mode === "reset")
+        await api.resetPassword({ email, code: String(form.get("code") ?? ""), new_password: password });
       else await api.login({ email, password });
       router.replace(safeNext(next)); // stays busy until the next page takes over
     } catch (err) {
@@ -76,20 +87,41 @@ export default function AuthForm({ mode, next }: { mode: Mode; next?: string }) 
               Email
               <input name="email" type="email" autoComplete="email" required autoFocus />
             </label>
+            {mode === "reset" && (
+              <label className="auth-field">
+                Reset code
+                <input
+                  name="code"
+                  type="text"
+                  autoComplete="one-time-code"
+                  autoCapitalize="characters"
+                  spellCheck={false}
+                  required
+                  minLength={4}
+                  maxLength={32}
+                  placeholder="K7QM-2XRP-9HTD"
+                />
+              </label>
+            )}
             <label className="auth-field">
-              Password
+              {mode === "reset" ? "New password" : "Password"}
               <input
                 name="password"
                 type="password"
-                autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                autoComplete={mode === "login" ? "current-password" : "new-password"}
                 required
                 minLength={8}
-                aria-describedby={mode === "signup" ? "password-hint" : undefined}
+                aria-describedby={mode === "login" ? undefined : "password-hint"}
               />
-              {mode === "signup" && (
+              {mode !== "login" && (
                 <span id="password-hint" className="auth-hint">
                   At least 8 characters.
                 </span>
+              )}
+              {mode === "login" && (
+                <Link href={next ? `/reset?next=${encodeURIComponent(next)}` : "/reset"} className="auth-hint">
+                  Forgot your password?
+                </Link>
               )}
             </label>
             {error && (
