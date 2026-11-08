@@ -507,3 +507,32 @@ summary:hover {
     transition: none;
   }
 }
+
+/* ---------- private email for this site ---------- */
+
+.alias-box {
+  padding: 12px 14px 14px;
+  border-top: 1px solid var(--border);
+}
+
+.alias-box > p {
+  margin: 0 0 8px;
+}
+
+.alias-box .alias-address {
+  font-family: var(--mono);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.alias-actions {
+  display: flex;
+  gap: 8px;
+  margin: 10px 0 0;
+}
+
+.alias-actions .button--primary {
+  width: auto;
+  flex: 1;
+}

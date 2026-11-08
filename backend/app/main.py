@@ -33,7 +33,10 @@ from app.models import (
     AccountsResponse,
     Alias,
     AliasHit,
+    AliasInvestigation,
+    AliasMessage,
     AliasRequest,
+    AliasUpdate,
     BreachEvent,
     CompanyRequest,
     Credentials,
@@ -175,6 +178,17 @@ OPEN_ROUTES = {
 # 127.0.0.1:8000, not the app) and sends a chrome-extension:// Origin. The route doesn't read or
 # change anything stored here, and it checks the Origin itself: it refuses any web page.
 EXTENSION_ROUTES = {"/api/site-policy"}
+# The extension's "private email for this site" lists and makes aliases through the app
+# (localhost:3000), with the user's own session cookie. A chrome-extension:// Origin may make
+# changes on these exact routes and methods only; a signed-in session is still required, and
+# every other change still has to come from a page on this laptop.
+EXTENSION_SESSION_ROUTES = {("GET", "/api/aliases"), ("POST", "/api/aliases")}
+
+
+def _extension_may_call(request: Request, origin: str | None) -> bool:
+    return bool(origin and origin.startswith("chrome-extension://")) and (
+        request.method, request.url.path
+    ) in EXTENSION_SESSION_ROUTES
 
 
 @app.middleware("http")
@@ -185,7 +199,12 @@ async def require_session(request: Request, call_next):
     # Changes must come from a page on this laptop, even if some other site's page got a browser
     # to send our cookie along.
     origin = request.headers.get("origin")
-    if request.method not in ("GET", "HEAD", "OPTIONS") and origin and urlsplit(origin).hostname not in LOCAL_HOSTS:
+    if (
+        request.method not in ("GET", "HEAD", "OPTIONS")
+        and origin
+        and urlsplit(origin).hostname not in LOCAL_HOSTS
+        and not _extension_may_call(request, origin)
+    ):
         return JSONResponse({"detail": "Requests must come from this laptop."}, status_code=403)
     if path in OPEN_ROUTES:
         return await call_next(request)
@@ -370,7 +389,27 @@ async def aliases():
 
 @app.post("/api/aliases", response_model=Alias)
 async def new_alias(req: AliasRequest):
-    return await _call("Stage 7 (aliases)", s7_aliases.create_alias, req.company)
+    """A new alias for a company or for the website you're signing up on (one per signup)."""
+    return await _call("Stage 7 (aliases)", s7_aliases.create_alias, req.company, req.site, req.label)
+
+
+@app.patch("/api/aliases/{address}", response_model=Alias)
+async def update_alias(address: str, req: AliasUpdate):
+    """Disable or re-enable one of your aliases, or change its note. 404 if it isn't yours."""
+    return await _call("Stage 7 (aliases)", s7_aliases.update_alias, address, req.status, req.note)
+
+
+@app.get("/api/aliases/{address}/messages", response_model=list[AliasMessage])
+async def alias_messages(address: str):
+    """One alias's mail from the mock inbox, newest first. Local only, no search."""
+    return await _call("Stage 7 (aliases)", s7_aliases.messages_for, address)
+
+
+@app.post("/api/aliases/{address}/investigate", response_model=AliasInvestigation)
+async def investigate_alias(address: str):
+    """Who wrote to this alias and what it suggests: rules set the facts and the tier, the
+    local LLM only explains them. Nothing leaves the laptop."""
+    return await _call("Stage 7 (aliases)", s7_aliases.investigate, address)
 
 
 @app.get("/api/inbox/check", response_model=list[AliasHit])

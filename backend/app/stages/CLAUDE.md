@@ -106,3 +106,14 @@ Pure function: `(exposures, breaches, policies, alias_hits) -> exposures with le
 - The demo uses `data/mock_inbox.json` and `data/mock_aliases.json`. Use a fictional company and `.example` domains, never a real company accused on fake data. Include one legitimate email from the company itself, to show it isn't flagged.
 
 **Built** (`s7_aliases.py`, plus the `aliases` table in `db.py`). `match_inbox()` is the pure core. Aliases can be made for companies in `companies.json` or the demo companies; anything else is a 404. If Postgres is down, the demo aliases still list and the inbox check still works.
+
+**Identity manager, Phase 1** (one alias per signup):
+- `POST /api/aliases {site}` makes an alias for a website. Only the hostname is kept (`models.normalize_site`), never a pasted URL's path or query. The expected senders are the domains of the company in `companies.json` that owns the site, or else the site itself. No lookup is made.
+- Aliases belong to the signed-in account (`aliases.user_id`). Aliases from before accounts go to the first admin.
+- Status and note live in `alias_states`, per account and per address, so the demo aliases can be disabled too.
+- Messages per alias come from the mock inbox (`alias_messages()`, pure). `blocked` means the message arrived on or after the day the alias was disabled. It's a label: nothing receives real mail. Don't word it as if mail was rejected.
+- A disabled alias's unexpected mail is still a Proven hit: the evidence doesn't go away.
+
+**Phase 2, investigate:** `investigation_facts()` (pure) writes the facts, each date with its source, names senders found in `brokers.json`/`companies.json`, and sets Proven. The local LLM (`prompts.alias_prompt`) sees the company, the sender domains, the dates and the subjects (truncated). It never sees the alias or a full sender address. It only picks a category and explains. `clean_explanation()` drops sentences with "leaked by", a sale or leak stated without a hedge, or a 2+ digit number missing from the facts. The model can't pick `legit` when the rules found unexpected mail.
+
+**Phase 3–4:** the Aliases tab (`frontend/app/components/AliasPanel.tsx`) and the extension's "private email for this site" (`extension/popup.js`).

@@ -417,8 +417,73 @@ blockquote .muted { display: block; margin-top: 2px; }
 
 /* ---------- Aliases ---------- */
 
-.alias-list { list-style: none; padding: 0; margin: 12px 0 16px; }
-.alias-list li { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--border); }
+/* One ledger, not a card per alias. Unexpected mail is the evidence: it gets the Proven tint. */
+.alias-create { margin: 4px 0 8px; }
+.alias-create label { display: block; font-weight: 600; margin-bottom: 6px; }
+.alias-create input { flex: 1 1 260px; }
+.alias-create .muted { margin-top: 6px; }
+
+.alias-ledger { list-style: none; padding: 0; margin: 20px 0 8px; border-top: 1px solid var(--border); }
+.alias-row { padding: 14px 0; border-bottom: 1px solid var(--border); }
+.alias-row.new {
+  transition: opacity 220ms var(--ease-out), transform 220ms var(--ease-out);
+  @starting-style { opacity: 0; transform: translateY(-6px); }
+}
+.alias-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.alias-address { font-size: 1rem; color: var(--text); transition: color 160ms ease; }
+.alias-row.off .alias-address { color: var(--muted); }
+.alias-off { font-size: 0.875rem; color: var(--muted); background: var(--sunken); border-radius: 999px; padding: 1px 10px; }
+.alias-meta { margin: 4px 0 0; color: var(--muted); font-size: 0.925rem; max-width: 70ch; }
+button.quiet.copy { padding: 2px 8px; font-size: 0.875rem; }
+.copy-label { display: inline-block; transition: opacity 150ms ease; @starting-style { opacity: 0; } }
+button.quiet.alias-toggle { padding: 4px 0; margin-top: 4px; font-size: 0.925rem; }
+
+.alias-detail {
+  margin-top: 10px;
+  padding: 14px 16px;
+  background: var(--sunken);
+  border-radius: 8px;
+  transition: opacity 180ms var(--ease-out), transform 180ms var(--ease-out);
+  @starting-style { opacity: 0; transform: translateY(-4px); }
+}
+.alias-detail > * + * { margin-top: 10px; }
+.alias-messages { list-style: none; padding: 0; margin: 0; }
+.alias-messages li {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 14rem) minmax(0, 1fr) auto;
+  gap: 4px 12px;
+  align-items: baseline;
+  padding: 8px 10px;
+  border-radius: 6px;
+}
+.alias-messages li + li { margin-top: 2px; }
+.alias-messages li.unexpected { background: var(--proven-bg); }
+.msg-date { color: var(--muted); font-size: 0.875rem; font-variant-numeric: tabular-nums; }
+.msg-from { overflow-wrap: anywhere; }
+.msg-subject { color: var(--text); }
+.msg-verdict { font-size: 0.875rem; color: var(--muted); white-space: nowrap; }
+.unexpected .msg-verdict { color: var(--proven); font-weight: 650; }
+.msg-blocked { display: inline-block; margin-left: 6px; font-weight: 400; color: var(--muted); }
+@media (max-width: 640px) {
+  .alias-messages li { grid-template-columns: 1fr auto; }
+  .msg-subject { grid-column: 1 / -1; }
+}
+.alias-actions { margin-top: 14px; }
+.alias-note label { font-weight: 600; }
+.alias-note input { flex: 1 1 220px; }
+
+.alias-investigation {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  transition: opacity 200ms var(--ease-out);
+  @starting-style { opacity: 0; }
+}
+.alias-investigation h4 { font-size: 1rem; margin: 14px 0 6px; }
+.alias-investigation p { max-width: 68ch; }
+.alias-facts, .alias-senders { margin: 0; padding-left: 1.2em; }
+.alias-facts li + li, .alias-senders li + li { margin-top: 4px; }
+.alias-senders { margin-top: 8px; }
 code, .mono { font-family: var(--mono); font-size: 0.875em; overflow-wrap: anywhere; }
 
 /* ---------- Outbound requests card ---------- */
@@ -672,6 +737,7 @@ code, .mono { font-family: var(--mono); font-size: 0.875em; overflow-wrap: anywh
   .drawer { transform: none; opacity: 0; transition: opacity 150ms ease, visibility 0s linear 150ms; }
   .drawer.open { opacity: 1; transition: opacity 150ms ease, visibility 0s; }
   .tabpanel, .picker-list, .token { @starting-style { transform: none; } }
+  .alias-row.new, .alias-detail { transition-property: opacity; @starting-style { transform: none; } }
   .tab-indicator[data-animate] { transition: none; }
   details::details-content { transition-property: opacity, content-visibility; }
 }

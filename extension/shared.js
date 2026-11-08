@@ -5,8 +5,39 @@ export const BACKEND = "http://127.0.0.1:8000";
 // The Dossier app on this laptop, for "scan yourself" on a people-search site. Only opened as a
 // link, with nothing added to it.
 export const APP_URL = "http://localhost:3000/app";
+// Private emails are the signed-in account's own data, so they go through the app (which proxies
+// to the backend) with the user's session cookie. Only GET/POST /api/aliases accept the
+// extension's origin (backend/app/main.py EXTENSION_SESSION_ROUTES).
+const APP_ORIGIN = "http://localhost:3000";
 
 export class Offline extends Error {}
+export class SignedOut extends Error {}
+
+/** A call to the app's alias API. Only a website's hostname is ever sent. */
+export async function aliasRequest(method, body = undefined) {
+  let res;
+  try {
+    res = await fetch(`${APP_ORIGIN}/api/aliases`, {
+      method,
+      credentials: "include",
+      headers: body ? { "Content-Type": "application/json" } : {},
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch {
+    throw new Offline("The Dossier app isn't running.");
+  }
+  if (res.status === 401) throw new SignedOut("Sign in to Dossier in this browser.");
+  if (!res.ok) {
+    let detail = `The app answered HTTP ${res.status}.`;
+    try {
+      const data = await res.json();
+      if (typeof data.detail === "string") detail = data.detail;
+      else if (Array.isArray(data.detail) && data.detail[0]?.msg) detail = String(data.detail[0].msg).replace(/^Value error, /, "");
+    } catch {}
+    throw new Error(detail);
+  }
+  return res.json();
+}
 
 /** Public websites only: not this computer, an IP address or the local network. */
 export function isCheckable(origin) {
