@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import Link from "next/link";
 import type { CSSProperties } from "react";
+import FilmPlayer from "./components/FilmPlayer";
 import ListingCycler from "./components/ListingCycler";
 import LogDemo from "./components/LogDemo";
 import Logo from "./components/Logo";
@@ -91,6 +92,7 @@ export default async function Landing() {
             <Logo />
           </Link>
           <nav className="nav-links" aria-label="Sections">
+            <a href="#watch">Demo</a>
             <a href="#how">How it works</a>
             <a href="#privacy">Privacy</a>
             <a href="#evidence">Evidence</a>
@@ -129,8 +131,8 @@ export default async function Landing() {
               <Link href={signedIn ? "/app" : "/signup"} className="btn btn-primary btn-lg">
                 Start a scan <Arrow />
               </Link>
-              <a href="#how" className="btn btn-ghost btn-lg">
-                See how it works
+              <a href="#watch" className="btn btn-ghost btn-lg">
+                Watch the 35-second demo
               </a>
             </div>
             <p className="hero-note">
@@ -160,6 +162,24 @@ export default async function Landing() {
             </div>
           ))}
         </dl>
+
+        <section id="watch" className="film" aria-labelledby="watch-title">
+          <div className="wrap">
+            <div className="film-head">
+              <h2 id="watch-title" className="sec-title" data-reveal="words">
+                <Words text="See Dossier in 35 seconds" />
+              </h2>
+              <p className="sec-lede" data-reveal="fade" style={delay(150)}>
+                Find it, trace it, take it down: from a listing with your name on it to an opt-out sent from your
+                laptop.
+              </p>
+            </div>
+            <div data-reveal="fade" style={delay(200)}>
+              <FilmPlayer />
+            </div>
+            <p className="film-caption">Sample data: Jordan Avery and every site in the film are fictional. No sound.</p>
+          </div>
+        </section>
 
         <section id="how" className="lp-section">
           <div className="wrap">
