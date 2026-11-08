@@ -31,11 +31,13 @@ Use REST, not vendor SDKs, so the outbound log shows the exact payload. Raise a 
 - The URLs come from web pages, so `public_https()` accepts only https on a public hostname and the default port. It refuses localhost, IP addresses, `.local`/`.test` names and `user:pass@`, upgrades http to https, and drops the query string. Hostnames aren't resolved, so the certificate check is what keeps hostile links off local devices. Redirects are followed by hand, and each hop is checked again.
 - `read_page()` sends no cookies, reads at most 2 MB (`outbound.request(max_bytes=...)` stops downloading there), and runs at most 4 fetches at once. HTML goes through `html_to_text()` in a thread (stdlib parser; scripts, styles and `<title>` are skipped). It raises `PageError` with a message for the user, and each hop has a 30-second total limit.
 
-## Ollama (`ollama.py`), local only
+## Gemini (`gemini.py`), https://generativelanguage.googleapis.com
 
-- `POST {OLLAMA_URL}/api/generate` with `model`, `prompt`, `system`, `format: "json"`, `stream: false` and `options: {temperature: 0, num_ctx, num_predict}`, with `num_ctx` and `keep_alive` from `.env` (`OLLAMA_NUM_CTX`, `OLLAMA_KEEP_ALIVE`). Every call sends the same `num_ctx`, warm-up included, or Ollama reloads the model.
-- `GET {OLLAMA_URL}/api/tags` tells you whether Ollama is running and the model is pulled.
-- Always pass `local=True` to `outbound.request`. `config.py` refuses to start if `OLLAMA_URL` isn't localhost. Don't remove that check.
+- `POST /v1beta/models/{GEMINI_MODEL}:generateContent` with `systemInstruction`, `contents` and `generationConfig: {responseMimeType: "application/json", maxOutputTokens, thinkingConfig: {thinkingLevel: "LOW"}}`. The key goes in the `x-goog-api-key` header, which the log redacts; never put it in the URL.
+- This is the only service that receives page text, policy text and breach evidence. It goes through `outbound.request("gemini", ...)` like everything else, never `local=True`: it leaves the machine.
+- `ready()` only checks that `GEMINI_API_KEY` is set; it contacts nothing. A wrong key shows up as failed calls in the log.
+- `ask_json()` runs at most `GEMINI_PARALLEL` calls at once, retries 429/503 twice, drops thought parts, and returns `{}` on any failure.
+- Default model `gemini-3.6-flash` (stable). On the free tier Google may use what it's sent to improve its products, so the public site needs a paid key.
 
 ## Have I Been Pwned (`hibp.py`), https://haveibeenpwned.com/API/v3
 

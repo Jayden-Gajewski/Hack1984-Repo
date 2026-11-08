@@ -18,9 +18,9 @@ The first-hour test (`scripts/test_extract.py`) decides how much Stage 1 can rel
 
 **Built.** Choices worth knowing, all in `s1_exposures.py`:
 - The Tavily query quotes only the name: `"Jane Doe" Springfield IL`.
-- Before any search, it checks for a search key and a running Ollama with the model pulled, so a scan never spends credits on pages it can't analyze.
+- Before any search, it checks for a search key and `GEMINI_API_KEY`, so a scan never spends credits on pages it can't analyze.
 - The last-name filter looks at the URL path, title and snippet, never the domain.
-- At most 20 candidates per scan (known brokers first), since each one is a local LLM call.
+- At most `SCAN_MAX_PAGES` pages per scan (default 8, known brokers first), since each one is a Gemini call.
 - Extracted text under 500 chars, or without the last name, counts as blocked and falls back to the snippet.
 - Pages on domains in neither `brokers.json` nor `public_profiles.json` must also have `is_people_search_site: true` from the LLM, so news stories and social profiles don't become cards.
 - Every field quote must appear in the page text; fields are limited to `prompts.LISTING_FIELDS`.
@@ -46,7 +46,7 @@ The first-hour test (`scripts/test_extract.py`) decides how much Stage 1 can rel
   - Tavily news search.
   - Tavily search restricted to the state attorney general domains in `data/breach_sources.json` (these pages list the date and data types).
   - Exa search with `startPublishedDate`.
-- The local LLM merges the snippets into breach events: `date`, `date_kind` (occurred, disclosed or unknown), `data_types`, `source_url` and `summary`.
+- Gemini merges the snippets into breach events: `date`, `date_kind` (occurred, disclosed or unknown), `data_types`, `source_url` and `summary`.
 - Normalize `data_types` to `FIELD_TYPES` (watch out: "email addresses" means `email`, not `address`). Label each date's source, and prefer AG notices.
 
 **Built** (`s3_breaches.py`). Tested on Ticketmaster; these choices came from real results:
@@ -69,7 +69,7 @@ The first-hour test (`scripts/test_extract.py`) decides how much Stage 1 can rel
 - A strict pattern also flags plain "we share/sell ... with third parties/partners" sentences, because the model's picks vary between runs.
 - Blocked policies fall back to search snippets from the company's own domains (AT&T needs this).
 
-## Stage 5: Rank likely sources (`s5_ranking.py`, Local LLM & ranking)
+## Stage 5: Rank likely sources (`s5_ranking.py`, LLM & ranking)
 
 Pure function: `(exposures, breaches, policies, alias_hits) -> exposures with leads`.
 
@@ -99,7 +99,7 @@ Pure function: `(exposures, breaches, policies, alias_hits) -> exposures with le
 
 **Built** (`s6_resolve.py`). A page under 500 characters counts as blocked (`unconfirmed`), not removed; "still listed" needs both first and last name. Tested live: Ticketmaster's contact search found privacy@ticketmaster.com.
 
-## Stage 7: Aliases (`s7_aliases.py`, Local LLM & ranking)
+## Stage 7: Aliases (`s7_aliases.py`, LLM & ranking)
 
 - Format: `{company-slug}.{6 random hex}@{ALIAS_DOMAIN}`. Save aliases to the `aliases` table in Postgres.
 - **Inbox check (local only, no search):** for each message sent to a known alias, if the sender's domain isn't the assigned company's domain or one of its subdomains, it's an `AliasHit` with tier Proven.
@@ -114,6 +114,6 @@ Pure function: `(exposures, breaches, policies, alias_hits) -> exposures with le
 - Messages per alias come from the mock inbox (`alias_messages()`, pure). `blocked` means the message arrived on or after the day the alias was disabled. It's a label: nothing receives real mail. Don't word it as if mail was rejected.
 - A disabled alias's unexpected mail is still a Proven hit: the evidence doesn't go away.
 
-**Phase 2, investigate:** `investigation_facts()` (pure) writes the facts, each date with its source, names senders found in `brokers.json`/`companies.json`, and sets Proven. The local LLM (`prompts.alias_prompt`) sees the company, the sender domains, the dates and the subjects (truncated). It never sees the alias or a full sender address. It only picks a category and explains. `clean_explanation()` drops sentences with "leaked by", a sale or leak stated without a hedge, or a 2+ digit number missing from the facts. The model can't pick `legit` when the rules found unexpected mail.
+**Phase 2, investigate:** `investigation_facts()` (pure) writes the facts, each date with its source, names senders found in `brokers.json`/`companies.json`, and sets Proven. Gemini (`prompts.alias_prompt`) sees the company, the sender domains, the dates and the subjects (truncated). It never sees the alias or a full sender address. It only picks a category and explains. `clean_explanation()` drops sentences with "leaked by", a sale or leak stated without a hedge, or a 2+ digit number missing from the facts. The model can't pick `legit` when the rules found unexpected mail.
 
 **Phase 3–4:** the Aliases tab (`frontend/app/components/AliasPanel.tsx`) and the extension's "private email for this site" (`extension/popup.js`).

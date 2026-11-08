@@ -7,7 +7,7 @@ const SERVICE_LABEL: Record<string, string> = {
   tavily: "Tavily",
   exa: "Exa",
   wayback: "Wayback",
-  gemini: "Gemini",
+  gemini: "Google AI",
   hibp: "Have I Been Pwned",
   smtp: "Email (SMTP)",
 };
@@ -249,10 +249,13 @@ export default function OutboundLog() {
           </div>
           {breakdown && <p className="muted small">{breakdown}</p>}
           <p className="muted small mt">Every request Dossier sent, with exactly what was in it.</p>
-          <label className="check ledger-toggle">
-            <input type="checkbox" checked={includeLocal} onChange={(e) => setIncludeLocal(e.target.checked)} />
-            <span>Show calls that stayed on this machine</span>
-          </label>
+          {/* Only when there are local calls to show: since the switch to Gemini, every call leaves. */}
+          {entries.some((e) => e.local) && (
+            <label className="check ledger-toggle">
+              <input type="checkbox" checked={includeLocal} onChange={(e) => setIncludeLocal(e.target.checked)} />
+              <span>Show calls that stayed on this machine</span>
+            </label>
+          )}
         </div>
         {error && <p className="error ledger-pad">{error}</p>}
         <div className="drawer-body">
