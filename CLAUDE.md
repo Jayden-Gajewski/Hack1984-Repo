@@ -39,7 +39,8 @@ backend/
     models.py        pydantic models = the API contract with the frontend
     prompts.py       local LLM prompts
     db.py            PostgreSQL: saved scans, local users and sessions
-    auth.py          local accounts: scrypt password hashes, session tokens
+    auth.py          local accounts: scrypt password hashes, hashed session tokens, roles,
+                     login throttling, admin-issued password reset codes
     site_policy.py   browser extension: privacy check for the site you're visiting
     clients/         exa.py, tavily.py, wayback.py, ollama.py, hibp.py,
                      website.py (reads a policy straight from a site)
@@ -58,7 +59,7 @@ frontend/
   lib/api.ts         typed API client; mirrors models.py
   lib/display.ts     wording rules (tier labels, date sources) and safe links
   next.config.ts     /api proxy to the backend
-  proxy.ts           sends /app to /login when there's no session cookie
+  proxy.ts           sends /app to /login without a session cookie, and /login and /signup to /app with one
 extension/           Chrome/Edge extension (Manifest V3, plain JS, no build step)
 docker-compose.yml   local Postgres
 ```

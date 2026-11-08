@@ -406,6 +406,20 @@ class StatusResponse(BaseModel):
 # ---------- Local accounts (stored in the local Postgres only) ----------
 
 
+def _account_email(v: str) -> str:
+    v = v.strip().lower()
+    local, _, domain = v.partition("@")
+    if not local or "." not in domain or " " in v:
+        raise ValueError("Enter a valid email address.")
+    return v
+
+
+def _new_password(v: str) -> str:
+    if len(v) < 8:
+        raise ValueError("Use at least 8 characters for your password.")
+    return v
+
+
 class Credentials(BaseModel):
     email: str = Field(max_length=254)
     password: str = Field(max_length=256)
@@ -413,22 +427,66 @@ class Credentials(BaseModel):
     @field_validator("email")
     @classmethod
     def _email(cls, v: str) -> str:
-        v = v.strip().lower()
-        local, _, domain = v.partition("@")
-        if not local or "." not in domain or " " in v:
-            raise ValueError("Enter a valid email address.")
-        return v
+        return _account_email(v)
 
     @field_validator("password")
     @classmethod
     def _password(cls, v: str) -> str:
-        if len(v) < 8:
-            raise ValueError("Use at least 8 characters for your password.")
-        return v
+        return _new_password(v)
+
+
+# "admin": the first account made on this laptop, and anyone an admin promotes (auth.py).
+Role = Literal["user", "admin"]
 
 
 class User(BaseModel):
     email: str
+    # The auth routes fill these in. Optional, so code that only knows the email still works.
+    id: str | None = None
+    role: Role = "user"
+    created_at: str | None = None
+
+
+class PasswordChange(BaseModel):
+    """A signed-in user changing their own password."""
+
+    current_password: str = Field(max_length=256)
+    new_password: str = Field(max_length=256)
+
+    @field_validator("new_password")
+    @classmethod
+    def _password(cls, v: str) -> str:
+        return _new_password(v)
+
+
+class PasswordReset(BaseModel):
+    """A forgotten password: the one-time code an admin created, and the new password."""
+
+    email: str = Field(max_length=254)
+    code: str = Field(min_length=4, max_length=32)
+    new_password: str = Field(max_length=256)
+
+    @field_validator("email")
+    @classmethod
+    def _email(cls, v: str) -> str:
+        return _account_email(v)
+
+    @field_validator("new_password")
+    @classmethod
+    def _password(cls, v: str) -> str:
+        return _new_password(v)
+
+
+class ResetCode(BaseModel):
+    """Shown to the admin once, to hand over in person. Only its hash is stored."""
+
+    email: str
+    code: str
+    expires_at: str
+
+
+class RoleUpdate(BaseModel):
+    role: Role
 
 
 # ---------- Threat monitor (app/monitor/) ----------

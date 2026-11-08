@@ -45,6 +45,13 @@ FastAPI app in `app/`. Read the privacy rules in the root `CLAUDE.md` first.
 | GET/POST | `/api/aliases` | `{company}` | aliases / new alias (Stage 7) |
 | GET | `/api/inbox/check` | | `AliasHit[]` from the mock inbox (Stage 7) |
 | GET/DELETE | `/api/outbound-log` | `?include_local=` | log entries / clear |
+| POST | `/api/auth/signup`, `/login` | `{email, password}` | `User` `{email, id, role, created_at}` and a session cookie. The first account on this laptop is the admin. Login is throttled per email (429 after `auth.MAX_FAILURES` misses in `auth.FAILURE_WINDOW` s) |
+| POST/GET | `/api/auth/logout`, `/me` | | end this session / the signed-in `User` (401 if none) |
+| POST | `/api/auth/password` | `{current_password, new_password}` | change your password; your other sessions end, this one stays (400 wrong current password, 429 throttled) |
+| POST | `/api/auth/reset` | `{email, code, new_password}` | spend a one-time code from an admin, set a new password and sign in (400 bad or expired code, 429 throttled). Open route |
+| GET | `/api/admin/users` | | admins only (403 otherwise): every account on this laptop |
+| PATCH/DELETE | `/api/admin/users/{id}` | `{role}` | change a role / remove an account with its sessions, saved scans and footprint. 409 for the last admin or your own account |
+| POST | `/api/admin/users/{id}/reset-code` | | `ResetCode` `{email, code, expires_at}`, shown once; replaces an earlier code and expires after `auth.RESET_MINUTES` |
 | POST | `/api/site-policy` | `{origin, policy_urls, opt_out_url?, page_text?, deep?, refresh?, third_party_hosts?, asks_for?, insecure_fields?}` | `SitePolicyResponse`: what the site's privacy policy says it collects and shares, what the page does (trackers, form fields, people-search site, ads.txt), and the risks. Called by the browser extension (`extension/`). 400 for this computer or the local network, 403 for a web page's origin. Results stay in memory, never in Postgres |
 | GET | `/api/monitor` | | threat monitor dashboard: summary, companies, emails, incidents, history, schedule, config |
 | GET/POST | `/api/monitor/refresh` | `{company_id?, include_news?}` | refresh status / start a background check (202; 409 if one runs) |
@@ -61,7 +68,7 @@ FastAPI app in `app/`. Read the privacy rules in the root `CLAUDE.md` first.
 | POST | `/api/footprint/requests/{request_id}/updates` | `{status, happened_on?, note?}` | record a step; `footprint.NEXT` decides which statuses can follow |
 | DELETE | `/api/footprint/requests/{request_id}/updates/last` | | undo the last recorded step (409 if there's none) |
 
-**Sign-in gate.** `require_session` in `main.py` answers 401 for every `/api/*` route except `OPEN_ROUTES` (status, brokers, auth) unless the request carries a valid session cookie, and 403 for any change whose `Origin` isn't this laptop. It sets `auth.current_user()`, which `db.py` uses to keep saved scans per account. New routes are gated automatically; tests get a signed-in client from `conftest.py`. The one exception is `EXTENSION_ROUTES` (`/api/site-policy`): the browser extension has no session cookie and sends a `chrome-extension://` Origin, so the route skips the gate and refuses any web page's Origin itself.
+**Sign-in gate.** `require_session` in `main.py` answers 401 for every `/api/*` route except `OPEN_ROUTES` (status, brokers, sign-up, login, logout, me, password reset) unless the request carries a valid session cookie, and 403 for any change whose `Origin` isn't this laptop. It sets `auth.current_user()`, which `db.py` uses to keep saved scans per account. New routes are gated automatically; tests get a signed-in client from `conftest.py`. Admin routes add `_admin`, which checks the account's role in Postgres. Session tokens and reset codes are stored only as SHA-256 (`auth.token_hash`); `db.py` hashes them, so callers pass the raw value. The one exception is `EXTENSION_ROUTES` (`/api/site-policy`): the browser extension has no session cookie and sends a `chrome-extension://` Origin, so the route skips the gate and refuses any web page's Origin itself.
 
 Footprint routes (feature 3) need a session cookie (401 otherwise), only read or change the signed-in account's rows (404 for anyone else's), and never call `outbound.request`: drafts are local templates, and Dossier doesn't send requests or change company settings. "Response received" and "Completed" can only follow "Sent", the text locks once a request is marked sent, and step dates can't be in the future or before the last recorded step (409/422).
 

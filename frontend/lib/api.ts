@@ -202,8 +202,21 @@ export interface OutboundEntry {
 
 // ---------- Local accounts (backend: models.User; stored in the local Postgres) ----------
 
+// "admin": the first account made on this laptop, and anyone an admin promotes.
+export type Role = "user" | "admin";
+
 export interface User {
   email: string;
+  id: string | null;
+  role: Role;
+  created_at: string | null;
+}
+
+// Shown to the admin once, to hand over in person (backend: models.ResetCode).
+export interface ResetCode {
+  email: string;
+  code: string;
+  expires_at: string;
 }
 
 // ---------- Threat monitor (backend: app/monitor/, models.py "Threat monitor") ----------
@@ -490,6 +503,15 @@ export const api = {
   login: (body: { email: string; password: string }) => request<User>("POST", "/api/auth/login", body),
   logout: () => request<{ ok: boolean }>("POST", "/api/auth/logout"),
   me: () => request<User>("GET", "/api/auth/me"),
+  changePassword: (body: { current_password: string; new_password: string }) =>
+    request<{ changed: boolean }>("POST", "/api/auth/password", body),
+  resetPassword: (body: { email: string; code: string; new_password: string }) =>
+    request<User>("POST", "/api/auth/reset", body),
+  // Admins only (403 otherwise).
+  users: () => request<User[]>("GET", "/api/admin/users"),
+  setRole: (userId: string, role: Role) => request<User>("PATCH", `/api/admin/users/${encodeURIComponent(userId)}`, { role }),
+  deleteUser: (userId: string) => request<{ deleted: boolean }>("DELETE", `/api/admin/users/${encodeURIComponent(userId)}`),
+  resetCode: (userId: string) => request<ResetCode>("POST", `/api/admin/users/${encodeURIComponent(userId)}/reset-code`),
 
   // Threat monitor. Email addresses and codes go in POST bodies, never URLs.
   monitor: {

@@ -57,18 +57,10 @@ export default function ExposureCard({ exposure, onDraft, removal }: Props) {
         {kinds.length === 0 && <li className="muted">Lists your name</li>}
         {kinds.map((field) => (
           <li key={field} className="chip">
-            {field}
+            {exposure.insights.find((i) => i.field === field)?.label ?? field}
           </li>
         ))}
       </ul>
-
-      {exposure.summary && (
-        <ul className="summary-points">
-          {sentences(exposure.summary).map((line) => (
-            <li key={line}>{line}</li>
-          ))}
-        </ul>
-      )}
 
       <p className="date-line">
         Public by <strong>{exposure.public_by ?? "unknown"}</strong>
@@ -92,6 +84,14 @@ export default function ExposureCard({ exposure, onDraft, removal }: Props) {
 
       <details className="detail">
         <summary>Details</summary>
+        {/* The write-up repeats the chips, date and buttons above, so it waits in here. */}
+        {exposure.summary && (
+          <ul className="summary-points">
+            {sentences(exposure.summary).map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        )}
         {exposure.risk && (
           <p className={`risk-callout ${exposure.risk}`}>
             <strong>{RISK_LABEL[exposure.risk]}</strong>

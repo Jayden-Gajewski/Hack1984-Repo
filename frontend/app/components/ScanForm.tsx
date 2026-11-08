@@ -76,11 +76,11 @@ export default function ScanForm({ onResult, onBusyChange }: Props) {
           />
         </label>
       </div>
-      <label className="check">
-        <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
-        <span>I&apos;m scanning myself (or a teammate who agreed to it).</span>
-      </label>
       <div className="row">
+        <label className="check">
+          <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
+          <span>I&apos;m scanning myself (or a teammate who agreed to it).</span>
+        </label>
         <button type="submit" disabled={!consent || loading}>
           {loading ? "Scanning…" : "Scan"}
         </button>

@@ -7,7 +7,8 @@ and it's stored as an scrypt hash (app/auth.py). Nothing leaves this laptop.
     python -m scripts.create_user --email admin@gmail.com            # prompts for the password
     python -m scripts.create_user --email admin@gmail.com --reset    # new password, ends sessions
 
-The app has no admin role: every local account can do the same things.
+The first account on this laptop is the admin (app/auth.py), whether it's made here or on the
+signup page. An admin can also hand out a one-time reset code in the app (Account page).
 """
 
 import argparse

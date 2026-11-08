@@ -41,11 +41,15 @@ from app.models import (
     Exposure,
     LeadsResponse,
     OptOutRequest,
+    PasswordChange,
+    PasswordReset,
     PolicyResult,
     RequestCreate,
     RequestTextUpdate,
     RequestUpdate,
     RescanResponse,
+    ResetCode,
+    RoleUpdate,
     ScanRequest,
     ScanResponse,
     SitePolicyRequest,
@@ -163,7 +167,10 @@ app.state.current_exposures = lambda: session.exposures
 # Routes anyone on this laptop may call. Everything else under /api/ holds or acts on personal
 # data (scans, saved scans, the outbound log, aliases, the footprint), so it needs a signed-in
 # local account, whoever is asking: the browser, a script, or another program on this machine.
-OPEN_ROUTES = {"/api/status", "/api/brokers", "/api/auth/signup", "/api/auth/login", "/api/auth/logout", "/api/auth/me"}
+OPEN_ROUTES = {
+    "/api/status", "/api/brokers",
+    "/api/auth/signup", "/api/auth/login", "/api/auth/logout", "/api/auth/me", "/api/auth/reset",
+}
 # The browser extension (extension/) calls only this route. It has no session cookie (it talks to
 # 127.0.0.1:8000, not the app) and sends a chrome-extension:// Origin. The route doesn't read or
 # change anything stored here, and it checks the Origin itself: it refuses any web page.
@@ -412,8 +419,18 @@ async def clear_outbound_log():
 
 
 # ---------- Local accounts ----------
-# Users and sessions live in the local Postgres. The session is an httpOnly cookie the
-# browser only ever sends to localhost.
+# Users and sessions live in the local Postgres (auth.py, db.py). The session is an httpOnly
+# cookie the browser only ever sends to localhost; the database keeps only its hash.
+
+TOO_MANY = "Too many wrong tries. Wait a few minutes and try again."
+
+
+async def _accounts_db(fn: Callable[..., Any], *args: Any) -> Any:
+    """A db.py account call off the event loop. Postgres down is a 503; ValueError passes through."""
+    try:
+        return await asyncio.to_thread(fn, *args)
+    except psycopg.Error as exc:
+        raise HTTPException(503, DB_DOWN) from exc
 
 
 def _start_session(response: Response, user_id: str) -> None:
@@ -424,34 +441,48 @@ def _start_session(response: Response, user_id: str) -> None:
     )
 
 
+async def _signed_in_user() -> dict[str, Any]:
+    """The signed-in account (require_session checked the cookie) with its email and role."""
+    user_id = auth.current_user()
+    user = await _accounts_db(db.user_by_id, user_id) if user_id else None
+    if user is None:
+        raise HTTPException(401, "Log in to continue.")
+    return user
+
+
+async def _admin() -> dict[str, Any]:
+    user = await _signed_in_user()
+    if user["role"] != "admin":
+        raise HTTPException(403, "Only an admin can do that.")
+    return user
+
+
 @app.post("/api/auth/signup", response_model=User)
 async def signup(req: Credentials, response: Response):
+    """Create an account and sign in. The first account on this laptop becomes the admin."""
     hashed = await asyncio.to_thread(auth.hash_password, req.password)
-    try:
-        created = await asyncio.to_thread(db.create_user, req.email, hashed)
-        if not created:
-            raise HTTPException(409, "An account with that email already exists. Log in instead.")
-        user = await asyncio.to_thread(db.get_user, req.email)
-        await asyncio.to_thread(db.claim_unowned_scans, user[0])  # the laptop's first account only
-        await asyncio.to_thread(_start_session, response, user[0])
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise HTTPException(503, DB_DOWN) from exc
-    return User(email=req.email)
+    created = await _accounts_db(db.create_user, req.email, hashed)
+    if not created:
+        raise HTTPException(409, "An account with that email already exists. Log in instead.")
+    found = await _accounts_db(db.get_user, req.email)
+    await _accounts_db(db.claim_unowned_scans, found[0])  # the laptop's first account only
+    await _accounts_db(_start_session, response, found[0])
+    return User(**await _accounts_db(db.user_by_id, found[0]))
 
 
 @app.post("/api/auth/login", response_model=User)
 async def login(req: Credentials, response: Response):
-    try:
-        user = await asyncio.to_thread(db.get_user, req.email)
-    except Exception as exc:
-        raise HTTPException(503, DB_DOWN) from exc
-    ok = user is not None and await asyncio.to_thread(auth.verify_password, req.password, user[1])
-    if not ok:
+    if auth.throttled(req.email):
+        raise HTTPException(429, TOO_MANY)
+    found = await _accounts_db(db.get_user, req.email)
+    # An unknown email is checked against a dummy hash, so it takes as long as a wrong password.
+    ok = await asyncio.to_thread(auth.verify_password, req.password, found[1] if found else auth.DUMMY_HASH)
+    if not found or not ok:
+        auth.record_failure(req.email)
         raise HTTPException(401, "That email and password don't match.")
-    await asyncio.to_thread(_start_session, response, user[0])
-    return User(email=req.email)
+    auth.clear_failures(req.email)
+    await _accounts_db(_start_session, response, found[0])
+    return User(**await _accounts_db(db.user_by_id, found[0]))
 
 
 @app.post("/api/auth/logout")
@@ -469,13 +500,91 @@ async def logout(response: Response, h84_session: str | None = Cookie(default=No
 async def me(h84_session: str | None = Cookie(default=None)):
     if not h84_session:
         raise HTTPException(401, "Log in to continue.")
-    try:
-        found = await asyncio.to_thread(db.session_user, h84_session)
-    except Exception as exc:
-        raise HTTPException(503, DB_DOWN) from exc
+    found = await _accounts_db(db.session_user, h84_session)
     if not found:
         raise HTTPException(401, "Your session ended. Log in again.")
-    return User(email=found)
+    return User(**found)
+
+
+@app.post("/api/auth/password")
+async def change_password(body: PasswordChange, h84_session: str | None = Cookie(default=None)):
+    """The signed-in user changes their password. Their other sessions end; this one stays."""
+    user = await _signed_in_user()
+    email = user["email"]
+    if auth.throttled(email):
+        raise HTTPException(429, TOO_MANY)
+    found = await _accounts_db(db.get_user, email)
+    if not found or not await asyncio.to_thread(auth.verify_password, body.current_password, found[1]):
+        auth.record_failure(email)
+        raise HTTPException(400, "Your current password isn't right.")
+    auth.clear_failures(email)
+    hashed = await asyncio.to_thread(auth.hash_password, body.new_password)
+    await _accounts_db(db.set_password, email, hashed, h84_session)
+    return {"changed": True}
+
+
+@app.post("/api/auth/reset", response_model=User)
+async def reset_password(body: PasswordReset, response: Response):
+    """A forgotten password: spend the one-time code an admin created, set a new password and
+    sign in. The account's other sessions end."""
+    if auth.throttled(body.email):
+        raise HTTPException(429, TOO_MANY)
+    if not await _accounts_db(db.use_reset, auth.normalize_code(body.code), body.email):
+        auth.record_failure(body.email)
+        raise HTTPException(400, "That code isn't valid for this email, or it has expired. Ask an admin for a new one.")
+    auth.clear_failures(body.email)
+    hashed = await asyncio.to_thread(auth.hash_password, body.new_password)
+    await _accounts_db(db.set_password, body.email, hashed)
+    found = await _accounts_db(db.get_user, body.email)
+    await _accounts_db(_start_session, response, found[0])
+    return User(**await _accounts_db(db.user_by_id, found[0]))
+
+
+# ---------- Admin: the accounts on this laptop ----------
+# Admins only (_admin): list accounts, change roles, remove an account with everything it owns
+# here, and create a one-time password reset code to hand over in person. db.py refuses to demote
+# or remove the last admin.
+
+
+@app.get("/api/admin/users", response_model=list[User])
+async def admin_users(admin: dict = Depends(_admin)):
+    return await _accounts_db(db.list_users)
+
+
+@app.patch("/api/admin/users/{user_id}", response_model=User)
+async def admin_set_role(user_id: str, body: RoleUpdate, admin: dict = Depends(_admin)):
+    try:
+        user = await _accounts_db(db.set_role, user_id, body.role)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from None
+    if user is None:
+        raise HTTPException(404, "There's no account with that id.")
+    return user
+
+
+@app.delete("/api/admin/users/{user_id}")
+async def admin_delete_user(user_id: str, admin: dict = Depends(_admin)):
+    """Remove an account with its sessions, saved scans and footprint."""
+    if user_id == admin["id"]:
+        raise HTTPException(409, "You can't remove your own account here.")
+    try:
+        deleted = await _accounts_db(db.delete_user, user_id)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from None
+    if not deleted:
+        raise HTTPException(404, "There's no account with that id.")
+    return {"deleted": True}
+
+
+@app.post("/api/admin/users/{user_id}/reset-code", response_model=ResetCode)
+async def admin_reset_code(user_id: str, admin: dict = Depends(_admin)):
+    """A one-time password reset code, shown here once. Making a new one cancels the old one."""
+    user = await _accounts_db(db.user_by_id, user_id)
+    if user is None:
+        raise HTTPException(404, "There's no account with that id.")
+    code = auth.new_reset_code()
+    expires_at = await _accounts_db(db.create_reset, user["id"], code, auth.RESET_MINUTES)
+    return ResetCode(email=user["email"], code=code, expires_at=expires_at)
 
 
 # ---------- Digital footprint ----------

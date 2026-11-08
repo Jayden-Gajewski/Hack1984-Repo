@@ -1,9 +1,9 @@
 """PostgreSQL access. The database runs locally in Docker (docker-compose.yml at the repo root).
 
 It stores saved scans, so "load last scan" still works if the venue Wi-Fi dies, the
-email aliases from Stage 7, local accounts, and each account's digital footprint (tracked
-companies and data requests). The rows hold personal data: the database stays on this
-laptop and nothing from it is committed.
+email aliases from Stage 7, local accounts (roles, hashed session tokens and reset codes; see
+auth.py), and each account's digital footprint (tracked companies and data requests). The
+rows hold personal data: the database stays on this laptop and nothing from it is committed.
 
 This uses psycopg's sync API on purpose; call it through asyncio.to_thread(). psycopg's
 async mode doesn't work with the default event loop on Windows.
@@ -17,7 +17,7 @@ from urllib.parse import urlsplit
 import psycopg
 from psycopg.types.json import Jsonb
 
-from app.auth import current_user
+from app.auth import current_user, token_hash
 from app.config import get_settings
 
 SCHEMA = """
@@ -48,6 +48,24 @@ create table if not exists sessions (
     token       text primary key,
     user_id     uuid not null references users(id) on delete cascade,
     created_at  timestamptz not null default now()
+);
+-- sessions.token holds the SHA-256 of the cookie's token (64 hex characters), never the token
+-- itself. Rows from before that hold a raw token; drop them once (those browsers log in again).
+delete from sessions where length(token) <> 64;
+
+-- Two roles (auth.py). The first account made on this laptop is the admin. On a laptop whose
+-- accounts predate roles, the oldest account becomes the admin.
+alter table users add column if not exists role text not null default 'user'
+    check (role in ('user', 'admin'));
+update users set role = 'admin'
+    where id = (select id from users order by created_at, id limit 1)
+      and not exists (select 1 from users where role = 'admin');
+
+-- One-time codes an admin creates for someone who forgot their password. Hashed, like sessions.
+create table if not exists password_resets (
+    code_hash   text primary key,
+    user_id     uuid not null references users(id) on delete cascade,
+    expires_at  timestamptz not null
 );
 
 -- Digital footprint: companies the user tracks, their data requests, and each request's history.
@@ -183,27 +201,48 @@ def list_aliases() -> list[dict[str, Any]]:
 
 
 # ---------- Local accounts ----------
+# Sessions and reset codes are stored as their SHA-256 (auth.token_hash), never as the token or
+# code itself. Functions here take the raw token and hash it.
+
+_USER_COLUMNS = "id, email, role, created_at"
+
+
+def _user(row: Any) -> dict[str, Any]:
+    return {"id": str(row[0]), "email": row[1], "role": row[2], "created_at": row[3].isoformat()}
+
+
+def _uuid(value: str) -> uuid.UUID | None:
+    try:
+        return uuid.UUID(value)
+    except (ValueError, TypeError, AttributeError):
+        return None
 
 
 def create_user(email: str, password_hash: str) -> bool:
-    """Insert a user. Returns False if the email is already taken."""
-    with connect() as conn:
+    """Insert a user. The first account on this laptop becomes the admin. Returns False if the
+    email is already taken."""
+    with connect() as conn, conn.transaction():
+        conn.execute("select pg_advisory_xact_lock(1984)")  # two first sign-ups can't both be admin
         row = conn.execute(
-            "insert into users (id, email, password_hash) values (%s, %s, %s)"
+            "insert into users (id, email, password_hash, role)"
+            " values (%s, %s, %s, case when exists (select 1 from users) then 'user' else 'admin' end)"
             " on conflict (email) do nothing returning id",
             (uuid.uuid4(), email, password_hash),
         ).fetchone()
     return row is not None
 
 
-def set_password(email: str, password_hash: str) -> bool:
-    """Replace a user's password hash and end their sessions. Returns False if there's no such user."""
-    with connect() as conn:
+def set_password(email: str, password_hash: str, keep_token: str | None = None) -> bool:
+    """Replace a user's password hash and end their sessions, except keep_token (the session that
+    made the change, if any). Unused reset codes go too. Returns False if there's no such user."""
+    keep = token_hash(keep_token) if keep_token else None
+    with connect() as conn, conn.transaction():
         row = conn.execute(
             "update users set password_hash = %s where email = %s returning id", (password_hash, email)
         ).fetchone()
         if row:
-            conn.execute("delete from sessions where user_id = %s", (row[0],))
+            conn.execute("delete from sessions where user_id = %s and token is distinct from %s", (row[0], keep))
+            conn.execute("delete from password_resets where user_id = %s", (row[0],))
     return row is not None
 
 
@@ -214,6 +253,16 @@ def get_user(email: str) -> tuple[str, str] | None:
             "select id, password_hash from users where email = %s", (email,)
         ).fetchone()
     return (str(row[0]), row[1]) if row else None
+
+
+def user_by_id(user_id: str) -> dict[str, Any] | None:
+    """{id, email, role, created_at} for a user id, or None."""
+    key = _uuid(user_id)
+    if key is None:
+        return None
+    with connect() as conn:
+        row = conn.execute(f"select {_USER_COLUMNS} from users where id = %s", (key,)).fetchone()
+    return _user(row) if row else None
 
 
 def claim_unowned_scans(user_id: str) -> int:
@@ -227,25 +276,26 @@ def claim_unowned_scans(user_id: str) -> int:
 
 def create_session(user_id: str, token: str) -> None:
     with connect() as conn:
+        conn.execute("delete from sessions where created_at < now() - interval '30 days'")  # tidy up
         conn.execute(
-            "insert into sessions (token, user_id) values (%s, %s)", (token, uuid.UUID(user_id))
+            "insert into sessions (token, user_id) values (%s, %s)", (token_hash(token), uuid.UUID(user_id))
         )
 
 
-def session_user(token: str) -> str | None:
-    """The email for a session token, or None. Sessions last 30 days."""
+def session_user(token: str) -> dict[str, Any] | None:
+    """{id, email, role, created_at} for a session token, or None. Sessions last 30 days."""
     with connect() as conn:
         row = conn.execute(
-            "select u.email from sessions s join users u on u.id = s.user_id"
+            "select u.id, u.email, u.role, u.created_at from sessions s join users u on u.id = s.user_id"
             " where s.token = %s and s.created_at > now() - interval '30 days'",
-            (token,),
+            (token_hash(token),),
         ).fetchone()
-    return row[0] if row else None
+    return _user(row) if row else None
 
 
 def delete_session(token: str) -> None:
     with connect() as conn:
-        conn.execute("delete from sessions where token = %s", (token,))
+        conn.execute("delete from sessions where token = %s", (token_hash(token),))
 
 
 def session_user_id(token: str) -> str | None:
@@ -253,9 +303,83 @@ def session_user_id(token: str) -> str | None:
     with connect() as conn:
         row = conn.execute(
             "select user_id from sessions where token = %s and created_at > now() - interval '30 days'",
-            (token,),
+            (token_hash(token),),
         ).fetchone()
     return str(row[0]) if row else None
+
+
+# ---------- Admin: roles, removing accounts, reset codes ----------
+
+LAST_ADMIN = "That's the only admin. Make someone else an admin first."
+
+
+def list_users() -> list[dict[str, Any]]:
+    with connect() as conn:
+        rows = conn.execute(f"select {_USER_COLUMNS} from users order by created_at, id").fetchall()
+    return [_user(r) for r in rows]
+
+
+def _is_last_admin(conn: psycopg.Connection, user_id: uuid.UUID) -> bool:
+    row = conn.execute(
+        "select count(*) filter (where role = 'admin'),"
+        " coalesce(bool_or(id = %s and role = 'admin'), false) from users",
+        (user_id,),
+    ).fetchone()
+    return bool(row[1]) and row[0] <= 1
+
+
+def set_role(user_id: str, role: str) -> dict[str, Any] | None:
+    """Change a user's role. Returns the updated user, or None if there's no such user. Raises
+    ValueError rather than demote the last admin."""
+    key = _uuid(user_id)
+    if key is None:
+        return None
+    with connect() as conn, conn.transaction():
+        conn.execute("select pg_advisory_xact_lock(1984)")
+        if role != "admin" and _is_last_admin(conn, key):
+            raise ValueError(LAST_ADMIN)
+        row = conn.execute(
+            f"update users set role = %s where id = %s returning {_USER_COLUMNS}", (role, key)
+        ).fetchone()
+    return _user(row) if row else None
+
+
+def delete_user(user_id: str) -> bool:
+    """Delete a user with everything they own here: sessions, saved scans, footprint, reset codes.
+    Raises ValueError rather than delete the last admin. Returns False if there's no such user."""
+    key = _uuid(user_id)
+    if key is None:
+        return False
+    with connect() as conn, conn.transaction():
+        conn.execute("select pg_advisory_xact_lock(1984)")
+        if _is_last_admin(conn, key):
+            raise ValueError(LAST_ADMIN)
+        return conn.execute("delete from users where id = %s", (key,)).rowcount > 0
+
+
+def create_reset(user_id: str, code: str, minutes: int) -> str:
+    """Store a reset code for a user, replacing any earlier one. Returns its expiry (ISO)."""
+    key = uuid.UUID(user_id)
+    with connect() as conn, conn.transaction():
+        conn.execute("delete from password_resets where user_id = %s or expires_at < now()", (key,))
+        row = conn.execute(
+            "insert into password_resets (code_hash, user_id, expires_at)"
+            " values (%s, %s, now() + %s * interval '1 minute') returning expires_at",
+            (token_hash(code), key, minutes),
+        ).fetchone()
+    return row[0].isoformat()
+
+
+def use_reset(code: str, email: str) -> bool:
+    """Spend a reset code: True if it's valid, unexpired and belongs to this email. A code works once."""
+    with connect() as conn:
+        row = conn.execute(
+            "delete from password_resets r using users u"
+            " where r.code_hash = %s and r.user_id = u.id and u.email = %s and r.expires_at > now()"
+            " returning r.user_id",
+            (token_hash(code), email),
+        ).fetchone()
+    return row is not None
 
 
 # ---------- Digital footprint ----------

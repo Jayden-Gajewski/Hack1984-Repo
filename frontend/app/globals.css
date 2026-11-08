@@ -172,7 +172,7 @@ form { display: grid; gap: 12px; }
 .fields { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1.4fr) 5.5rem; gap: 10px; align-items: end; }
 @media (max-width: 560px) { .fields { grid-template-columns: 1fr 5.5rem; } .fields label:first-child { grid-column: 1 / -1; } }
 label { display: grid; gap: 4px; font-size: 0.875rem; font-weight: 500; }
-input[type="text"], input[type="email"], select {
+input[type="text"], input[type="email"], input[type="password"], select {
   font: inherit;
   font-size: 1rem;
   padding: 9px 11px;
@@ -184,7 +184,7 @@ input[type="text"], input[type="email"], select {
   min-width: 0;
 }
 @media (hover: hover) and (pointer: fine) {
-  input[type="text"]:hover, select:hover { border-color: color-mix(in srgb, var(--border) 50%, var(--muted)); }
+  input[type="text"]:hover, input[type="password"]:hover, select:hover { border-color: color-mix(in srgb, var(--border) 50%, var(--muted)); }
 }
 input[type="text"]::placeholder { color: var(--muted); }
 input[type="checkbox"] { accent-color: var(--accent); width: 18px; height: 18px; margin: 2px 0 0; flex: none; }

@@ -543,6 +543,117 @@ body:has(.site) { background: #060b1a; }
 }
 .foot .logo { color: var(--ink); font-size: 1rem; }
 
+/* ---------- The film: the 35-second ad, served from public/demo and played muted ---------- */
+
+.film { padding: 112px 0 24px; }
+.film-head { max-width: 46rem; }
+.film-stage { position: relative; isolation: isolate; margin-top: 48px; }
+/* The screen lights the page: a soft brand glow behind the frame that brightens while it plays. */
+.film-stage::before {
+  content: "";
+  position: absolute;
+  inset: 10% 8% -4%;
+  z-index: -1;
+  background:
+    radial-gradient(55% 60% at 30% 45%, rgb(106 90 249 / 0.6), transparent 70%),
+    radial-gradient(45% 55% at 75% 60%, rgb(94 242 198 / 0.22), transparent 70%);
+  filter: blur(64px);
+  opacity: 0.5;
+  transition: opacity 500ms ease;
+}
+.film-stage[data-playing]::before { opacity: 0.9; }
+.film-frame {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 16 / 9;
+  border: 1px solid var(--line-strong);
+  border-radius: 18px;
+  background: #02040b;
+  box-shadow: var(--shadow-lg);
+}
+.film-frame:fullscreen { border: 0; border-radius: 0; }
+.film-video { display: block; width: 100%; height: 100%; object-fit: cover; cursor: pointer; }
+.film-frame:fullscreen .film-video { object-fit: contain; }
+
+.film-play {
+  position: absolute;
+  left: 24px;
+  bottom: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 48px;
+  padding: 0 20px 0 18px;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--bg);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+  transition: transform 160ms var(--ease-out), background-color 160ms ease, opacity 160ms ease;
+  @starting-style { opacity: 0; }
+}
+.film-play:active { transform: scale(0.97); }
+.film-play-time { color: #5b6478; font-weight: 500; font-variant-numeric: tabular-nums; }
+@media (hover: hover) and (pointer: fine) {
+  .film-play:hover { background: #eef2fb; }
+}
+
+.film-controls {
+  position: absolute;
+  inset: auto 0 0 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 28px 16px 14px;
+  background: linear-gradient(to top, rgb(2 4 11 / 0.7), transparent);
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+.film-controls[hidden] { display: none; }
+.film-frame:hover .film-controls, .film-frame:focus-within .film-controls { opacity: 1; }
+@media (hover: none) { .film-controls { opacity: 1; } }
+.film-icon-btn {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.16);
+  color: #fff;
+  cursor: pointer;
+  transition: transform 160ms var(--ease-out), background-color 160ms ease;
+}
+.film-icon-btn:active { transform: scale(0.94); }
+@media (hover: hover) and (pointer: fine) {
+  .film-icon-btn:hover { background: rgb(255 255 255 / 0.26); }
+}
+.film-expand { margin-left: auto; }
+.film-time { color: rgb(255 255 255 / 0.85); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.film-progress { position: absolute; inset: auto 0 0 0; height: 3px; background: rgb(255 255 255 / 0.1); }
+.film-progress span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--brand-ink), var(--mint));
+  transform: scaleX(0);
+  transform-origin: left;
+}
+.film-caption { margin-top: 18px; color: var(--ink-3); font-size: 0.9rem; }
+
+@media (max-width: 560px) {
+  .film { padding-top: 72px; }
+  .film-stage { margin-top: 32px; }
+  .film-frame { border-radius: 12px; }
+  .film-play { left: 12px; bottom: 14px; height: 40px; padding: 0 14px; font-size: 0.9rem; }
+  .film-play-time { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .film-stage::before { transition: none; }
+}
+
 /* ---------- Scroll reveals (initial states apply only once Motion.tsx adds .motion-ready) ---------- */
 
 .w { display: inline-block; }

@@ -41,7 +41,8 @@ Everything shown on screen (page titles, field quotes, policy quotes, email subj
   - Show counts per service, and include a toggle for local Ollama calls. They're hidden by default and labeled "stayed on this machine".
 
 - **Threat monitor (`/app/monitor`):** a separate section, linked from the app bar.
-  - Tabs: Alerts (summary strip, incident cards), Monitored (companies, emails) and Activity (schedule, history).
+  - A monitor panel up top: a radar scope (one dot per open threat, coloured by severity), one plain sentence about what's going on, and a live scan feed while it scans.
+  - Tabs: Threats (compact rows that open into boxes), What we watch (companies, emails, setup) and History (schedule, history).
   - Each card shows severity and involvement side by side in one split pill. They're separate answers: a critical breach can be "Not confirmed for you".
   - Steps are checkboxes. Copy never says an account is secure because steps are checked.
   - Missing keys or settings show as "off" in the setup line, never as fake results.
@@ -62,4 +63,4 @@ Everything shown on screen (page titles, field quotes, policy quotes, email subj
 
 ## Demo
 
-The demo is the 3-minute script in the root `CLAUDE.md`. It ends on the outbound log, so that panel should look good full-screen. Make sure each step works without a page reload, and have loading states (scans take a while with a local LLM). Keep a fallback: the "Load last scan" button reads the last saved scan from local Postgres (`GET /api/scans/latest`), in case the venue Wi-Fi fails.
+The demo is the 3-minute script in the root `CLAUDE.md`. It ends on the outbound log, so that panel should look good full-screen. Make sure each step works without a page reload, and have loading states (scans take a while with a local LLM). Keep a fallback in case the venue Wi-Fi fails: the Scan tab opens on the account's last saved scan from local Postgres (`GET /api/scans/latest`), labeled "Nothing was searched", with no click needed. Cards are sorted most urgent first (risk, then evidence tier).
