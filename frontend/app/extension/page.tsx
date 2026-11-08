@@ -199,16 +199,6 @@ export default function ExtensionPage() {
                   </div>
                 </li>
               </ol>
-              <aside className="ext-req">
-                <h3>Keep Dossier running</h3>
-                <p>
-                  During the beta, the extension checks sites with the Dossier app on this computer. If it isn&apos;t
-                  running, the badge stays blank and the popup says so. Start it from the Dossier folder:
-                </p>
-                <pre>
-                  <code>{"cd backend\nuvicorn app.main:app"}</code>
-                </pre>
-              </aside>
             </div>
           </div>
         </section>

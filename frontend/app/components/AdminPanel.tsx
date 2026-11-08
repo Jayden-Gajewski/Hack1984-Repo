@@ -58,10 +58,6 @@ export default function AdminPanel({ me }: { me: User }) {
   return (
     <section className="section" aria-labelledby="accounts-h">
       <h2 id="accounts-h">Accounts</h2>
-      <p className="muted">
-        You&apos;re an admin. The first account made here is one; admins can promote others. Accounts stay in Dossier&apos;s
-        database.
-      </p>
       {error && (
         <p className="error" role="alert">
           {error}
