@@ -1,7 +1,7 @@
 /* Account page (app/app/account, components/ChangePassword.tsx and AdminPanel.tsx). Only the
    scanner's tokens and pieces from globals.css: sections, cards, chips, notices. */
 
-.account-form { max-width: 360px; margin-top: 12px; }
+.account-form { max-width: 360px; margin-top: var(--space-3); }
 
 .account-list { margin: 0; padding: 0; list-style: none; }
 .account-row {
@@ -9,12 +9,12 @@
   flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  gap: 10px 16px;
+  gap: var(--space-3) var(--space-4);
 }
-.account-who { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; min-width: 0; }
+.account-who { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-3); min-width: 0; }
 .account-who strong { overflow-wrap: anywhere; }
 .account-actions { margin-top: 0; }
-.account-role select { padding-block: 6px; font-size: 0.925rem; }
+.account-role select { padding-block: var(--space-2); font-size: var(--text-sm); line-height: var(--leading-sm); }
 
 /* Read aloud or copied off the screen, so it's big, spaced and monospaced. */
-.reset-code { font-size: 1.1em; letter-spacing: 0.08em; user-select: all; }
+.reset-code { font-size: var(--text-lg); line-height: var(--leading-lg); letter-spacing: 0.08em; user-select: all; }
