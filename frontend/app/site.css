@@ -379,7 +379,6 @@
 .demo-log-status { grid-area: status; font-family: var(--mono); color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
 .demo-log-ms { margin-left: var(--space-2); }
 .demo-log-body { grid-area: body; font-family: var(--mono); font-size: var(--text-xs); line-height: var(--leading-xs); color: var(--muted); overflow-wrap: anywhere; }
-.demo-log-foot { padding: var(--space-3) var(--space-5); font-size: var(--text-xs); line-height: var(--leading-xs); color: var(--muted); border-top: 1px solid var(--border); }
 
 /* ---------- Evidence ---------- */
 
@@ -439,7 +438,6 @@
 @media (hover: hover) and (pointer: fine) {
   .foot-nav a:hover { text-decoration: underline; }
 }
-.foot-note { grid-column: 1 / -1; padding-top: var(--space-6); border-top: 1px solid var(--border); }
 
 /* ---------- The film: the 35-second ad, served from public/demo and played muted ---------- */
 

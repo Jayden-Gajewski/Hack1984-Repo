@@ -4,7 +4,7 @@ import Link from "next/link";
 import ExtensionDownload, { CopyText } from "../components/ExtensionDownload";
 import Logo from "../components/Logo";
 import NavScroll from "../components/NavScroll";
-import { Check, Lock } from "../components/icons";
+import { Check } from "../components/icons";
 import "./extension.css";
 
 // The browser extension's page. Public; the download itself needs a signed-in account during the
@@ -106,9 +106,6 @@ export default function ExtensionPage() {
                 How to install
               </a>
             </ExtensionDownload>
-            <p className="hero-note">
-              <Lock /> {HOSTED ? "Free beta. It checks sites with your Dossier account." : "Free beta. It works while Dossier runs on this computer."}
-            </p>
           </div>
 
           <figure className="hero-visual ext-shot">
@@ -148,7 +145,6 @@ export default function ExtensionPage() {
                 </div>
               </div>
             </div>
-            <figcaption>The popup on ShopCo, a sample store that doesn&apos;t exist.</figcaption>
           </figure>
         </section>
 
@@ -254,7 +250,6 @@ export default function ExtensionPage() {
                   </li>
                 ))}
               </ol>
-              <p className="demo-log-foot">Sample entries for ShopCo, a store that doesn&apos;t exist.</p>
             </div>
           </div>
         </section>
@@ -262,7 +257,6 @@ export default function ExtensionPage() {
         <section className="wrap cta">
           <div>
             <h2 className="sec-title">Check the next site you visit.</h2>
-            <p className="sec-lede">Automated removal plans are coming.</p>
           </div>
           <div>
             <ExtensionDownload />
@@ -282,7 +276,6 @@ export default function ExtensionPage() {
           <Link href="/">Dossier</Link>
           <Link href="/login?next=/extension">Log in</Link>
         </nav>
-        <p className="foot-note">ShopCo and the .example sites on this page are fictional.</p>
       </footer>
 
       <NavScroll />

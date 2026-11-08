@@ -24,28 +24,18 @@ export default function ExtensionDownload({ children }: { children?: ReactNode }
   }, []);
 
   const signedIn = session === "in";
-  const note = {
-    checking: " ",
-    in: "For Chrome and Edge. Unzip it, then follow the four steps below.",
-    out: "You'll sign in first.",
-  }[session];
 
   return (
-    <div className="ext-get">
-      <div className="hero-ctas">
-        <a
-          className="btn btn-primary btn-lg"
-          href={signedIn ? "/api/extension.zip" : "/login?next=/extension"}
-          download={signedIn ? "dossier-privacy-check.zip" : undefined}
-          aria-busy={session === "checking"}
-        >
-          <DownloadIcon /> Download the extension
-        </a>
-        {children}
-      </div>
-      <p className="ext-get-note" aria-live="polite">
-        {note}
-      </p>
+    <div className="hero-ctas">
+      <a
+        className="btn btn-primary btn-lg"
+        href={signedIn ? "/api/extension.zip" : "/login?next=/extension"}
+        download={signedIn ? "dossier-privacy-check.zip" : undefined}
+        aria-busy={session === "checking"}
+      >
+        <DownloadIcon /> Download the extension
+      </a>
+      {children}
     </div>
   );
 }

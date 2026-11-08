@@ -107,7 +107,6 @@ export default function LogDemo() {
           </li>
         ))}
       </ol>
-      <p className="demo-log-foot">Sample scan of a fictional person. In the app, this panel lists every real request with its full body.</p>
     </div>
   );
 }

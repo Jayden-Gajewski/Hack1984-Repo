@@ -2,10 +2,6 @@
    (site.css); only what this page adds lives here. Its one load moment: the window rises with the
    hero, then the popup drops from the toolbar icon. */
 
-/* ---------- Download button and its note ---------- */
-
-.ext-get { display: grid; gap: var(--space-3); }
-.ext-get-note { min-height: var(--leading-sm); font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--muted); }
 
 /* ---------- Hero visual: a browser toolbar with the popup hanging from the Dossier icon ---------- */
 
@@ -75,7 +71,6 @@
   animation: ext-drop var(--dur-slow) var(--ease-out) 500ms both; /* once the window (.hero-visual) has risen */
 }
 .ext-popup img { display: block; width: 100%; height: auto; }
-.ext-shot figcaption { margin-top: var(--space-3); font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--muted); }
 @keyframes ext-drop {
   from { opacity: 0; transform: translateY(-8px) scale(0.98); }
 }
@@ -146,8 +141,6 @@
 }
 @media (max-width: 560px) {
   .ext-shows { grid-template-columns: minmax(0, 1fr); gap: var(--space-8); }
-  /* The signed-out note wraps here: keep room for it so nothing below jumps when the check returns. */
-  .ext-get-note { min-height: calc(2 * var(--leading-sm)); }
 }
 @media (prefers-reduced-motion: reduce) {
   .ext-popup,

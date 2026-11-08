@@ -295,10 +295,6 @@ export default async function Landing() {
           <Link href="/extension">Browser extension</Link>
           {signedIn ? <Link href="/app">Open Dossier</Link> : <Link href="/login">Log in</Link>}
         </nav>
-        <p className="foot-note">
-          Sample data on this page is fictional. Jane Example, the .example sites and the Example companies don&apos;t
-          exist.
-        </p>
       </footer>
 
       <NavScroll />
