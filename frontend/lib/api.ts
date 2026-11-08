@@ -21,7 +21,6 @@ export interface ScanRequest {
   name: string;
   city: string;
   state: string;
-  consent: boolean;
   // Someone scanned before gets their newest saved scan back; true forces a fresh scan.
   refresh?: boolean;
 }

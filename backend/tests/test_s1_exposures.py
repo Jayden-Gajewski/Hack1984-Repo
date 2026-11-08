@@ -15,7 +15,7 @@ from app.models import FieldFinding
 from app.outbound import assert_minimal_query
 from app.stages import s1_exposures as s1
 
-PERSON = {"name": "Jane Example", "city": "Springfield", "state": "IL", "consent": True}
+PERSON = {"name": "Jane Example", "city": "Springfield", "state": "IL"}
 
 BROKERS = [
     {"id": "peoplefinder", "name": "PeopleFinder", "domain": "peoplefinder.example",

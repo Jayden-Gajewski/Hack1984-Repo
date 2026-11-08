@@ -327,9 +327,6 @@ async def add_company_route(req: CompanyRequest):
 async def scan(req: ScanRequest):
     """Stages 1 and 2. A person scanned before gets their newest saved scan back instead,
     unless req.refresh is set."""
-    if not req.consent:
-        raise HTTPException(400, "A scan needs consent: you can only scan yourself.")
-
     current = _session()
     key = (auth.current_user(), req.name.casefold(), req.city.casefold(), req.state)
     running = _running_scans.get(key)
@@ -378,7 +375,7 @@ async def _run_scan(req: ScanRequest, current: Session) -> ScanResponse:
         await asyncio.to_thread(
             db.save_scan,
             response.scan_id,
-            req.model_dump(exclude={"consent", "refresh"}),
+            req.model_dump(exclude={"refresh"}),
             response.model_dump(),
         )
     except Exception as exc:
@@ -418,7 +415,7 @@ async def latest_scan():
     # Re-run the write-up: older saved scans don't have it, and its wording may have changed.
     response.exposures = [explain.explain(e) for e in response.exposures]
     current = _session()
-    current.person = ScanRequest(**saved_request, consent=True)  # it was consented when it ran
+    current.person = ScanRequest(**saved_request)
     current.exposures = response.exposures
     return response
 

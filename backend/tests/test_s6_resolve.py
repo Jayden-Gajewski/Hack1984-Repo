@@ -10,7 +10,7 @@ from app import outbound
 from app.models import Exposure, ScanRequest
 from app.stages import s6_resolve as s6
 
-PERSON = ScanRequest(name="Jane Example", city="Springfield", state="IL", consent=True)
+PERSON = ScanRequest(name="Jane Example", city="Springfield", state="IL")
 KNOWN = Exposure(id="e1", broker="PeopleFinder", broker_id="peoplefinder",
                  url="https://www.peoplefinder.example/jane-example", opt_out_url="https://peoplefinder.example/optout")
 UNKNOWN = Exposure(id="e2", broker="newbroker.example", url="https://newbroker.example/p/jane-example")
@@ -119,7 +119,7 @@ def test_rescan_reports_each_listing():
 
 
 def test_removal_status_matches_whole_words_only():
-    person = ScanRequest(name="Ana Li", city="Springfield", state="IL", consent=True)
+    person = ScanRequest(name="Ana Li", city="Springfield", state="IL")
     filler = "Search public records and listings for anyone in Illinois. " * 20
     assert s6.removal_status(filler, person) == "removed"  # "li" inside "listings" doesn't count
     assert s6.removal_status(filler + " Ana Li, age 34", person) == "still_listed"
@@ -135,6 +135,6 @@ def test_combined_status_for_a_card_with_several_pages():
 def test_broker_letter_lists_every_merged_page():
     e = Exposure(id="x", broker="PeopleFinder", url="https://peoplefinder.example/a",
                  other_urls=["https://peoplefinder.example/b"])
-    person = ScanRequest(name="Jane Example", city="Springfield", state="IL", consent=True)
+    person = ScanRequest(name="Jane Example", city="Springfield", state="IL")
     _, body = s6.broker_letter(e, person)
     assert "The listings are here:\nhttps://peoplefinder.example/a\nhttps://peoplefinder.example/b" in body

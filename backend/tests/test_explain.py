@@ -98,7 +98,7 @@ def test_scan_and_saved_scans_carry_the_write_up(client, monkeypatch):
 
     monkeypatch.setattr(main.s1_exposures, "find_exposures", find)
     monkeypatch.setattr(main.s2_dating, "date_exposures", date)
-    person = {"name": "Jane Example", "city": "Springfield", "state": "IL", "consent": True}
+    person = {"name": "Jane Example", "city": "Springfield", "state": "IL"}
     [card] = client.post("/api/scan", json=person).json()["exposures"]
     assert card["risk"] == "high" and card["summary"] and len(card["insights"]) == 2
 

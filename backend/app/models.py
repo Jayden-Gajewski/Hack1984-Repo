@@ -47,7 +47,6 @@ class ScanRequest(BaseModel):
     name: str = Field(min_length=2, max_length=100)
     city: str = Field(min_length=2, max_length=100)
     state: str = Field(min_length=2, max_length=2)
-    consent: bool = False
     # A person scanned before gets their newest saved scan back from local Postgres, with no
     # searching. refresh=True skips that and runs a fresh scan.
     refresh: bool = False

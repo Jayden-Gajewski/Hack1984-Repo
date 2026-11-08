@@ -56,7 +56,7 @@ https-only. Without `SITE_URL` the backend behaves exactly like the local app.
 - **Not there yet:** the Threat Monitor (it still keeps one person's data). It keeps working in the
   local app.
 - **Sign-up is open.** Anyone can create an account and scan any name, which is the misuse risk
-  people-search sites carry too. The consent checkbox stays, and the limits cap the cost. Keep an
+  people-search sites carry too. There's no consent checkbox; the daily limits cap the cost. Keep an
   eye on the admin page's account list.
 
 ## Good to know

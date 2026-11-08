@@ -19,7 +19,7 @@ Everything shown on screen (page titles, field quotes, policy quotes, email subj
 
 ## Screens and components
 
-- **Scan form:** name, city, state, and a required "I'm scanning myself" consent checkbox. Under the button, show this line: "We search with your name and city only. Never your phone number or email."
+- **Scan form:** name, city and state. Under the button, show this line: "We search with your name and city only. Never your phone number or email."
 - **Exposure cards:** broker name, the fields as chips (address, phone, relatives, email, …), the "public by" date with its source, and the strongest lead tier as a badge. If `text_source` is `snippet`, add a small note: "from search snippet; page blocked extraction".
 - **Card detail:**
   - Each field with its quote.

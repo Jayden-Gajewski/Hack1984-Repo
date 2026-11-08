@@ -4,7 +4,7 @@ are replaced with fixtures here (they have their own tests); Stages 5 and 7 run 
 from app import main
 from app.models import BreachEvent, Exposure, FieldFinding, PolicyClause, PolicyResult
 
-PERSON = {"name": "Jane Example", "city": "Springfield", "state": "IL", "consent": True}
+PERSON = {"name": "Jane Example", "city": "Springfield", "state": "IL"}
 SHOPCO = {"id": "shopco", "name": "ShopCo", "domains": ["shopco.example"], "privacy_url": None}
 # A listing on the site that mailed the ShopCo-only alias in data/mock_inbox.json.
 LISTING = Exposure(

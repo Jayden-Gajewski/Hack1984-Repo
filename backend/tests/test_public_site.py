@@ -12,7 +12,7 @@ from app.config import get_settings
 SITE = "https://dossier.example"
 ME, MY_SESSION = "00000000-0000-4000-8000-0000000000aa", "test-session"  # conftest's signed-in account
 OTHER, OTHER_SESSION = "00000000-0000-4000-8000-0000000000bb", "other-session"
-PERSON = {"name": "Jane Example", "city": "Springfield", "state": "IL", "consent": True}
+PERSON = {"name": "Jane Example", "city": "Springfield", "state": "IL"}
 SAVED = (
     {"name": "Jane Example", "city": "Springfield", "state": "IL"},
     {"scan_id": "s1", "errors": [], "exposures": [{"id": "e1", "broker": "ExampleBroker", "url": "https://people.example/jane"}]},

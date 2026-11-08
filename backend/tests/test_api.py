@@ -6,7 +6,7 @@ from app import main
 from app.clients import gemini
 from app.models import Exposure
 
-PERSON = {"name": "Jane Example", "city": "Springfield", "state": "il", "consent": True}
+PERSON = {"name": "Jane Example", "city": "Springfield", "state": "il"}
 
 
 def _current():
@@ -23,11 +23,6 @@ def _fake_stages(monkeypatch, exposures):
 
     monkeypatch.setattr(main.s1_exposures, "find_exposures", find)
     monkeypatch.setattr(main.s2_dating, "date_exposures", date)
-
-
-def test_scan_requires_consent(client):
-    res = client.post("/api/scan", json={**PERSON, "consent": False})
-    assert res.status_code == 400
 
 
 def test_scan_rejects_contact_details_typed_into_fields(client):
@@ -86,11 +81,6 @@ def test_refresh_runs_a_fresh_scan_even_when_one_is_saved(client, monkeypatch):
 
     body = client.post("/api/scan", json={**PERSON, "refresh": True}).json()
     assert calls == [] and body["saved_at"] is None and body["exposures"][0]["id"] == "e1"
-
-
-def test_saved_scans_still_need_consent(client, monkeypatch):
-    _saved(monkeypatch, [])
-    assert client.post("/api/scan", json={**PERSON, "consent": False}).status_code == 400
 
 
 def test_postgres_down_means_a_fresh_scan(client, monkeypatch):
@@ -153,7 +143,7 @@ def test_outbound_log_endpoint(client):
     ],
 )
 def test_scan_rejects_digits_and_bad_state(client, person):
-    body = {"name": "Jane Example", "city": "Springfield", "state": "IL", "consent": True, **person}
+    body = {"name": "Jane Example", "city": "Springfield", "state": "IL", **person}
     assert client.post("/api/scan", json=body).status_code == 422
 
 

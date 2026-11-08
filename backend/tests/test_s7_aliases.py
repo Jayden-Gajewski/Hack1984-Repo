@@ -279,7 +279,7 @@ def test_extension_origin_is_refused_everywhere_else(client):
     assert client.patch(f"/api/aliases/{address}", json={"status": "disabled"}, headers=EXT).status_code == 403
     assert client.post(f"/api/aliases/{address}/investigate", headers=EXT).status_code == 403
     assert client.delete("/api/outbound-log", headers=EXT).status_code == 403
-    assert client.post("/api/scan", json={"name": "Jane Example", "city": "Springfield", "state": "IL", "consent": True},
+    assert client.post("/api/scan", json={"name": "Jane Example", "city": "Springfield", "state": "IL"},
                        headers=EXT).status_code == 403
     # A web page's origin still can't make aliases.
     assert client.post("/api/aliases", json={"site": "shop.example"},

@@ -34,7 +34,7 @@ The two hand off to each other:
 
 ## The website: scan yourself
 
-Sign in, confirm it's your own data (a scan requires consent), and search with your name and city or state only:
+Sign in and search with your name and city or state only:
 
 1. **Find exposures.** Exa and Tavily find people-search listings, and Gemini lists what each one exposes (address, phone, relatives, email). When a site blocks extraction, the scan falls back to search snippets.
 2. **Date them.** The Wayback Machine's earliest snapshot is the "public by" date. Every date shows its source, and a missing date is "unknown".

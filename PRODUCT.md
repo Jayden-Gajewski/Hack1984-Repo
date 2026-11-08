@@ -29,7 +29,7 @@ The analysis runs on the user's own computer, and every request that leaves it i
 
 ## Capabilities and Constraints
 
-- The privacy rules in the root CLAUDE.md are non-negotiable: local analysis, one door out (outbound.py), minimal queries, self-scan only, user data stays on the laptop.
+- The privacy rules in the root CLAUDE.md are non-negotiable: local analysis, one door out (outbound.py), minimal queries, user data stays on the laptop.
 - Wording: "likely source", never "who leaked it"; every date shows its source; a missing date is "unknown".
 - Frontend: no third-party fonts, CDNs, analytics or remote images; no UI libraries beyond Next.js.
 - Pricing: automated removal plans are coming. No prices, tiers or dates are decided; say only that plans are coming (confirmed).

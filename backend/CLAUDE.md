@@ -35,7 +35,7 @@ FastAPI app in `app/`. Read the privacy rules in the root `CLAUDE.md` first.
 | Method | Path | Body | Returns |
 |---|---|---|---|
 | GET | `/api/status` | | key presence, Gemini set up (`ollama_running`, `ollama_model`: old names, Gemini values), Postgres up, `public` |
-| POST | `/api/scan` | `{name, city, state, consent, refresh?}` | `{scan_id, exposures, errors, saved_at}` (Stages 1 and 2); saved to Postgres. A person scanned before gets their newest saved scan back (`saved_at` set, nothing searched) unless `refresh` is true. The scan runs as its own task: a dropped request (Vercel's 120-second limit, a closed tab) doesn't stop it, and asking again for the same person joins it |
+| POST | `/api/scan` | `{name, city, state, refresh?}` | `{scan_id, exposures, errors, saved_at}` (Stages 1 and 2); saved to Postgres. A person scanned before gets their newest saved scan back (`saved_at` set, nothing searched) unless `refresh` is true. The scan runs as its own task: a dropped request (Vercel's 120-second limit, a closed tab) doesn't stop it, and asking again for the same person joins it |
 | GET | `/api/scans/latest` | | the last saved scan ("load last scan" fallback) |
 | GET | `/api/brokers` | | the broker list |
 | GET | `/api/companies` | | account list for the picker: `data/companies.json` plus companies the user added |
@@ -77,7 +77,7 @@ FastAPI app in `app/`. Read the privacy rules in the root `CLAUDE.md` first.
 
 Footprint routes (feature 3) need a session cookie (401 otherwise), only read or change the signed-in account's rows (404 for anyone else's), and never call `outbound.request`: drafts are local templates, and Dossier doesn't send requests or change company settings. "Response received" and "Completed" can only follow "Sent", the text locks once a request is marked sent, and step dates can't be in the future or before the last recorded step (409/422).
 
-Reject `/api/scan` with HTTP 400 when `consent` is false. Routes that act on the current scan (`/api/optout`, `/api/rescan`) return 409 until a scan has run or been loaded. FastAPI doesn't serve the frontend: it's a separate Next.js app that proxies `/api/*` here.
+Routes that act on the current scan (`/api/optout`, `/api/rescan`) return 409 until a scan has run or been loaded. FastAPI doesn't serve the frontend: it's a separate Next.js app that proxies `/api/*` here.
 
 ## Database (`db.py`)
 

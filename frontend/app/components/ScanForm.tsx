@@ -19,7 +19,6 @@ export default function ScanForm({ onResult, onBusyChange }: Props) {
   const [name, setName] = useState("");
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
-  const [consent, setConsent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +38,7 @@ export default function ScanForm({ onResult, onBusyChange }: Props) {
     onBusyChange?.(true);
     setError(null);
     try {
-      const request = { name, city, state, consent };
+      const request = { name, city, state };
       onResult(await api.scan(request), request);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Scan failed");
@@ -78,11 +77,7 @@ export default function ScanForm({ onResult, onBusyChange }: Props) {
         </label>
       </div>
       <div className="row">
-        <label className="check">
-          <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
-          <span>I&apos;m scanning myself (or a teammate who agreed to it).</span>
-        </label>
-        <button type="submit" disabled={!consent || loading} aria-busy={loading || undefined}>
+        <button type="submit" disabled={loading} aria-busy={loading || undefined}>
           <SwapLabel on={loading} idle="Scan" active="Scanning…" />
         </button>
       </div>
