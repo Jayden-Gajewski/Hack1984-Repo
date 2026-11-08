@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { api, type Draft, type RemovalStatus, type ScanRequest, type ScanResponse } from "@/lib/api";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { api, type Draft, type Exposure, type RemovalStatus, type ScanRequest, type ScanResponse } from "@/lib/api";
 import AccountsPanel from "../components/AccountsPanel";
 import AliasPanel from "../components/AliasPanel";
 import AuthGate from "../components/AuthGate";
@@ -12,6 +12,7 @@ import OutboundLog from "../components/OutboundLog";
 import ScanForm from "../components/ScanForm";
 import StarGlobe from "../components/StarGlobe";
 import StatusLine from "../components/StatusLine";
+import { RISK_LABEL } from "@/lib/display";
 import Tabs, { type Tab } from "../components/Tabs";
 
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
@@ -25,9 +26,19 @@ const TABS: Tab<TabId>[] = [
 ];
 const isTab = (v: string): v is TabId => TABS.some((t) => t.id === v);
 
+// Most urgent first: higher risk, then stronger evidence for the likely source.
+const RISK_RANK = { high: 0, medium: 1, low: 2 } as const;
+const TIER_RANK = { proven: 0, likely: 1, possible: 2 } as const;
+const urgency = (e: Exposure) => [e.risk ? RISK_RANK[e.risk] : 3, e.leads[0] ? TIER_RANK[e.leads[0].tier] : 3];
+const byUrgency = (a: Exposure, b: Exposure) => {
+  const [ra, ta] = urgency(a);
+  const [rb, tb] = urgency(b);
+  return ra - rb || ta - tb;
+};
+
 export default function ScannerPage() {
   const [result, setResult] = useState<ScanResponse | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [showingSaved, setShowingSaved] = useState(false); // opened on the account's last saved scan
   const [draftOpen, setDraftOpen] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [draftLoading, setDraftLoading] = useState(false);
@@ -52,12 +63,27 @@ export default function ScannerPage() {
     history.replaceState(null, "", id === "scan" ? window.location.pathname : `#${id}`);
   }
 
-  function showScan(scan: ScanResponse, request?: ScanRequest) {
+  function showScan(scan: ScanResponse, request?: ScanRequest, saved = false) {
+    shown.current = true;
     setResult(scan);
     setRemovals({});
     setNotes([]);
     setLastRequest(request ?? null);
+    setShowingSaved(saved);
   }
+
+  // Open on this account's last saved scan (local Postgres), so there's something to work with
+  // straight away. It's also the demo fallback if the venue Wi-Fi fails, with no click needed.
+  // No saved scan yet is fine: the empty state shows. A scan started meanwhile wins.
+  const shown = useRef(false);
+  useEffect(() => {
+    api.latestScan().then(
+      (scan) => {
+        if (!shown.current) showScan(scan, undefined, true);
+      },
+      () => {},
+    );
+  }, []);
 
   // A saved scan came back instead of a new search: run a fresh one for the same person.
   async function scanAgain() {
@@ -72,15 +98,6 @@ export default function ScannerPage() {
     }
   }
 
-  // Demo fallback if the venue Wi-Fi fails: reload the last saved scan from local Postgres.
-  async function loadLastScan() {
-    setLoadError(null);
-    try {
-      showScan(await api.latestScan());
-    } catch (err) {
-      setLoadError(message(err));
-    }
-  }
 
   // Stage 5: re-rank after new evidence (breaches, policies, alias hits) comes in.
   const refreshLeads = useCallback(async () => {
@@ -138,17 +155,6 @@ export default function ScannerPage() {
         <section className="section scan-section" aria-label="Scan">
           <div className="task-panel">
             <ScanForm onResult={showScan} onBusyChange={setScanning} />
-            <div className="row mt">
-              <button type="button" className="secondary" onClick={loadLastScan} disabled={scanning}>
-                Load last scan
-              </button>
-              <span className="muted small">Reads the last saved scan from this laptop.</span>
-            </div>
-            {loadError && (
-              <p className="error" role="alert">
-                {loadError}
-              </p>
-            )}
           </div>
         </section>
 
@@ -180,6 +186,18 @@ export default function ScannerPage() {
               )}
             </div>
           )}
+          {showingSaved && result && !result.saved_at && (
+            <p className="muted">Your last saved scan, from this laptop. Nothing was searched; scan again above to refresh it.</p>
+          )}
+          {result && count > 0 && !scanning && (
+            <p className="row small muted">
+              Most urgent first:
+              {(["high", "medium", "low"] as const).map((level) => {
+                const n = result.exposures.filter((e) => e.risk === level).length;
+                return n > 0 && <span key={level} className={`risk ${level}`}>{n} {RISK_LABEL[level].toLowerCase()}</span>;
+              })}
+            </p>
+          )}
           {!result && !scanning && (
             <p className="muted">Run a scan to see which people-search sites list you.</p>
           )}
@@ -203,7 +221,7 @@ export default function ScannerPage() {
             ))}
           {result && (
             <div className="cards" key={result.scan_id}>
-              {result.exposures.map((exposure) => (
+              {[...result.exposures].sort(byUrgency).map((exposure) => (
                 <ExposureCard
                   key={exposure.id}
                   exposure={exposure}

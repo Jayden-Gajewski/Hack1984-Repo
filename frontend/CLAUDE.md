@@ -62,4 +62,4 @@ Everything shown on screen (page titles, field quotes, policy quotes, email subj
 
 ## Demo
 
-The demo is the 3-minute script in the root `CLAUDE.md`. It ends on the outbound log, so that panel should look good full-screen. Make sure each step works without a page reload, and have loading states (scans take a while with a local LLM). Keep a fallback: the "Load last scan" button reads the last saved scan from local Postgres (`GET /api/scans/latest`), in case the venue Wi-Fi fails.
+The demo is the 3-minute script in the root `CLAUDE.md`. It ends on the outbound log, so that panel should look good full-screen. Make sure each step works without a page reload, and have loading states (scans take a while with a local LLM). Keep a fallback in case the venue Wi-Fi fails: the Scan tab opens on the account's last saved scan from local Postgres (`GET /api/scans/latest`), labeled "Nothing was searched", with no click needed. Cards are sorted most urgent first (risk, then evidence tier).
