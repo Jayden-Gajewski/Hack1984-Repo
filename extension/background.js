@@ -5,7 +5,7 @@
 // fields, people-search sites), plus any policy result the user already asked for. Reading a
 // site's policy is a request from this computer's own connection, outside any VPN or proxy set up
 // only in the browser, so it waits until the popup opens, unless the user turns on "Also read each
-// site's policy automatically". The local LLM pass also runs only from the popup.
+// site's policy automatically". The Gemini pass also runs only from the popup.
 import { checkPage, isCheckable, readPage, rememberResult, setBadge } from "./shared.js";
 
 chrome.runtime.onMessage.addListener((message, sender) => {

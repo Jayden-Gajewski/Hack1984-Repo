@@ -92,7 +92,7 @@ export default function ScanForm({ onResult, onBusyChange }: Props) {
         <div className="progress" role="status">
           <p className="progress-text">
             <span className="elapsed" aria-hidden="true">{formatElapsed(elapsed)}</span>
-            <span>Searching broker sites, then reading each page with the local LLM. This can take a few minutes.</span>
+            <span>Searching broker sites, then reading each page with Gemini. This can take a minute.</span>
           </p>
           <div className="stripe" aria-hidden="true" />
         </div>

@@ -1,4 +1,4 @@
-"""The local LLM's explanation: every check in monitor/analysis.py, and what the model is sent."""
+"""Gemini's explanation: every check in monitor/analysis.py, and what the model is sent."""
 
 import asyncio
 
@@ -69,7 +69,7 @@ def test_missing_or_bad_fields_fall_back_to_facts():
     assert len(long["summary"]) <= analysis.FIELD_LIMITS["summary"]
 
 
-def test_explain_sends_only_the_breach_to_the_local_llm(monkeypatch):
+def test_explain_sends_only_the_breach_to_gemini(monkeypatch):
     use_settings(monkeypatch)
     sent = {}
 
@@ -78,7 +78,7 @@ def test_explain_sends_only_the_breach_to_the_local_llm(monkeypatch):
         return {"summary": "ShopCo had 120,000 accounts exposed.", "impact": "Passwords can be reused.",
                 "guidance": "", "uncertainty": "", "severity_explanation": "High because of passwords."}
 
-    monkeypatch.setattr(analysis.ollama, "ask_json", ask_json)
+    monkeypatch.setattr(analysis.gemini, "ask_json", ask_json)
     result = asyncio.run(
         analysis.explain(FACTS, level="high", level_reasons=REASONS, involvement="confirmed",
                          involvement_reason=f"Have I Been Pwned lists your verified address {EMAIL} in this breach.")
@@ -94,8 +94,8 @@ def test_explain_reports_a_silent_llm(monkeypatch):
     async def ask_json(prompt, *, system, purpose):
         return {}
 
-    monkeypatch.setattr(analysis.ollama, "ask_json", ask_json)
-    with pytest.raises(RuntimeError, match="local LLM"):
+    monkeypatch.setattr(analysis.gemini, "ask_json", ask_json)
+    with pytest.raises(RuntimeError, match="Gemini didn't answer"):
         asyncio.run(analysis.explain(FACTS, level="high", level_reasons=REASONS, involvement="unconfirmed", involvement_reason="x"))
 
 

@@ -13,7 +13,7 @@ privacy-policy links it found on the page, and any "Do Not Sell or Share" link. 
    (CATEGORIES, each backed by a verbatim line), Stage 4's strict sale/sharing pattern, any "we
    do not sell" statement, and risks built from those by fixed rules (risks_for).
 3. Deep pass (`deep: true`, sent when the popup opens): read the site's ads.txt (one more GET to
-   the same site, same rules) and run Stage 4's local LLM pass over the same sentences. It runs in
+   the same site, same rules) and run Stage 4's Gemini pass over the same sentences. It runs in
    the background because the LLM can take a minute on a CPU. The response says "running" in
    `llm` and `ad_sellers.status`, and the extension asks again until both are done.
 4. What the page itself does (page_risks), from what the extension saw in the browser: trackers it
@@ -45,7 +45,7 @@ from typing import Any
 from urllib.parse import urljoin, urlsplit
 
 from app import prompts
-from app.clients import ollama, website
+from app.clients import gemini, website
 from app.companies import registrable as _list_registrable
 from app.data import load_json
 from app.models import (
@@ -684,7 +684,7 @@ def _not_read(**found: Any) -> _Site:
 
 async def _deep_pass(entry: _Site, read_ads: bool) -> None:
     """Started when the popup opens: the site's ads.txt (unless it was already read), then the
-    local LLM pass."""
+    Gemini pass."""
     if read_ads:
         await _ads_pass(entry)
     if entry.status == "ok":
@@ -713,24 +713,24 @@ async def _ads_pass(entry: _Site) -> None:
 
 
 async def _llm_pass(entry: _Site) -> None:
-    """Stage 4's local LLM pass over the policy's sale and sharing sentences. The model only picks
+    """Stage 4's Gemini pass over the policy's sale and sharing sentences. The model only picks
     sentence numbers and every pick passes Stage 4's checks, so quotes stay verbatim."""
     try:
         groups = s4.batches(entry.sentences)
         answers = await asyncio.gather(
             *(
-                ollama.ask_json(
+                gemini.ask_json(
                     prompts.policy_prompt(entry.site, s4.numbered(group)),
                     system=prompts.POLICY_SYSTEM,
                     # No site name here: a failed call's purpose is printed to the console.
-                    purpose=f"Browser extension: flag sale and sharing clauses in a site's policy, on this "
-                    f"laptop (part {i} of {len(groups)})",
+                    purpose=f"Browser extension: ask Gemini to flag sale and sharing clauses in a site's policy "
+                    f"(part {i} of {len(groups)})",
                 )
                 for i, group in enumerate(groups, 1)
             )
         )
         if groups and not any(answers):
-            entry.errors.append("The local LLM didn't answer (is Ollama running?), so only the quick check ran.")
+            entry.errors.append("Gemini didn't answer, so only the quick check ran.")
             entry.llm = "failed"
             return
         picked = [
@@ -748,7 +748,7 @@ async def _llm_pass(entry: _Site) -> None:
         entry.llm = "done"
     except Exception as exc:
         log.exception("A site policy LLM pass failed")  # no site name: the console isn't for browsing history
-        entry.errors.append(f"The local LLM check failed: {exc}")
+        entry.errors.append(f"The Gemini check failed: {exc}")
         entry.llm = "failed"
     finally:
         entry.sentences = []  # only this pass needed them

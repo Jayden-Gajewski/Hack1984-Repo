@@ -51,7 +51,7 @@ function Setup({ config }: { config: MonitorConfig }) {
     { on: config.news_search, text: config.news_search ? "News search keys set" : "News search needs a Tavily or Exa key" },
     {
       on: config.local_llm,
-      text: config.local_llm ? `Local AI ready (${config.local_llm_model})` : "Local AI not running (start Ollama)",
+      text: config.local_llm ? `Gemini ready (${config.local_llm_model})` : "Gemini not set up (add GEMINI_API_KEY to .env)",
     },
   ];
   return (
@@ -257,8 +257,8 @@ export default function MonitorPage() {
           <header>
             <h1>Threat monitor</h1>
             <p className="lede">
-              We watch the companies you use for known data breaches and tell you what to do. Matching and explanations
-              run on this laptop.
+              We watch the companies you use for known data breaches and tell you what to do. Matching runs on this
+              laptop, and Gemini writes the explanations.
             </p>
           </header>
 

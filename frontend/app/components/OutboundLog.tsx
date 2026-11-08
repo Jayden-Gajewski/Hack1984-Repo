@@ -7,7 +7,7 @@ const SERVICE_LABEL: Record<string, string> = {
   tavily: "Tavily",
   exa: "Exa",
   wayback: "Wayback",
-  ollama: "Ollama",
+  gemini: "Gemini",
   hibp: "Have I Been Pwned",
   smtp: "Email (SMTP)",
 };
@@ -251,7 +251,7 @@ export default function OutboundLog() {
           <p className="muted small mt">Every request that left this laptop, with exactly what was sent.</p>
           <label className="check ledger-toggle">
             <input type="checkbox" checked={includeLocal} onChange={(e) => setIncludeLocal(e.target.checked)} />
-            <span>Show local LLM calls (stayed on this machine)</span>
+            <span>Show calls that stayed on this machine</span>
           </label>
         </div>
         {error && <p className="error ledger-pad">{error}</p>}

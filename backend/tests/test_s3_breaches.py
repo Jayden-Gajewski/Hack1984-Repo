@@ -8,7 +8,7 @@ import httpx
 import pytest
 
 from app import outbound
-from app.clients import ollama
+from app.clients import gemini
 from app.models import BreachEvent
 from app.stages import s3_breaches as s3
 
@@ -51,8 +51,8 @@ def fake_web(request: httpx.Request) -> httpx.Response:
             {"url": BLOG_URL, "title": "The ShopCo hack", "highlights": ["In 2023 ShopCo exposed customer emails."],
              "publishedDate": "2023-04-05T00:00:00.000Z"},
         ]})
-    if host == "localhost" and path == "/api/generate":
-        return httpx.Response(200, json={"response": json.dumps(LLM_ANSWER)})
+    if host == "generativelanguage.googleapis.com" and path.endswith(":generateContent"):
+        return httpx.Response(200, json={"candidates": [{"content": {"parts": [{"text": json.dumps(LLM_ANSWER)}]}}]})
     raise AssertionError(f"unexpected request: {request.url}")
 
 
@@ -60,10 +60,11 @@ def fake_web(request: httpx.Request) -> httpx.Response:
 def fake_internet(monkeypatch):
     monkeypatch.setenv("TAVILY_API_KEY", "test-key")
     monkeypatch.setenv("EXA_API_KEY", "test-key")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-gemini-key")
     from app.config import get_settings
     get_settings.cache_clear()
     monkeypatch.setattr(outbound, "_client", httpx.AsyncClient(transport=httpx.MockTransport(fake_web)))
-    monkeypatch.setattr(ollama, "_generate_slots", asyncio.Semaphore(2))
+    monkeypatch.setattr(gemini, "_generate_slots", asyncio.Semaphore(2))
     data = {"companies.json": [SHOPCO], "breach_sources.json": [{"state": "CA", "name": "CA AG", "domain": "oag.ca.gov"}]}
     monkeypatch.setattr(s3, "load_json", lambda name: data[name])
     monkeypatch.setattr(s3, "all_companies", lambda: data["companies.json"])
@@ -85,11 +86,12 @@ def test_stage_builds_one_grounded_event_per_incident(fake_internet):
 
 def test_stage_sends_the_company_name_only(fake_internet):
     asyncio.run(s3.breach_timelines(["shopco"]))
-    remote = [e for e in outbound.get_log() if not e.local]
-    assert {e.service for e in remote} == {"tavily", "exa"}
-    for entry in remote:
+    log = outbound.get_log()
+    search = [e for e in log if e.service != "gemini"]
+    assert {e.service for e in search} == {"tavily", "exa"} and any(e.service == "gemini" for e in log)
+    for entry in search:
         assert "ShopCo" in entry.body["query"]
-        assert "unauthorized party" not in json.dumps(entry.body)  # result text never goes back out
+        assert "unauthorized party" not in json.dumps(entry.body)  # result text goes only to Gemini
 
 
 def test_normalize_data_type():

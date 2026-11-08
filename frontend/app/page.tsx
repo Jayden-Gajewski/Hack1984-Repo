@@ -15,7 +15,7 @@ const POWERED_BY = [
   { name: "Exa", role: "Finds listings that match you" },
   { name: "Tavily", role: "Searches and reads broker pages" },
   { name: "Wayback Machine", role: "Dates when a listing went public" },
-  { name: "Ollama", role: "Runs the analysis on your laptop" },
+  { name: "Gemini", role: "Reads each page and privacy policy" },
 ];
 
 const STEPS = [
@@ -117,8 +117,7 @@ export default async function Landing() {
             <h1 className="hero-title">{HEADLINE}</h1>
             <p className="hero-lede">
               Dossier finds you on people-search sites, shows what each listing reveals and which company
-              is the likely source, then drafts the opt-out. It runs on your laptop, so you aren&apos;t
-              handing your data to one more company.
+              is the likely source, then drafts the opt-out.
             </p>
             <div className="hero-ctas">
               <Link href={signedIn ? "/app" : "/signup"} className="btn btn-primary btn-lg">
@@ -140,8 +139,8 @@ export default async function Landing() {
                 <Check />
               </span>
               <div>
-                <p className="mock-float-title">4 requests left this laptop</p>
-                <p className="mock-float-sub">Name and city only. Page text stayed here.</p>
+                <p className="mock-float-title">5 requests left this laptop</p>
+                <p className="mock-float-sub">Searches got your name and city only.</p>
               </div>
             </div>
           </div>
@@ -212,7 +211,7 @@ export default async function Landing() {
                   <Check /> Phone numbers, emails, birthdates and SSNs are blocked before a search is sent.
                 </li>
                 <li>
-                  <Check /> Pages and privacy policies are read by Ollama on this machine, never by a hosted AI.
+                  <Check /> Pages and privacy policies are read by Google&apos;s Gemini, and the log shows exactly what it was sent.
                 </li>
                 <li>
                   <Check /> Your account and saved scans stay in a database on this laptop.

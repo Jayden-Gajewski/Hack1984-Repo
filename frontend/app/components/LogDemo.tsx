@@ -37,12 +37,12 @@ const ROWS = [
     ms: "380 ms",
   },
   {
-    service: "Ollama",
-    local: true,
+    service: "Gemini",
+    local: false,
     method: "POST",
-    url: "localhost:11434/api/generate",
-    body: "Page text and prompt. Stays on this laptop.",
-    ms: "4.1 s",
+    url: "generativelanguage.googleapis.com/…:generateContent",
+    body: "Page text and prompt, read by Google's Gemini.",
+    ms: "2.3 s",
   },
 ];
 
@@ -81,7 +81,6 @@ export default function LogDemo() {
 
   const visible = ROWS.slice(0, shown);
   const sent = visible.filter((r) => !r.local).length;
-  const kept = visible.length - sent;
 
   return (
     <div ref={ref} className="demo-log" role="figure" aria-label="Sample outbound log">
@@ -92,7 +91,6 @@ export default function LogDemo() {
         </span>
         <span className="demo-log-count">
           <span>{sent} left this laptop</span>
-          <span className="demo-log-count-local">{kept} stayed local</span>
         </span>
       </div>
       <ol className="demo-log-rows">

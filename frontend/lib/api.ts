@@ -227,8 +227,8 @@ export interface Company {
 
 export interface Status {
   keys: Record<string, boolean>;
-  ollama_running: boolean;
-  ollama_model: string;
+  ollama_running: boolean; // GEMINI_API_KEY is set (named before the switch to Gemini)
+  ollama_model: string; // GEMINI_MODEL
   model_pulled: boolean;
   database: boolean;
 }
@@ -269,7 +269,7 @@ export interface ResetCode {
 
 // ---------- Threat monitor (backend: app/monitor/, models.py "Threat monitor") ----------
 // Severity, confidence and involvement are separate answers: a critical breach can still be
-// "unconfirmed" for this user. Rules in the backend set all three; the local LLM only explains.
+// "unconfirmed" for this user. Rules in the backend set all three; Gemini only explains.
 
 export type Severity = "critical" | "high" | "medium" | "low";
 export type Confidence = "high" | "medium" | "low";

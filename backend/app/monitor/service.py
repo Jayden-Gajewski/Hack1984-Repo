@@ -4,7 +4,7 @@ A refresh, in order (each part can fail without stopping the rest):
 1. Download HIBP's whole breach list (cached 30 minutes) and match each monitored company
    on this laptop. HIBP learns nothing about which companies are monitored.
 2. Optionally (include_news), run Stage 3 for each company: Tavily and Exa searches with the
-   company name only, read by the local LLM. News incidents that describe an HIBP breach are
+   company name only, read by Gemini. News incidents that describe an HIBP breach are
    folded into it.
 3. Check each verified email with HIBP's hashed search (first 6 hash characters only).
 4. Save: new incidents and newly confirmed ones become alerts, once. Known incidents keep their
@@ -20,7 +20,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from app.clients import hibp, ollama
+from app.clients import gemini, hibp
 from app.config import get_settings
 from app.models import (
     SEVERITIES,
@@ -45,11 +45,9 @@ from app.stages import s3_breaches, s5_ranking
 log = logging.getLogger(__name__)
 
 CATALOG_TTL = 30 * 60  # seconds
-LLM_STATUS_TTL = 30  # seconds; the dashboard is polled, and each status call is a log entry
 MAX_ERROR_EVENTS = 5
 
 _catalog: tuple[float, list[dict[str, Any]]] | None = None
-_llm_status: tuple[float, bool] | None = None
 _status = RefreshStatus()
 _task: asyncio.Task | None = None
 
@@ -120,13 +118,12 @@ def _company(record: dict[str, Any]) -> dict[str, Any]:
 
 async def _news_ready() -> str | None:
     """Why the news search can't run, or None. Checked first so a refresh never spends search
-    credits on results the local LLM can't read."""
+    credits on results Gemini can't read."""
     settings = get_settings()
     if not (settings.tavily_api_key or settings.exa_api_key):
         return "News and official-notice search needs TAVILY_API_KEY or EXA_API_KEY in .env."
-    running, pulled = await ollama.status()
-    if not (running and pulled):
-        return f"News and official-notice search needs the local LLM (start Ollama and pull {settings.ollama_model})."
+    if not gemini.ready():
+        return "News and official-notice search needs GEMINI_API_KEY in .env."
     return None
 
 
@@ -477,12 +474,7 @@ def incident_views(data: dict[str, Any], exposures: list[Exposure]) -> list[Inci
 
 
 async def _local_llm_ready() -> bool:
-    global _llm_status
-    if _llm_status and time.monotonic() - _llm_status[0] < LLM_STATUS_TTL:
-        return _llm_status[1]
-    running, pulled = await ollama.status()
-    _llm_status = (time.monotonic(), running and pulled)
-    return _llm_status[1]
+    return gemini.ready()
 
 
 def schedule_view(data: dict[str, Any]) -> MonitorSchedule:
@@ -556,7 +548,7 @@ async def dashboard(exposures: list[Exposure]) -> MonitorDashboard:
             smtp=settings.smtp_configured,
             news_search=bool(settings.tavily_api_key or settings.exa_api_key),
             local_llm=await _local_llm_ready(),
-            local_llm_model=settings.ollama_model,
+            local_llm_model=settings.gemini_model,
         ),
         scan_loaded=bool(exposures),
     )
@@ -649,16 +641,15 @@ async def set_schedule(schedule: MonitorSchedule) -> MonitorSchedule:
 
 
 async def analyze(incident_id: str, exposures: list[Exposure]) -> Incident:
-    """Explain one incident with the local LLM, check the answer, and save it."""
+    """Explain one incident with Gemini, check the answer, and save it."""
     data = store.load()
     fid = store.find_incident_id(data, incident_id)
     if fid is None:
         raise LookupError("No incident with that id.")
     facts = data["incidents"][fid]
     view = build_incident(facts, data["emails"], {}, [])
-    running, pulled = await ollama.status()
-    if not (running and pulled):
-        raise RuntimeError(f"The local LLM isn't ready. Start Ollama and pull {get_settings().ollama_model}.")
+    if not gemini.ready():
+        raise RuntimeError("Gemini isn't set up. Add GEMINI_API_KEY to .env.")
     result = await analysis.explain(
         facts,
         level=view.severity,

@@ -1,4 +1,4 @@
-"""The local LLM's explanation of one incident, checked against the evidence before it's kept.
+"""Gemini's explanation of one incident, checked against the evidence before it's kept.
 
 The model gets the evidence (HIBP's description, the reported data, dates with their sources,
 report summaries, and for a breach HIBP doesn't describe, the text of its official notice) plus
@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from app import prompts
-from app.clients import ollama, tavily
+from app.clients import gemini, tavily
 from app.config import get_settings
 from app.monitor import severity
 
@@ -199,7 +199,7 @@ async def fetch_notice(facts: dict[str, Any]) -> str:
         return ""
     try:
         data = await tavily.extract(
-            [url], purpose=f"Read {facts['company']}'s breach notice so the local LLM can summarize it"
+            [url], purpose=f"Read {facts['company']}'s breach notice so Gemini can summarize it"
         )
         results = data.get("results") or []
         text = results[0].get("raw_content") or "" if results else ""
@@ -212,15 +212,15 @@ async def fetch_notice(facts: dict[str, Any]) -> str:
 async def explain(
     facts: dict[str, Any], *, level: str, level_reasons: list[str], involvement: str, involvement_reason: str
 ) -> dict[str, Any]:
-    """A checked explanation, ready to store. Raises RuntimeError if the local LLM doesn't answer."""
+    """A checked explanation, ready to store. Raises RuntimeError if Gemini doesn't answer."""
     evidence = evidence_text(facts, await fetch_notice(facts))
-    out = await ollama.ask_json(
+    out = await gemini.ask_json(
         prompts.threat_prompt(evidence, level, " ".join(level_reasons), INVOLVEMENT_FOR_MODEL[involvement]),
         system=prompts.THREAT_SYSTEM,
-        purpose=f"Explain the {facts['title']} breach on this laptop",
+        purpose=f"Ask Gemini to explain the {facts['title']} breach",
     )
     if not out:
-        raise RuntimeError("The local LLM didn't answer. Check that Ollama is running, then try again.")
+        raise RuntimeError("Gemini didn't answer. Check GEMINI_API_KEY in .env, then try again.")
     result = validate(
         out,
         evidence=evidence,
@@ -231,5 +231,5 @@ async def explain(
         involvement_reason=involvement_reason,
     )
     result["analyzed_at"] = datetime.now(timezone.utc).isoformat()
-    result["model"] = get_settings().ollama_model
+    result["model"] = get_settings().gemini_model
     return result

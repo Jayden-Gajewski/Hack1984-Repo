@@ -3,7 +3,7 @@ running on this laptop. There's no cloud job or background service, and the UI s
 
 Every minute it looks at the saved schedule. When checks are on and one is due, it starts the
 same refresh as the "Refresh now" button (news searches only if the schedule includes them,
-since they spend search credits and local LLM time).
+since they spend search credits and Gemini calls).
 """
 
 import asyncio

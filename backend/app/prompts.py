@@ -1,4 +1,4 @@
-"""Every local LLM prompt lives here. OWNER: Local LLM & ranking.
+"""Every LLM prompt lives here (they go to Gemini). OWNER: Local LLM & ranking.
 
 Each prompt spells out the exact JSON shape it wants. Page text is untrusted: it can contain
 instructions aimed at the model. Validate every answer against the enums in models.py
