@@ -19,11 +19,11 @@ from typing import Any
 from urllib.parse import urlsplit
 
 import psycopg
-from fastapi import Cookie, Depends, FastAPI, HTTPException, Query, Request, Response
+from fastapi import Cookie, Depends, FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 
-from app import auth, db, explain, footprint, outbound
+from app import auth, db, explain, extension_package, footprint, outbound, site_policy
 from app.clients import ollama
 from app.companies import add_company, all_companies
 from app.config import LOCAL_HOSTS, get_settings
@@ -48,6 +48,8 @@ from app.models import (
     RescanResponse,
     ScanRequest,
     ScanResponse,
+    SitePolicyRequest,
+    SitePolicyResponse,
     StatusResponse,
     TrackedCompany,
     TrackedCompanyInput,
@@ -162,12 +164,16 @@ app.state.current_exposures = lambda: session.exposures
 # data (scans, saved scans, the outbound log, aliases, the footprint), so it needs a signed-in
 # local account, whoever is asking: the browser, a script, or another program on this machine.
 OPEN_ROUTES = {"/api/status", "/api/brokers", "/api/auth/signup", "/api/auth/login", "/api/auth/logout", "/api/auth/me"}
+# The browser extension (extension/) calls only this route. It has no session cookie (it talks to
+# 127.0.0.1:8000, not the app) and sends a chrome-extension:// Origin. The route doesn't read or
+# change anything stored here, and it checks the Origin itself: it refuses any web page.
+EXTENSION_ROUTES = {"/api/site-policy"}
 
 
 @app.middleware("http")
 async def require_session(request: Request, call_next):
     path = request.url.path
-    if not path.startswith("/api/"):
+    if not path.startswith("/api/") or path in EXTENSION_ROUTES:
         return await call_next(request)
     # Changes must come from a page on this laptop, even if some other site's page got a browser
     # to send our cookie along.
@@ -365,6 +371,33 @@ async def inbox_check():
     """Stage 7: runs locally on the mock inbox, no search."""
     session.alias_hits = await _call("Stage 7 (inbox check)", s7_aliases.check_inbox)
     return session.alias_hits
+
+
+@app.get("/api/extension.zip")
+async def extension_download():
+    """The browser extension, zipped from extension/ for Chrome's "Load unpacked". Signed-in
+    accounts only during the beta (require_session covers this route)."""
+    data = await asyncio.to_thread(extension_package.zip_extension)
+    return Response(
+        data,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{extension_package.FILENAME}"'},
+    )
+
+
+@app.post("/api/site-policy", response_model=SitePolicyResponse)
+async def site_policy_check(req: SitePolicyRequest, origin: str | None = Header(default=None)):
+    """The browser extension (extension/): what the privacy policy of the site you're visiting
+    says it collects and shares, and the risks. The policy is read straight from the site (or
+    sent by the browser) and analyzed on this laptop. Which sites you visit is never saved."""
+    # Only the extension calls this route. A web page can't read the answer, but it could still
+    # send page text to plant a fake verdict, so refuse anything that says it came from a page.
+    if origin and not origin.startswith("chrome-extension://"):
+        raise HTTPException(403, "Only the Dossier browser extension can use this route.")
+    try:
+        return await site_policy.check_site(req)
+    except site_policy.CantCheck as exc:
+        raise HTTPException(400, str(exc)) from None
 
 
 @app.get("/api/outbound-log", response_model=list[OutboundEntry])

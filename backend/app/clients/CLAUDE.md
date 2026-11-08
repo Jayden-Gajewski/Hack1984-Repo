@@ -25,6 +25,12 @@ Use REST, not vendor SDKs, so the outbound log shows the exact payload. Raise a 
 - No key is needed, but the service is slow and flaky. Use short timeouts and limit concurrency to about 4.
 - The broker URL (which can include the user's name) goes to archive.org. That's expected, and it appears in the log.
 
+## Websites (`website.py`)
+
+- Reads one page straight from a website: the browser extension's privacy-policy fetch. It appears in the outbound log as service `"website"`, in its own 200-entry log. It needs no key and no search API. `site_policy.py` fetches only pages on the visited site and passes `stay_within`, so redirects stay there too.
+- The URLs come from web pages, so `public_https()` accepts only https on a public hostname and the default port. It refuses localhost, IP addresses, `.local`/`.test` names and `user:pass@`, upgrades http to https, and drops the query string. Hostnames aren't resolved, so the certificate check is what keeps hostile links off local devices. Redirects are followed by hand, and each hop is checked again.
+- `read_page()` sends no cookies, reads at most 2 MB (`outbound.request(max_bytes=...)` stops downloading there), and runs at most 4 fetches at once. HTML goes through `html_to_text()` in a thread (stdlib parser; scripts, styles and `<title>` are skipped). It raises `PageError` with a message for the user, and each hop has a 30-second total limit.
+
 ## Ollama (`ollama.py`), local only
 
 - `POST {OLLAMA_URL}/api/generate` with `model`, `prompt`, `system`, `format: "json"`, `stream: false` and `options: {temperature: 0, num_ctx, num_predict}`, with `num_ctx` and `keep_alive` from `.env` (`OLLAMA_NUM_CTX`, `OLLAMA_KEEP_ALIVE`). Every call sends the same `num_ctx`, warm-up included, or Ollama reloads the model.

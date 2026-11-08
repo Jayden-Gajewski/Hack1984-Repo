@@ -6,6 +6,11 @@
   ],
   "two_level_suffixes": [
     "co.uk", "org.uk", "ac.uk", "gov.uk", "com.au", "net.au", "org.au", "co.nz", "co.jp",
-    "co.in", "com.br", "com.mx", "co.za", "com.sg", "com.hk", "co.kr", "com.tr"
+    "co.in", "com.br", "com.mx", "co.za", "com.sg", "com.hk", "co.kr", "com.tr",
+    "github.io", "gitlab.io", "vercel.app", "netlify.app", "pages.dev", "workers.dev", "web.app",
+    "firebaseapp.com", "herokuapp.com", "onrender.com", "fly.dev", "azurewebsites.net",
+    "appspot.com", "myshopify.com", "blogspot.com", "wordpress.com", "wixsite.com",
+    "squarespace.com", "weebly.com", "tumblr.com", "substack.com", "glitch.me", "neocities.org",
+    "readthedocs.io", "webflow.io", "carrd.co"
   ]
 }
