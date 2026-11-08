@@ -109,6 +109,8 @@ class Exposure(BaseModel):
     broker_id: str | None = None
     source_kind: SourceKind = "broker"
     url: str
+    # More pages about this person on the same site, merged into this card (Stage 1).
+    other_urls: list[str] = []
     title: str = ""
     found_via: Literal["tavily", "exa"] | None = None
     text_source: TextSource = "snippet"
@@ -231,15 +233,103 @@ class RescanResponse(BaseModel):
 # ---------- Stage 7: aliases ----------
 
 
+_SITE_RE = re.compile(r"^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$")
+
+
+def normalize_site(value: str) -> str:
+    """A hostname from "shop.example", "www.shop.example" or a pasted signup URL. Only the
+    hostname is kept: a URL's path and query can carry personal data."""
+    text = value.strip().lower()
+    host = (urlsplit(text if "://" in text else f"https://{text}").hostname or "").removeprefix("www.")
+    if not _SITE_RE.match(host):
+        raise ValueError("Enter a website like shop.example.")
+    return host
+
+
 class AliasRequest(BaseModel):
-    company: str  # company id from GET /api/companies, or a name for a demo company
+    # One of these: a company id from GET /api/companies (or a demo company's name), or the
+    # website you're signing up on. A site gets its own alias, so every signup can have one.
+    company: str | None = None
+    site: str | None = None
+    label: str = Field(default="", max_length=80)  # your own note, e.g. "newsletter signup"
+
+    @field_validator("site")
+    @classmethod
+    def _site(cls, value: str | None) -> str | None:
+        return normalize_site(value) if value and value.strip() else None
+
+    @model_validator(mode="after")
+    def _one_target(self) -> "AliasRequest":
+        if not (self.company and self.company.strip()) and not self.site:
+            raise ValueError("Pick a company or enter the website you're signing up on.")
+        return self
+
+
+AliasStatus = Literal["active", "disabled"]
 
 
 class Alias(BaseModel):
     alias: str
     company: str
-    company_domains: list[str]
+    company_domains: list[str]  # expected senders: mail from anywhere else is unexpected
     created_at: str
+    # Identity manager (all additive; defaults keep older clients working).
+    site: str = ""  # the website this alias was made for, if any
+    label: str = ""
+    status: AliasStatus = "active"
+    disabled_at: str | None = None  # YYYY-MM-DD
+    note: str = ""
+    demo: bool = False  # from data/mock_aliases.json, not one you made
+    message_count: int = 0  # in the mock inbox
+    unexpected_count: int = 0  # from outside company_domains
+    last_message_at: str | None = None
+
+
+class AliasUpdate(BaseModel):
+    status: AliasStatus | None = None
+    note: str | None = Field(default=None, max_length=280)
+
+
+class AliasMessage(BaseModel):
+    """One message to an alias. Mock inbox only: nothing is received from the internet."""
+
+    alias: str
+    from_address: str
+    from_domain: str
+    subject: str
+    date: str | None = None
+    expected: bool  # sender is one of the alias's company_domains (or a subdomain)
+    # The alias was disabled on or before this date. Mock inbox: a label, not a real rejection.
+    blocked: bool = False
+
+
+SenderKind = Literal["data_broker", "known_company", "unknown"]
+AliasCategory = Literal["legit", "marketing", "data_sharing", "possible_phishing", "unknown"]
+
+
+class SenderFact(BaseModel):
+    """What the app knows about one unexpected sender, from checked-in lists only."""
+
+    domain: str
+    kind: SenderKind
+    name: str = ""  # the broker's or company's name when kind isn't "unknown"
+    count: int
+    first_seen: str | None = None  # YYYY-MM-DD, from the message date
+
+
+class AliasInvestigation(BaseModel):
+    """Rules decide the facts and the tier; the local LLM only explains them."""
+
+    alias: str
+    company: str
+    tier: Literal["proven"] | None = None  # proven when anyone outside company_domains wrote
+    facts: list[str]  # plain sentences built in code, each citing its date
+    senders: list[SenderFact] = []
+    days_to_first_unexpected: int | None = None  # from the alias's creation date
+    category: AliasCategory = "unknown"  # the local LLM's guess, checked against the enum
+    explanation: str = ""  # local LLM, checked sentence by sentence; empty if nothing passed
+    explained_locally: bool = False  # true when the explanation came from the local LLM
+    errors: list[str] = []
 
 
 class AliasHit(BaseModel):

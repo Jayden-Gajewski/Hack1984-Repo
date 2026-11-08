@@ -56,6 +56,7 @@ export interface Exposure {
   broker_id: string | null;
   source_kind: SourceKind;
   url: string;
+  other_urls?: string[]; // more pages on the same site, merged into this card
   title: string;
   found_via: "tavily" | "exa" | null;
   text_source: TextSource;
@@ -140,11 +141,58 @@ export interface RescanResponse {
   errors: string[];
 }
 
+export type AliasStatus = "active" | "disabled";
+
 export interface Alias {
   alias: string;
   company: string;
-  company_domains: string[];
+  company_domains: string[]; // expected senders; mail from anywhere else is unexpected
   created_at: string;
+  site: string; // the website this alias was made for, if any
+  label: string;
+  status: AliasStatus;
+  disabled_at: string | null;
+  note: string;
+  demo: boolean; // from the demo data, not one the user made
+  message_count: number; // in the mock inbox
+  unexpected_count: number;
+  last_message_at: string | null;
+}
+
+// Mock inbox only: nothing is received from the internet.
+export interface AliasMessage {
+  alias: string;
+  from_address: string;
+  from_domain: string;
+  subject: string;
+  date: string | null;
+  expected: boolean;
+  blocked: boolean; // arrived on or after the day the alias was disabled (a label, not a real rejection)
+}
+
+export type SenderKind = "data_broker" | "known_company" | "unknown";
+export type AliasCategory = "legit" | "marketing" | "data_sharing" | "possible_phishing" | "unknown";
+
+export interface SenderFact {
+  domain: string;
+  kind: SenderKind;
+  name: string;
+  count: number;
+  first_seen: string | null;
+}
+
+// Rules set the facts and the tier; the local LLM only explains them.
+export interface AliasInvestigation {
+  alias: string;
+  company: string;
+  tier: "proven" | null;
+  facts: string[];
+  senders: SenderFact[];
+  days_to_first_unexpected: number | null;
+  category: AliasCategory;
+  explanation: string;
+  explained_locally: boolean;
+  errors: string[];
 }
 
 export interface AliasHit {
@@ -494,6 +542,13 @@ export const api = {
   rescan: () => request<RescanResponse>("POST", "/api/rescan"),
   aliases: () => request<Alias[]>("GET", "/api/aliases"),
   newAlias: (company: string) => request<Alias>("POST", "/api/aliases", { company }),
+  newSiteAlias: (site: string, label = "") => request<Alias>("POST", "/api/aliases", { site, label }),
+  updateAlias: (alias: string, change: { status?: AliasStatus; note?: string }) =>
+    request<Alias>("PATCH", `/api/aliases/${encodeURIComponent(alias)}`, change),
+  aliasMessages: (alias: string) =>
+    request<AliasMessage[]>("GET", `/api/aliases/${encodeURIComponent(alias)}/messages`),
+  investigateAlias: (alias: string) =>
+    request<AliasInvestigation>("POST", `/api/aliases/${encodeURIComponent(alias)}/investigate`),
   checkInbox: () => request<AliasHit[]>("GET", "/api/inbox/check"),
   outboundLog: (includeLocal: boolean) =>
     request<OutboundEntry[]>("GET", `/api/outbound-log?include_local=${includeLocal}`),

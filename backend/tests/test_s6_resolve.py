@@ -124,3 +124,17 @@ def test_removal_status_matches_whole_words_only():
     assert s6.removal_status(filler, person) == "removed"  # "li" inside "listings" doesn't count
     assert s6.removal_status(filler + " Ana Li, age 34", person) == "still_listed"
     assert s6.removal_status("too short", person) == "unconfirmed"
+
+
+def test_combined_status_for_a_card_with_several_pages():
+    assert s6.combined_status(["removed", "still_listed"]) == "still_listed"
+    assert s6.combined_status(["removed", "removed"]) == "removed"
+    assert s6.combined_status(["removed", "unconfirmed"]) == "unconfirmed"
+
+
+def test_broker_letter_lists_every_merged_page():
+    e = Exposure(id="x", broker="PeopleFinder", url="https://peoplefinder.example/a",
+                 other_urls=["https://peoplefinder.example/b"])
+    person = ScanRequest(name="Jane Example", city="Springfield", state="IL", consent=True)
+    _, body = s6.broker_letter(e, person)
+    assert "The listings are here:\nhttps://peoplefinder.example/a\nhttps://peoplefinder.example/b" in body

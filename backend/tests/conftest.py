@@ -18,6 +18,23 @@ def client(monkeypatch):
     monkeypatch.setattr(db, "ping", lambda: False)
     monkeypatch.setattr(db, "save_alias", lambda *args: "2026-11-07")
     monkeypatch.setattr(db, "list_aliases", lambda: [])
+    # Alias on/off switches, kept in memory for the test (same rules as db.set_alias_state).
+    states: dict[str, dict] = {}
+
+    def set_alias_state(alias, status, note):
+        old = states.get(alias.lower(), {"status": "active", "disabled_at": None, "note": ""})
+        new = dict(old)
+        if status == "disabled" and old["status"] != "disabled":
+            new["disabled_at"] = "2026-11-07"
+        elif status == "active":
+            new["disabled_at"] = None
+        new["status"] = status or old["status"]
+        new["note"] = old["note"] if note is None else note
+        states[alias.lower()] = new
+        return new
+
+    monkeypatch.setattr(db, "alias_states", lambda: dict(states))
+    monkeypatch.setattr(db, "set_alias_state", set_alias_state)
     monkeypatch.setattr(db, "session_user_id", lambda token: TEST_USER if token == TEST_SESSION else None)
     monkeypatch.setattr(main, "session", main.Session())
     with TestClient(main.app, base_url="http://localhost") as c:  # TrustedHostMiddleware

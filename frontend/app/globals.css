@@ -562,8 +562,73 @@ blockquote .muted { display: block; margin-top: var(--space-1); }
 
 /* ---------- Aliases ---------- */
 
-.alias-list { list-style: none; padding: 0; margin: var(--space-3) 0 var(--space-4); }
-.alias-list li { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); align-items: baseline; padding: var(--space-2) 0; border-bottom: 1px solid var(--border); }
+/* One ledger, not a card per alias. Unexpected mail is the evidence: it gets the Proven tint. */
+.alias-create { margin: var(--space-1) 0 var(--space-2); }
+.alias-create label { display: block; font-weight: 600; margin-bottom: var(--space-2); }
+.alias-create input { flex: 1 1 260px; }
+.alias-create .muted { margin-top: var(--space-2); }
+
+.alias-ledger { list-style: none; padding: 0; margin: var(--space-5) 0 var(--space-2); border-top: 1px solid var(--border); }
+.alias-row { padding: var(--space-3) 0; border-bottom: 1px solid var(--border); }
+.alias-row.new {
+  transition: opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out);
+  @starting-style { opacity: 0; transform: translateY(-6px); }
+}
+.alias-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
+.alias-address { font-size: var(--text-base); color: var(--text); transition: color var(--dur-fast) ease; }
+.alias-row.off .alias-address { color: var(--muted); }
+.alias-off { font-size: var(--text-sm); color: var(--muted); background: var(--sunken); border-radius: var(--radius-full); padding: 1px 10px; }
+.alias-meta { margin: var(--space-1) 0 0; color: var(--muted); font-size: var(--text-sm); max-width: 70ch; }
+button.quiet.copy { padding: 2px var(--space-2); font-size: var(--text-sm); }
+.copy-label { display: inline-block; transition: opacity var(--dur-fast) ease; @starting-style { opacity: 0; } }
+button.quiet.alias-toggle { padding: var(--space-1) 0; margin-top: var(--space-1); font-size: var(--text-sm); }
+
+.alias-detail {
+  margin-top: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--sunken);
+  border-radius: var(--radius);
+  transition: opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out);
+  @starting-style { opacity: 0; transform: translateY(-4px); }
+}
+.alias-detail > * + * { margin-top: var(--space-3); }
+.alias-messages { list-style: none; padding: 0; margin: 0; }
+.alias-messages li {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 14rem) minmax(0, 1fr) auto;
+  gap: var(--space-1) var(--space-3);
+  align-items: baseline;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+}
+.alias-messages li + li { margin-top: 2px; }
+.alias-messages li.unexpected { background: var(--proven-bg); }
+.msg-date { color: var(--muted); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
+.msg-from { overflow-wrap: anywhere; }
+.msg-subject { color: var(--text); }
+.msg-verdict { font-size: var(--text-sm); color: var(--muted); white-space: nowrap; }
+.unexpected .msg-verdict { color: var(--proven); font-weight: 600; }
+.msg-blocked { display: inline-block; margin-left: var(--space-2); font-weight: 400; color: var(--muted); }
+@media (max-width: 640px) {
+  .alias-messages li { grid-template-columns: 1fr auto; }
+  .msg-subject { grid-column: 1 / -1; }
+}
+.alias-actions { margin-top: var(--space-3); }
+.alias-note label { font-weight: 600; }
+.alias-note input { flex: 1 1 220px; }
+
+.alias-investigation {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+  transition: opacity var(--dur-base) var(--ease-out);
+  @starting-style { opacity: 0; }
+}
+.alias-investigation h4 { font-size: var(--text-base); margin: var(--space-3) 0 var(--space-2); }
+.alias-investigation p { max-width: 68ch; }
+.alias-facts, .alias-senders { margin: 0; padding-left: 1.2em; }
+.alias-facts li + li, .alias-senders li + li { margin-top: var(--space-1); }
+.alias-senders { margin-top: var(--space-2); }
 code, .mono { font-family: var(--mono); font-size: 0.875em; overflow-wrap: anywhere; }
 
 /* ---------- Outbound requests card ---------- */
@@ -810,6 +875,7 @@ code, .mono { font-family: var(--mono); font-size: 0.875em; overflow-wrap: anywh
   .drawer { transform: none; opacity: 0; transition: opacity var(--dur-fast) ease, visibility 0s linear var(--dur-fast); }
   .drawer.open { opacity: 1; transition: opacity var(--dur-fast) ease, visibility 0s; }
   .picker-list, .token { @starting-style { transform: none; } }
+  .alias-row.new, .alias-detail { transition-property: opacity; @starting-style { transform: none; } }
   .tab-indicator[data-animate] { transition: none; }
   details::details-content { transition-property: opacity, content-visibility; }
   /* Loading stays visible without movement: the ring holds still and breathes. */

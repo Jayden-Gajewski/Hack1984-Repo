@@ -7,7 +7,7 @@
   "minimum_chrome_version": "116",
   "incognito": "not_allowed",
   "permissions": ["storage", "activeTab"],
-  "host_permissions": ["http://127.0.0.1:8000/*"],
+  "host_permissions": ["http://127.0.0.1:8000/*", "http://localhost:3000/*"],
   "background": {
     "service_worker": "background.js",
     "type": "module"
