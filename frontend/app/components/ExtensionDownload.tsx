@@ -76,6 +76,9 @@ export function CopyText({ text }: { text: string }) {
           Copied
         </span>
       </button>
+      <span className="sr-only" aria-live="polite">
+        {copied ? `Copied ${text}` : ""}
+      </span>
     </span>
   );
 }

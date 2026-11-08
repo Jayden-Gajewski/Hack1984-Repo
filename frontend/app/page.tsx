@@ -91,6 +91,7 @@ export default function Landing() {
             <a href="#how">How it works</a>
             <a href="#privacy">Privacy</a>
             <a href="#evidence">Evidence</a>
+            <Link href="/extension">Browser extension</Link>
           </nav>
           <div className="nav-actions">
             <Link href="/login" className="btn btn-ghost btn-sm">
