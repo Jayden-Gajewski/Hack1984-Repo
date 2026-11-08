@@ -6,7 +6,8 @@ FastAPI app in `app/`. Read the privacy rules in the root `CLAUDE.md` first.
 
 - **Async everywhere.** Run independent calls together with `asyncio.gather(..., return_exceptions=True)`.
 - **Network calls go through `outbound.request(...)` only.** It takes:
-  - `service`: `"exa"`, `"tavily"`, `"wayback"` or `"ollama"`.
+  - `service`: `"exa"`, `"tavily"`, `"wayback"`, `"ollama"`, or `"website"` (a page read straight from a site: the browser extension's policy fetch in `clients/website.py`). Website entries go in their own 200-entry log, so browsing can't push a scan's entries out of the main one.
+  - `send_cookies=False` and `max_bytes=...`: optional, used for website fetches (no stored cookies; stop downloading after that many bytes).
   - `purpose`: a plain-English reason shown in the log panel, e.g. `"Find listings on known people-search sites"`. Write it for a non-technical judge.
   - `guard=[query]`: every search query string. The guard rejects emails, phone numbers, SSNs and birthdates.
   - `local=True`: for Ollama calls. They're logged, with long text truncated, and marked as never leaving the machine.
@@ -14,7 +15,7 @@ FastAPI app in `app/`. Read the privacy rules in the root `CLAUDE.md` first.
 - **Partial failure is normal.** A broker blocks extraction, archive.org times out, a key is missing. Stages collect error strings and return them next to their results. One failed source must not fail the whole scan.
 - **`models.py` is the contract with the frontend.** Add fields; don't rename or remove them without telling the UI owner, who keeps the types in `frontend/lib/api.ts` in sync.
 - **Reference data goes in `app/data/*.json`, and user data in Postgres.** Don't hard-code broker lists or company domains in Python, and don't load reference data into the database.
-- **No CORS.** The browser reaches FastAPI only through the Next.js `/api` rewrite, so don't add `CORSMiddleware` or `allow_origins=["*"]`.
+- **No CORS.** The browser reaches FastAPI only through the Next.js `/api` rewrite, so don't add `CORSMiddleware` or `allow_origins=["*"]`. The browser extension (`extension/`) calls `http://127.0.0.1:8000` directly. That works without CORS because the URL is in the extension's `host_permissions`.
 - **Treat scraped content as untrusted.** It can contain prompt injection aimed at the local LLM. Validate LLM output against enums (e.g. `FIELD_TYPES`, tier names) and drop anything else.
 - **Stubs.** Each stage function raises `NotImplementedError` until its owner builds it. `main.py` turns that into an error string, or HTTP 501 for routes without an errors list, so the app runs end to end from day one. Keep each stub's name and signature when you fill it in.
 - **Reference data:** `from app.data import load_json`, then `load_json("brokers.json")`. Keys are snake_case; `tests/test_data.py` checks them.
@@ -44,6 +45,7 @@ FastAPI app in `app/`. Read the privacy rules in the root `CLAUDE.md` first.
 | GET/POST | `/api/aliases` | `{company}` | aliases / new alias (Stage 7) |
 | GET | `/api/inbox/check` | | `AliasHit[]` from the mock inbox (Stage 7) |
 | GET/DELETE | `/api/outbound-log` | `?include_local=` | log entries / clear |
+| POST | `/api/site-policy` | `{origin, policy_urls, opt_out_url?, page_text?, deep?, refresh?, third_party_hosts?, asks_for?, insecure_fields?}` | `SitePolicyResponse`: what the site's privacy policy says it collects and shares, what the page does (trackers, form fields, people-search site, ads.txt), and the risks. Called by the browser extension (`extension/`). 400 for this computer or the local network, 403 for a web page's origin. Results stay in memory, never in Postgres |
 | GET | `/api/monitor` | | threat monitor dashboard: summary, companies, emails, incidents, history, schedule, config |
 | GET/POST | `/api/monitor/refresh` | `{company_id?, include_news?}` | refresh status / start a background check (202; 409 if one runs) |
 | POST/DELETE | `/api/monitor/companies[/{id}]` | `{name}` | monitor a company (same lookup as `/api/companies`) / stop |
@@ -59,7 +61,7 @@ FastAPI app in `app/`. Read the privacy rules in the root `CLAUDE.md` first.
 | POST | `/api/footprint/requests/{request_id}/updates` | `{status, happened_on?, note?}` | record a step; `footprint.NEXT` decides which statuses can follow |
 | DELETE | `/api/footprint/requests/{request_id}/updates/last` | | undo the last recorded step (409 if there's none) |
 
-**Sign-in gate.** `require_session` in `main.py` answers 401 for every `/api/*` route except `OPEN_ROUTES` (status, brokers, auth) unless the request carries a valid session cookie, and 403 for any change whose `Origin` isn't this laptop. It sets `auth.current_user()`, which `db.py` uses to keep saved scans per account. New routes are gated automatically; tests get a signed-in client from `conftest.py`.
+**Sign-in gate.** `require_session` in `main.py` answers 401 for every `/api/*` route except `OPEN_ROUTES` (status, brokers, auth) unless the request carries a valid session cookie, and 403 for any change whose `Origin` isn't this laptop. It sets `auth.current_user()`, which `db.py` uses to keep saved scans per account. New routes are gated automatically; tests get a signed-in client from `conftest.py`. The one exception is `EXTENSION_ROUTES` (`/api/site-policy`): the browser extension has no session cookie and sends a `chrome-extension://` Origin, so the route skips the gate and refuses any web page's Origin itself.
 
 Footprint routes (feature 3) need a session cookie (401 otherwise), only read or change the signed-in account's rows (404 for anyone else's), and never call `outbound.request`: drafts are local templates, and Dossier doesn't send requests or change company settings. "Response received" and "Completed" can only follow "Sent", the text locks once a request is marked sent, and step dates can't be in the future or before the last recorded step (409/422).
 
