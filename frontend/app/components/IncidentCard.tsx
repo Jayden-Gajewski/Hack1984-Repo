@@ -288,7 +288,7 @@ export default function IncidentCard(props: Props) {
                 </li>
               </ul>
               <p className="muted small">
-                Written by {analysis.model}, {localTime(analysis.analyzed_at)}, from the evidence above.
+                Written by AI, {localTime(analysis.analyzed_at)}, from the evidence above.
                 {analysis.removed_sentences > 0 &&
                   ` ${analysis.removed_sentences} sentence${analysis.removed_sentences === 1 ? " was" : "s were"} removed because the evidence didn't support ${analysis.removed_sentences === 1 ? "it" : "them"}.`}
               </p>
@@ -297,7 +297,7 @@ export default function IncidentCard(props: Props) {
               )}
             </div>
           ) : (
-            <p className="muted small">A short explanation written by Gemini from the evidence above.</p>
+            <p className="muted small">A short explanation written by AI from the evidence above.</p>
           )}
           <div className="row mt">
             <button type="button" className="secondary" onClick={analyze} disabled={analyzing || !llm.ready} aria-busy={analyzing || undefined}>
@@ -306,10 +306,10 @@ export default function IncidentCard(props: Props) {
             {!analyzing && (
               <span className="muted small">
                 {!llm.ready
-                  ? "Add GEMINI_API_KEY to .env to use Gemini."
+                  ? "Needs the AI API key in .env (see .env.example)."
                   : readsNotice
-                    ? `Sends the evidence above to Gemini (${llm.model}). It may first read the official notice through Tavily (one public URL). Both show in the outbound log.`
-                    : `Sends the evidence above to Gemini (${llm.model}). It shows in the outbound log.`}
+                    ? `Sends the evidence above to Google's AI. It may first read the official notice through Tavily (one public URL). Both show in the outbound log.`
+                    : `Sends the evidence above to Google's AI. It shows in the outbound log.`}
               </span>
             )}
           </div>
@@ -319,7 +319,7 @@ export default function IncidentCard(props: Props) {
                 <span className="elapsed" aria-hidden="true">
                   {elapsed} s
                 </span>
-                <span>Asking Gemini. This usually takes a few seconds.</span>
+                <span>Asking the AI. This usually takes a few seconds.</span>
               </p>
               <div className="stripe" aria-hidden="true" />
             </div>

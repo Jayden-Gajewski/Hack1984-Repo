@@ -123,7 +123,7 @@ async def _news_ready() -> str | None:
     if not (settings.tavily_api_key or settings.exa_api_key):
         return "News and official-notice search needs TAVILY_API_KEY or EXA_API_KEY in .env."
     if not gemini.ready():
-        return "News and official-notice search needs GEMINI_API_KEY in .env."
+        return "News and official-notice search needs the AI API key in .env."
     return None
 
 
@@ -649,7 +649,7 @@ async def analyze(incident_id: str, exposures: list[Exposure]) -> Incident:
     facts = data["incidents"][fid]
     view = build_incident(facts, data["emails"], {}, [])
     if not gemini.ready():
-        raise RuntimeError("Gemini isn't set up. Add GEMINI_API_KEY to .env.")
+        raise RuntimeError("The AI model isn't set up. Add its API key to .env.")
     result = await analysis.explain(
         facts,
         level=view.severity,

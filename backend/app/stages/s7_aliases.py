@@ -314,10 +314,10 @@ async def investigate(address: str) -> AliasInvestigation:
             [(m.date or "", m.from_domain, m.subject) for m in messages],
         ),
         system=prompts.ALIAS_SYSTEM,
-        purpose=f"Ask Gemini to explain the unexpected mail to your {alias.company} alias",
+        purpose=f"Ask the AI to explain the unexpected mail to your {alias.company} alias",
     )
     if not answer:
-        result.errors.append("Gemini didn't answer, so only the facts are shown.")
+        result.errors.append("The AI didn't answer, so only the facts are shown.")
         return result
     category = answer.get("category")
     if category in prompts.ALIAS_CATEGORIES and category != "legit":  # rules already ruled out legit

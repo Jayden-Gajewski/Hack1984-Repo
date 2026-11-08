@@ -309,13 +309,13 @@ async def _check(company: dict[str, Any], errors: list[str]) -> PolicyResult:
             gemini.ask_json(
                 prompts.policy_prompt(name, numbered(group)),
                 system=prompts.POLICY_SYSTEM,
-                purpose=f"Ask Gemini to flag sale and sharing clauses in {name}'s policy (part {i} of {len(groups)})",
+                purpose=f"Ask the AI to flag sale and sharing clauses in {name}'s policy (part {i} of {len(groups)})",
             )
             for i, group in enumerate(groups, 1)
         )
     )
     if groups and not any(answers):
-        errors.append(f"Gemini didn't answer for {name}'s policy, so it wasn't checked.")
+        errors.append(f"The AI didn't answer for {name}'s policy, so it wasn't checked.")
     clauses = [c for group, answer in zip(groups, answers) if answer for c in parse_clauses(answer, group, name)]
     clauses += pattern_clauses([s for group in groups for s in group], name)  # model's picks win on ties
     return result.model_copy(update={"clauses": merge_clauses(clauses)})

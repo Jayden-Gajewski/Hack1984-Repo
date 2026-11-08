@@ -98,7 +98,7 @@ export default function MonitoredCompanies({ monitored, config, refreshing, onCh
                   className="secondary"
                   onClick={() => onSearchNews(c.id)}
                   disabled={refreshing || !newsReady}
-                  title={newsReady ? undefined : "Needs a Tavily or Exa key and a Gemini key"}
+                  title={newsReady ? undefined : "Needs a Tavily or Exa key and an AI key"}
                 >
                   Search news &amp; notices
                 </button>
@@ -112,8 +112,8 @@ export default function MonitoredCompanies({ monitored, config, refreshing, onCh
       )}
       {monitored.length > 0 && (
         <p className="muted small mt">
-          News and official-notice searches use Tavily and Exa credits and Gemini, about a minute per company.
-          {!newsReady && " They need a Tavily or Exa key and GEMINI_API_KEY in .env."}
+          News and official-notice searches use Tavily and Exa credits and AI calls, about a minute per company.
+          {!newsReady && " They need a Tavily or Exa key and the AI API key in .env."}
         </p>
       )}
     </section>

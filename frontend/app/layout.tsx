@@ -8,7 +8,7 @@ const sans = localFont({ src: "./fonts/Geist-Variable.woff2", variable: "--font-
 const mono = localFont({ src: "./fonts/GeistMono-Variable.woff2", variable: "--font-mono", weight: "100 900" });
 
 const DESCRIPTION =
-  "Dossier finds your listings on people-search sites, shows the likely source with its evidence, and drafts the opt-out. Every request it sends is logged, including what Gemini reads.";
+  "Dossier finds your listings on people-search sites, shows the likely source with its evidence, and drafts the opt-out. Every request it sends is logged, including what the AI reads.";
 
 export const metadata: Metadata = {
   // Absolute URLs (the Open Graph image) use the public site's address when there is one. On

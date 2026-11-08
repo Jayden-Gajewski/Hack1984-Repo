@@ -37,11 +37,11 @@ const ROWS = [
     ms: "380 ms",
   },
   {
-    service: "Gemini",
+    service: "Google AI",
     local: false,
     method: "POST",
     url: "generativelanguage.googleapis.com/…:generateContent",
-    body: "Page text and prompt, read by Google's Gemini.",
+    body: "Page text and prompt, read by Google's AI.",
     ms: "2.3 s",
   },
 ];

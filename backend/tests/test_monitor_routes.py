@@ -93,7 +93,7 @@ def test_analyze_needs_gemini(api, monkeypatch):
 
     monkeypatch.setattr(service.gemini, "ready", lambda: False)
     res = api.post("/api/monitor/incidents/hibp-shopco/analyze")
-    assert res.status_code == 503 and "GEMINI_API_KEY" in res.json()["detail"]
+    assert res.status_code == 503 and "API key" in res.json()["detail"]
 
     async def ask_json(prompt, *, system, purpose):
         return {"summary": "ShopCo had 120,000 accounts exposed in 2021.", "impact": "Reused passwords are at risk.",

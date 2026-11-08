@@ -78,7 +78,7 @@ export default function MonitorActivity({ schedule, events, onChanged }: Props) 
               disabled={saving}
               onChange={(e) => save({ include_news: e.target.checked })}
             />
-            <span>Include news and official notices (uses Tavily and Exa credits and Gemini)</span>
+            <span>Include news and official notices (uses Tavily and Exa credits and AI calls)</span>
           </label>
           <p className="muted small mt">
             {schedule.enabled

@@ -291,10 +291,10 @@ async def _timeline(company: dict[str, Any], errors: list[str]) -> list[BreachEv
     answer = await gemini.ask_json(
         prompts.breach_prompt(company["name"], format_sources(sources)),
         system=prompts.BREACH_SYSTEM,
-        purpose=f"Ask Gemini to build {company['name']}'s breach timeline",
+        purpose=f"Ask the AI to build {company['name']}'s breach timeline",
     )
     if not answer:
-        errors.append(f"Gemini didn't answer for {company['name']}, so its breaches weren't summarized.")
+        errors.append(f"The AI didn't answer for {company['name']}, so its breaches weren't summarized.")
         return []
     return parse_breaches(answer, company, sources)
 

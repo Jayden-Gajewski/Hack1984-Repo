@@ -47,14 +47,14 @@ const GUARANTEES = [
   "It never reads what you type. Form fields are judged by their labels.",
   "Trackers are matched by hostname. The rest of a tracker's address, where account IDs hide, is dropped.",
   "Checking each site you visit contacts no site. Opening the popup reads that site's own policy and ads.txt, and logs each request.",
-  "Nothing goes to a search engine or a Dossier server. Opening the popup sends the policy's selling and sharing sentences to Google's Gemini, and that's logged too.",
+  "Nothing goes to a search engine or a Dossier server. Opening the popup sends the policy's selling and sharing sentences to Google's AI, and that's logged too.",
   "One button forgets the sites you've visited, in the extension and on the backend, and tells you what it can't recall.",
 ];
 
 const RECEIPT = [
   { service: "Website", local: false, method: "GET", url: "shopco.example/legal/privacy", note: "No cookies sent. Read straight from the site.", status: "200" },
   { service: "Website", local: false, method: "GET", url: "shopco.example/ads.txt", note: "Who may sell its ads.", status: "200" },
-  { service: "Gemini", local: false, method: "POST", url: "generativelanguage.googleapis.com/…:generateContent", note: "Policy sentences, read by Google's Gemini.", status: "200" },
+  { service: "Google AI", local: false, method: "POST", url: "generativelanguage.googleapis.com/…:generateContent", note: "Policy sentences, read by Google's AI.", status: "200" },
 ];
 
 export default function ExtensionPage() {

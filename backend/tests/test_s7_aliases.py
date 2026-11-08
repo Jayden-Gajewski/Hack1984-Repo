@@ -226,7 +226,7 @@ def test_investigate_asks_gemini_and_checks_its_answer(monkeypatch):
     )
     # The model sees sender domains, never the alias or a full sender address.
     assert shopco.alias not in seen["prompt"] and "offers@" not in seen["prompt"]
-    assert "leadgen-partners.example" in seen["prompt"] and seen["purpose"].startswith("Ask Gemini")
+    assert "leadgen-partners.example" in seen["prompt"] and seen["purpose"].startswith("Ask the AI")
 
 
 def test_investigate_rejects_an_unknown_or_legit_category_and_survives_a_silent_model(monkeypatch):

@@ -813,14 +813,14 @@ async def _llm_pass(entry: _Site) -> None:
                     prompts.policy_prompt(entry.site, s4.numbered(group)),
                     system=prompts.POLICY_SYSTEM,
                     # No site name here: a failed call's purpose is printed to the console.
-                    purpose=f"Browser extension: ask Gemini to flag sale and sharing clauses in a site's policy "
+                    purpose=f"Browser extension: ask the AI to flag sale and sharing clauses in a site's policy "
                     f"(part {i} of {len(groups)})",
                 )
                 for i, group in enumerate(groups, 1)
             )
         )
         if groups and not any(answers):
-            entry.errors.append("Gemini didn't answer, so only the quick check ran.")
+            entry.errors.append("The AI didn't answer, so only the quick check ran.")
             entry.llm = "failed"
             return
         picked = [
@@ -838,7 +838,7 @@ async def _llm_pass(entry: _Site) -> None:
         entry.llm = "done"
     except Exception as exc:
         log.exception("A site policy LLM pass failed")  # no site name: the console isn't for browsing history
-        entry.errors.append(f"The Gemini check failed: {exc}")
+        entry.errors.append(f"The AI check failed: {exc}")
         entry.llm = "failed"
     finally:
         entry.sentences = []  # only this pass needed them

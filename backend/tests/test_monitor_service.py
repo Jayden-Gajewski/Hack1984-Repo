@@ -135,7 +135,7 @@ def test_news_search_is_skipped_without_keys_or_gemini(world, monkeypatch):
 
     monkeypatch.setattr(service.gemini, "ready", lambda: False)
     status = refresh(include_news=True)
-    assert any("GEMINI_API_KEY" in e for e in status.errors)
+    assert any("AI API key" in e for e in status.errors)
 
 
 def _verified(monkeypatch):

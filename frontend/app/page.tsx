@@ -15,7 +15,7 @@ const POWERED_BY = [
   { name: "Exa", role: "Finds listings that match you" },
   { name: "Tavily", role: "Searches and reads broker pages" },
   { name: "Wayback Machine", role: "Dates when a listing went public" },
-  { name: "Gemini", role: "Reads each page and privacy policy" },
+  { name: "Google AI", role: "Reads each page and privacy policy" },
 ];
 
 const STEPS = [
@@ -24,7 +24,7 @@ const STEPS = [
     items: [
       {
         title: "Find your listings",
-        body: "Exa and Tavily search people-search sites for your name and city. A local model lists what each page shows about you.",
+        body: "Exa and Tavily search people-search sites for your name and city. An AI model lists what each page shows about you.",
       },
       {
         title: "Date each one",
@@ -41,7 +41,7 @@ const STEPS = [
       },
       {
         title: "Read the fine print",
-        body: "A local model reads each company's privacy policy and flags clauses that allow selling or sharing your data.",
+        body: "An AI model reads each company's privacy policy and flags clauses that allow selling or sharing your data.",
       },
       {
         title: "Rank likely sources",
@@ -211,7 +211,7 @@ export default async function Landing() {
                   <Check /> Phone numbers, emails, birthdates and SSNs are blocked before a search is sent.
                 </li>
                 <li>
-                  <Check /> Pages and privacy policies are read by Google&apos;s Gemini, and the log shows exactly what it was sent.
+                  <Check /> Pages and privacy policies are read by Google&apos;s AI, and the log shows exactly what it was sent.
                 </li>
                 <li>
                   <Check /> Your saved scans belong to your account. Nobody else can see them.

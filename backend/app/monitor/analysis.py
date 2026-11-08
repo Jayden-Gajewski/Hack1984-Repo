@@ -199,7 +199,7 @@ async def fetch_notice(facts: dict[str, Any]) -> str:
         return ""
     try:
         data = await tavily.extract(
-            [url], purpose=f"Read {facts['company']}'s breach notice so Gemini can summarize it"
+            [url], purpose=f"Read {facts['company']}'s breach notice so the AI can summarize it"
         )
         results = data.get("results") or []
         text = results[0].get("raw_content") or "" if results else ""
@@ -217,10 +217,10 @@ async def explain(
     out = await gemini.ask_json(
         prompts.threat_prompt(evidence, level, " ".join(level_reasons), INVOLVEMENT_FOR_MODEL[involvement]),
         system=prompts.THREAT_SYSTEM,
-        purpose=f"Ask Gemini to explain the {facts['title']} breach",
+        purpose=f"Ask the AI to explain the {facts['title']} breach",
     )
     if not out:
-        raise RuntimeError("Gemini didn't answer. Check GEMINI_API_KEY in .env, then try again.")
+        raise RuntimeError("The AI didn't answer. Check its API key in .env, then try again.")
     result = validate(
         out,
         evidence=evidence,
