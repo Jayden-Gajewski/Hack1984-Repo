@@ -1,235 +1,271 @@
-"use client";
+import Link from "next/link";
+import type { CSSProperties } from "react";
+import ListingCycler from "./components/ListingCycler";
+import LogDemo from "./components/LogDemo";
+import Logo from "./components/Logo";
+import Motion from "./components/Motion";
+import Words from "./components/Words";
+import { Arrow, Check, Lock } from "./components/icons";
 
-import { useCallback, useEffect, useState } from "react";
-import { api, type Draft, type RemovalStatus, type ScanRequest, type ScanResponse } from "@/lib/api";
-import AccountsPanel from "./components/AccountsPanel";
-import AliasPanel from "./components/AliasPanel";
-import DraftModal from "./components/DraftModal";
-import ExposureCard from "./components/ExposureCard";
-import OutboundLog from "./components/OutboundLog";
-import ScanForm from "./components/ScanForm";
-import StarGlobe from "./components/StarGlobe";
-import StatusLine from "./components/StatusLine";
-import Tabs, { type Tab } from "./components/Tabs";
+// Landing page. Every person, site and company shown here is fictional sample data.
 
-const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
+const HEADLINE = "Find out where your data is exposed. Then take it down.";
 
-type TabId = "scan" | "accounts" | "aliases";
-const TABS: Tab<TabId>[] = [
-  { id: "scan", label: "Scan" },
-  { id: "accounts", label: "Accounts" },
-  { id: "aliases", label: "Aliases" },
+const POWERED_BY = [
+  { name: "Exa", role: "Finds listings that match you" },
+  { name: "Tavily", role: "Searches and reads broker pages" },
+  { name: "Wayback Machine", role: "Dates when a listing went public" },
+  { name: "Ollama", role: "Runs the analysis on your laptop" },
 ];
-const isTab = (v: string): v is TabId => TABS.some((t) => t.id === v);
 
-export default function Home() {
-  const [result, setResult] = useState<ScanResponse | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [draftOpen, setDraftOpen] = useState(false);
-  const [draft, setDraft] = useState<Draft | null>(null);
-  const [draftLoading, setDraftLoading] = useState(false);
-  const [draftError, setDraftError] = useState<string | null>(null);
-  const [removals, setRemovals] = useState<Record<string, RemovalStatus>>({});
-  const [rescanning, setRescanning] = useState(false);
-  const [notes, setNotes] = useState<string[]>([]);
-  const [scanning, setScanning] = useState(false);
-  const [lastRequest, setLastRequest] = useState<ScanRequest | null>(null);
-  const [freshScanning, setFreshScanning] = useState(false);
-  const closeDraft = useCallback(() => setDraftOpen(false), []);
-  const [tab, setTab] = useState<TabId>("scan");
+const STEPS = [
+  {
+    group: "Find it",
+    items: [
+      {
+        title: "Find your listings",
+        body: "Exa and Tavily search people-search sites for your name and city. A local model lists what each page shows about you.",
+      },
+      {
+        title: "Date each one",
+        body: "The earliest Wayback Machine snapshot shows when a listing went public. With no snapshot, the date says unknown.",
+      },
+    ],
+  },
+  {
+    group: "Trace it",
+    items: [
+      {
+        title: "Check breaches",
+        body: "For the accounts you pick, news reports and state attorney general notices show when each company was breached and what was taken.",
+      },
+      {
+        title: "Read the fine print",
+        body: "A local model reads each company's privacy policy and flags clauses that allow selling or sharing your data.",
+      },
+      {
+        title: "Rank likely sources",
+        body: "Every lead gets an evidence tier, Proven, Likely or Possible, with the evidence right next to it.",
+      },
+    ],
+  },
+  {
+    group: "Remove it",
+    items: [
+      {
+        title: "Send opt-outs",
+        body: "Dossier finds each site's opt-out page and drafts the request. A re-scan later confirms the listing came down.",
+      },
+      {
+        title: "Use email aliases",
+        body: "Give each company its own alias. When someone else writes to that alias, you know whose copy got out.",
+      },
+    ],
+  },
+];
+const STEP_START = STEPS.map((_, i) => STEPS.slice(0, i).reduce((n, g) => n + g.items.length, 0));
 
-  // The tab lives in the URL hash (#accounts) so a refresh or a shared link lands on the same tab.
-  useEffect(() => {
-    const fromHash = window.location.hash.slice(1);
-    if (isTab(fromHash)) setTab(fromHash);
-  }, []);
+const TIERS = [
+  { tier: "proven", label: "Proven", body: "An email alias you gave to one company got mail from someone else." },
+  {
+    tier: "likely",
+    label: "Likely",
+    body: "A breach at the company lines up with your listing, in timing and in the data it exposed.",
+  },
+  { tier: "possible", label: "Possible", body: "The company's privacy policy lets it sell or share your data." },
+];
 
-  function changeTab(id: TabId) {
-    setTab(id);
-    history.replaceState(null, "", id === "scan" ? window.location.pathname : `#${id}`);
-  }
+// Stagger index and delay for the scroll reveals in site.css.
+const order = (n: number) => ({ "--i": n }) as CSSProperties;
+const delay = (ms: number) => ({ "--d": `${ms}ms` }) as CSSProperties;
 
-  function showScan(scan: ScanResponse, request?: ScanRequest) {
-    setResult(scan);
-    setRemovals({});
-    setNotes([]);
-    setLastRequest(request ?? null);
-  }
-
-  // A saved scan came back instead of a new search: run a fresh one for the same person.
-  async function scanAgain() {
-    if (!lastRequest) return;
-    setFreshScanning(true);
-    try {
-      showScan(await api.scan({ ...lastRequest, refresh: true }), lastRequest);
-    } catch (err) {
-      setNotes([message(err)]);
-    } finally {
-      setFreshScanning(false);
-    }
-  }
-
-  // Demo fallback if the venue Wi-Fi fails: reload the last saved scan from local Postgres.
-  async function loadLastScan() {
-    setLoadError(null);
-    try {
-      showScan(await api.latestScan());
-    } catch (err) {
-      setLoadError(message(err));
-    }
-  }
-
-  // Stage 5: re-rank after new evidence (breaches, policies, alias hits) comes in.
-  const refreshLeads = useCallback(async () => {
-    try {
-      const leads = await api.leads();
-      setResult((prev) => (prev ? { ...prev, exposures: leads.exposures } : prev));
-      setNotes(leads.errors);
-    } catch (err) {
-      setNotes([message(err)]);
-    }
-  }, []);
-
-  async function openDraft(target: { exposure_id: string } | { company: string }) {
-    setDraftOpen(true);
-    setDraft(null);
-    setDraftError(null);
-    setDraftLoading(true);
-    try {
-      setDraft(await api.optOut(target));
-    } catch (err) {
-      setDraftError(message(err));
-    } finally {
-      setDraftLoading(false);
-    }
-  }
-
-  async function rescan() {
-    setRescanning(true);
-    try {
-      const res = await api.rescan();
-      setRemovals(Object.fromEntries(res.results.map((r) => [r.exposure_id, r.status])));
-      setNotes(res.errors);
-    } catch (err) {
-      setNotes([message(err)]);
-    } finally {
-      setRescanning(false);
-    }
-  }
-
-  const count = result?.exposures.length ?? 0;
-
+export default function Landing() {
   return (
-    <main>
-      <div className="work">
-        <header>
-          <h1>Dossier</h1>
-          <p className="lede">Find where your personal data is exposed. Analysis runs on this laptop.</p>
-          <StatusLine />
-        </header>
+    <div className="site">
+      <header className="nav-bar">
+        <div className="wrap nav">
+          <Link href="/" className="brand" aria-label="Dossier home">
+            <Logo />
+          </Link>
+          <nav className="nav-links" aria-label="Sections">
+            <a href="#how">How it works</a>
+            <a href="#privacy">Privacy</a>
+            <a href="#evidence">Evidence</a>
+          </nav>
+          <div className="nav-actions">
+            <Link href="/login" className="btn btn-ghost btn-sm">
+              Log in
+            </Link>
+            <Link href="/signup" className="btn btn-light btn-sm">
+              Sign up <Arrow />
+            </Link>
+          </div>
+        </div>
+      </header>
 
-        <Tabs tabs={TABS} active={tab} onChange={changeTab} label="Dossier sections" />
-
-        <div className="tabpanel" role="tabpanel" id="panel-scan" aria-labelledby="tab-scan" hidden={tab !== "scan"}>
-        <section className="section scan-section" aria-label="Scan">
-          <div className="task-panel">
-            <ScanForm onResult={showScan} onBusyChange={setScanning} />
-            <div className="row mt">
-              <button type="button" className="secondary" onClick={loadLastScan} disabled={scanning}>
-                Load last scan
-              </button>
-              <span className="muted small">Reads the last saved scan from this laptop.</span>
+      <main>
+        <section className="wrap hero">
+          <div>
+            <h1 className="hero-title">
+              <Words text={HEADLINE} className="hero-word" />
+            </h1>
+            <p className="hero-lede">
+              Dossier finds you on people-search sites, shows what each listing reveals and which company
+              is the likely source, then drafts the opt-out. It runs on your laptop, so you aren&apos;t
+              handing your data to one more company.
+            </p>
+            <div className="hero-ctas">
+              <Link href="/signup" className="btn btn-primary btn-lg">
+                Start a scan <Arrow />
+              </Link>
+              <a href="#how" className="btn btn-ghost btn-lg">
+                See how it works
+              </a>
             </div>
-            {loadError && (
-              <p className="error" role="alert">
-                {loadError}
-              </p>
-            )}
+            <p className="hero-note">
+              <Lock /> Every request that leaves your laptop is logged, with its exact contents.
+            </p>
+          </div>
+
+          <div className="hero-visual">
+            <ListingCycler />
+            <div className="mock-float">
+              <span className="mock-float-icon">
+                <Check />
+              </span>
+              <div>
+                <p className="mock-float-title">4 requests left this laptop</p>
+                <p className="mock-float-sub">Name and city only. Page text stayed here.</p>
+              </div>
+            </div>
           </div>
         </section>
 
-        <section className="section" aria-labelledby="exposures-h" aria-busy={scanning}>
-          <div className="section-head">
-            <h2 id="exposures-h" aria-live="polite">
-              {scanning
-                ? "Exposures"
-                : result
-                  ? `${count} exposure${count === 1 ? "" : "s"} found`
-                  : "Exposures"}
+        <dl className="wrap credits" aria-label="What powers Dossier" data-reveal="stagger">
+          {POWERED_BY.map((p, n) => (
+            <div key={p.name} style={order(n)}>
+              <dt>{p.name}</dt>
+              <dd>{p.role}</dd>
+            </div>
+          ))}
+        </dl>
+
+        <section id="how" className="section">
+          <div className="wrap">
+            <h2 className="sec-title" data-reveal="words">
+              <Words text="From your name to a sent opt-out" />
             </h2>
-            {result && count > 0 && (
-              <button type="button" className="secondary" onClick={rescan} disabled={rescanning || scanning}>
-                {rescanning ? "Re-checking…" : "Re-scan listings"}
-              </button>
-            )}
-          </div>
-          {result?.saved_at && (
-            <div className="row">
-              <span className="muted">
-                Loaded your saved scan from {new Date(result.saved_at).toLocaleString()} (local database).
-                Nothing was searched.
-              </span>
-              {lastRequest && (
-                <button type="button" className="secondary" onClick={scanAgain} disabled={freshScanning || scanning}>
-                  {freshScanning ? "Scanning… (the local LLM can take a few minutes)" : "Scan again"}
-                </button>
-              )}
-            </div>
-          )}
-          {!result && !scanning && (
-            <p className="muted">Run a scan to see which people-search sites list you.</p>
-          )}
-          {scanning && <p className="muted">Results appear here when the scan finishes.</p>}
-          {result && count === 0 && !scanning && (
-            <p className="muted">
-              None of the broker sites we checked list this name in this city. That covers the sites we
-              search, not the whole web.
+            <p className="sec-lede" data-reveal="fade" style={delay(150)}>
+              Seven steps, all started from your laptop. Each one shows you the evidence it found.
             </p>
-          )}
-          {(!result || count === 0) && (
-            <div className="exposure-art">
-              <StarGlobe />
-            </div>
-          )}
-          {result &&
-            [...result.errors, ...notes].map((err, i) => (
-              <p key={i} className="notice">
-                <strong>Note:</strong> {err}
-              </p>
-            ))}
-          {result && (
-            <div className="cards" key={result.scan_id}>
-              {result.exposures.map((exposure) => (
-                <ExposureCard
-                  key={exposure.id}
-                  exposure={exposure}
-                  removal={removals[exposure.id]}
-                  onDraft={(id) => openDraft({ exposure_id: id })}
-                />
+            <div className="how-grid">
+              {STEPS.map((g, gi) => (
+                <div className="how-col" key={g.group} data-reveal="col" style={delay(gi * 140)}>
+                  <h3 className="how-group">{g.group}</h3>
+                  <ol className="how-steps">
+                    {g.items.map((s, si) => (
+                      <li key={s.title} style={order(si + 1)}>
+                        <span className="how-num">{STEP_START[gi] + si + 1}</span>
+                        <div>
+                          <h4 className="how-step">{s.title}</h4>
+                          <p className="how-body">{s.body}</p>
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
               ))}
             </div>
-          )}
+          </div>
         </section>
-        </div>
 
-        <div className="tabpanel" role="tabpanel" id="panel-accounts" aria-labelledby="tab-accounts" hidden={tab !== "accounts"}>
-          <AccountsPanel
-            onChecked={refreshLeads}
-            onDraft={(company) => openDraft({ company })}
-            canDraft={result !== null}
-          />
-        </div>
+        <section id="privacy" className="dark">
+          <div className="wrap dark-grid">
+            <div>
+              <h2 className="sec-title" data-reveal="words">
+                <Words text="Here's everything that left this laptop" />
+              </h2>
+              <p className="sec-lede" data-reveal="fade" style={delay(150)}>
+                You shouldn&apos;t have to hand your data to another company to get it removed. Dossier sends
+                search services your name and city, nothing else, and shows you the receipt.
+              </p>
+              <ul className="dark-points" data-reveal="stagger" style={delay(250)}>
+                <li style={order(0)}>
+                  <Check /> Phone numbers, emails, birthdates and SSNs are blocked before a search is sent.
+                </li>
+                <li style={order(1)}>
+                  <Check /> Pages and privacy policies are read by Ollama on this machine, never by a hosted AI.
+                </li>
+                <li style={order(2)}>
+                  <Check /> Your account and saved scans stay in a database on this laptop.
+                </li>
+              </ul>
+            </div>
+            <LogDemo />
+          </div>
+        </section>
 
-        <div className="tabpanel" role="tabpanel" id="panel-aliases" aria-labelledby="tab-aliases" hidden={tab !== "aliases"}>
-          <AliasPanel onChecked={refreshLeads} />
-        </div>
-      </div>
+        <section id="evidence" className="section">
+          <div className="wrap ev-grid">
+            <div>
+              <h2 className="sec-title" data-reveal="words">
+                <Words text="A likely source, with the evidence attached" />
+              </h2>
+              <p className="sec-lede" data-reveal="fade" style={delay(150)}>
+                Dossier doesn&apos;t guess who&apos;s to blame. Each lead says how strong its evidence is and links
+                to it.
+              </p>
+              <dl className="tiers" data-reveal="stagger" style={delay(250)}>
+                {TIERS.map((t, n) => (
+                  <div className="tier-row" key={t.tier} style={order(n)}>
+                    <dt>
+                      <span className={`tier tier-${t.tier}`}>{t.label}</span>
+                    </dt>
+                    <dd>{t.body}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+            <figure className="ev-quote" data-reveal="fade" style={delay(200)}>
+              <p className="ev-quote-title">Sometimes it wasn&apos;t a hack</p>
+              <blockquote>
+                “We may <mark className="ev-mark">sell or share your personal information</mark> with marketing
+                partners, including data brokers.”
+              </blockquote>
+              <figcaption>
+                Flagged in the privacy policy of ExampleShop, a sample company. A policy that allows selling
+                makes it a Possible source.
+              </figcaption>
+            </figure>
+          </div>
+        </section>
 
-      <OutboundLog />
+        <section className="wrap cta">
+          <div>
+            <h2 className="sec-title" data-reveal="words">
+              <Words text="Take your data back." />
+            </h2>
+            <p className="sec-lede" data-reveal="fade" style={delay(150)}>
+              Create an account on this laptop to run your first scan.
+            </p>
+          </div>
+          <div className="hero-ctas" data-reveal="fade" style={delay(250)}>
+            <Link href="/signup" className="btn btn-primary btn-glow btn-lg">
+              Create account <Arrow />
+            </Link>
+            <Link href="/login" className="btn btn-ghost btn-lg">
+              Log in
+            </Link>
+          </div>
+        </section>
+      </main>
 
-      {draftOpen && (
-        <DraftModal draft={draft} loading={draftLoading} error={draftError} onClose={closeDraft} />
-      )}
-    </main>
+      <footer className="wrap foot">
+        <Logo />
+        <p>Sample data on this page is fictional. Jane Example, the .example sites and the Example companies don&apos;t exist.</p>
+      </footer>
+
+      <Motion />
+    </div>
   );
 }

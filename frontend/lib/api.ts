@@ -200,6 +200,12 @@ export interface OutboundEntry {
   error: string | null;
 }
 
+// ---------- Local accounts (backend: models.User; stored in the local Postgres) ----------
+
+export interface User {
+  email: string;
+}
+
 // ---------- Calls ----------
 
 // FastAPI errors look like {detail: "message"}, or {detail: [{msg}, ...]} for validation errors.
@@ -225,7 +231,7 @@ async function request<T>(method: "GET" | "POST" | "DELETE", path: string, body?
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const data: unknown = await res.json().catch(() => null);
-  if (!res.ok) throw new Error(errorMessage(data, res.status));
+  if (!res.ok) throw Object.assign(new Error(errorMessage(data, res.status)), { status: res.status });
   return data as T;
 }
 
@@ -248,4 +254,9 @@ export const api = {
   outboundLog: (includeLocal: boolean) =>
     request<OutboundEntry[]>("GET", `/api/outbound-log?include_local=${includeLocal}`),
   clearOutboundLog: () => request<{ cleared: boolean }>("DELETE", "/api/outbound-log"),
+  signup: (body: { email: string; password: string }) =>
+    request<User>("POST", "/api/auth/signup", body),
+  login: (body: { email: string; password: string }) => request<User>("POST", "/api/auth/login", body),
+  logout: () => request<{ ok: boolean }>("POST", "/api/auth/logout"),
+  me: () => request<User>("GET", "/api/auth/me"),
 };

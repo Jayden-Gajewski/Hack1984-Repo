@@ -28,49 +28,49 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #111418;
-    --surface: #191d23;
-    --sunken: #0c0e11;
-    --text: #e5e8ec;
-    --muted: #a0a8b4;
-    --border: #2d333c;
-    --accent: #9db4ff;
-    --on-accent: #111418;
-    --proven: #5cc994;
-    --likely: #f0b84a;
-    --possible: #bba6ff;
-    --proven-bg: #15301f;
-    --likely-bg: #33260f;
-    --possible-bg: #261f3d;
-    --danger: #ff8a80;
-    --danger-bg: #3a1714;
-    --notice: #f0b84a;
-    --notice-bg: #33260f;
-    --focus: #9db4ff;
+    --bg: #060b1a;
+    --surface: #0f1b38;
+    --sunken: #040816;
+    --text: #eef2fb;
+    --muted: #a3b0c8;
+    --border: #22325a;
+    --accent: #8f83ff;
+    --on-accent: #060b1a;
+    --proven: #3ddc97;
+    --likely: #ffb547;
+    --possible: #b69cff;
+    --proven-bg: color-mix(in srgb, #3ddc97 16%, #0f1b38);
+    --likely-bg: color-mix(in srgb, #ffb547 16%, #0f1b38);
+    --possible-bg: color-mix(in srgb, #b69cff 16%, #0f1b38);
+    --danger: #ff7a90;
+    --danger-bg: color-mix(in srgb, #ff7a90 16%, #0f1b38);
+    --notice: #ffb547;
+    --notice-bg: color-mix(in srgb, #ffb547 16%, #0f1b38);
+    --focus: #8f83ff;
     color-scheme: dark;
   }
 }
 
 :root[data-theme="dark"] {
-  --bg: #111418;
-  --surface: #191d23;
-  --sunken: #0c0e11;
-  --text: #e5e8ec;
-  --muted: #a0a8b4;
-  --border: #2d333c;
-  --accent: #9db4ff;
-  --on-accent: #111418;
-  --proven: #5cc994;
-  --likely: #f0b84a;
-  --possible: #bba6ff;
-  --proven-bg: #15301f;
-  --likely-bg: #33260f;
-  --possible-bg: #261f3d;
-  --danger: #ff8a80;
-  --danger-bg: #3a1714;
-  --notice: #f0b84a;
-  --notice-bg: #33260f;
-  --focus: #9db4ff;
+  --bg: #060b1a;
+  --surface: #0f1b38;
+  --sunken: #040816;
+  --text: #eef2fb;
+  --muted: #a3b0c8;
+  --border: #22325a;
+  --accent: #8f83ff;
+  --on-accent: #060b1a;
+  --proven: #3ddc97;
+  --likely: #ffb547;
+  --possible: #b69cff;
+  --proven-bg: color-mix(in srgb, #3ddc97 16%, #0f1b38);
+  --likely-bg: color-mix(in srgb, #ffb547 16%, #0f1b38);
+  --possible-bg: color-mix(in srgb, #b69cff 16%, #0f1b38);
+  --danger: #ff7a90;
+  --danger-bg: color-mix(in srgb, #ff7a90 16%, #0f1b38);
+  --notice: #ffb547;
+  --notice-bg: color-mix(in srgb, #ffb547 16%, #0f1b38);
+  --focus: #8f83ff;
   color-scheme: dark;
 }
 
@@ -80,7 +80,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
   font-size: 1rem;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
@@ -111,13 +111,13 @@ details[open]::details-content { block-size: auto; opacity: 1; transition-durati
 
 /* ---------- Page frame ---------- */
 
-main {
+.scanner {
   max-width: 808px;
   margin: 0 auto;
   padding: 76px 24px 64px;
 }
 @media (max-width: 900px) {
-  main { padding: 64px 16px 48px; }
+  .scanner { padding: 64px 16px 48px; }
 }
 
 .work { min-width: 0; }
