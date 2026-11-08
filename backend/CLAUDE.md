@@ -42,7 +42,18 @@ FastAPI app in `app/`. Read the privacy rules in the root `CLAUDE.md` first.
 | POST | `/api/rescan` | | removal status per listing (Stage 6) |
 | GET/POST | `/api/aliases` | `{company}` | aliases / new alias (Stage 7) |
 | GET | `/api/inbox/check` | | `AliasHit[]` from the mock inbox (Stage 7) |
-| GET/DELETE | `/api/outbound-log` | `?include_local=` | log entries / clear |
+| GET/DELETE | `/api/outbound-log` | `?include_local=` | log entries / clear (a user's own; admins: all) |
+| POST | `/api/auth/signup` | `{username, password}` | `User`; sets the login cookie. The first account becomes admin |
+| POST | `/api/auth/login` | `{username, password}` | `User`; sets the login cookie. 429 after 5 failures in 5 minutes |
+| POST | `/api/auth/logout` | | clears the cookie and the user's in-memory scan |
+| GET | `/api/auth/me` | | the logged-in `User`, or 401 |
+| POST | `/api/auth/password` | `{current_password, new_password}` | change your password; logs out your other sessions |
+| POST | `/api/auth/reset` | `{username, code, new_password}` | forgotten password: spend an admin's one-time code, set a new password, log in |
+| POST | `/api/admin/users/{id}/reset-code` | | `{username, code, expires_at}`: a one-time code (30 min) to hand over in person (admin only) |
+| GET | `/api/admin/users` | | every `User` (admin only) |
+| PATCH/DELETE | `/api/admin/users/{id}` | `{role}` | change role / delete user and their scans (admin only; never the last admin) |
+
+If the only admin forgets their password, run `python -m scripts.reset_code --username <name>` on this laptop. Every route except `/api/status` and `/api/auth/*` needs a login (`auth.require_user`, an app-wide dependency) and answers 401 otherwise. The current scan (`session` in `main.py`) and saved scans are per user. Tests get a logged-in user from `tests/conftest.py`; `tests/test_auth.py` covers the real login.
 
 Reject `/api/scan` with HTTP 400 when `consent` is false. Routes that act on the current scan (`/api/optout`, `/api/rescan`) return 409 until a scan has run or been loaded. FastAPI doesn't serve the frontend: it's a separate Next.js app that proxies `/api/*` here.
 

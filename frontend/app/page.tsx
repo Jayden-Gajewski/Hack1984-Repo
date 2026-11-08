@@ -1,8 +1,11 @@
 "use client";
 
-import { useCallback, useState } from "react";
-import { api, type Draft, type RemovalStatus, type ScanRequest, type ScanResponse } from "@/lib/api";
+import { useCallback, useEffect, useState } from "react";
+import { api, type Draft, type RemovalStatus, type ScanRequest, type ScanResponse, type User } from "@/lib/api";
 import AccountsPanel from "./components/AccountsPanel";
+import AdminPanel from "./components/AdminPanel";
+import AuthForm from "./components/AuthForm";
+import ChangePassword from "./components/ChangePassword";
 import AliasPanel from "./components/AliasPanel";
 import DraftModal from "./components/DraftModal";
 import ExposureCard from "./components/ExposureCard";
@@ -13,6 +16,8 @@ import StatusLine from "./components/StatusLine";
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
 export default function Home() {
+  // undefined: still checking the login cookie; null: logged out.
+  const [user, setUser] = useState<User | null | undefined>(undefined);
   const [result, setResult] = useState<ScanResponse | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [draftOpen, setDraftOpen] = useState(false);
@@ -24,6 +29,22 @@ export default function Home() {
   const [notes, setNotes] = useState<string[]>([]);
   const [lastRequest, setLastRequest] = useState<ScanRequest | null>(null);
   const [freshScanning, setFreshScanning] = useState(false);
+
+  useEffect(() => {
+    api.me().then(setUser, () => setUser(null));
+  }, []);
+
+  async function logout() {
+    try {
+      await api.logout();
+    } finally {
+      setUser(null);
+      setResult(null);
+      setLastRequest(null);
+      setRemovals({});
+      setNotes([]);
+    }
+  }
 
   function showScan(scan: ScanResponse, request?: ScanRequest) {
     setResult(scan);
@@ -93,12 +114,35 @@ export default function Home() {
     }
   }
 
+  if (!user) {
+    return (
+      <main>
+        <section>
+          <h1>Hack1984</h1>
+          <p className="muted">Find where your personal data is exposed. Analysis runs on this laptop.</p>
+          <StatusLine />
+          {user === null ? <AuthForm onLoggedIn={setUser} /> : <p className="muted">Checking your login…</p>}
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main>
       <section>
         <h1>Hack1984</h1>
         <p className="muted">Find where your personal data is exposed. Analysis runs on this laptop.</p>
+        <p className="row">
+          <span className="muted">
+            Logged in as <strong>{user.username}</strong> ({user.role})
+          </span>
+          <button type="button" className="secondary" onClick={logout}>
+            Log out
+          </button>
+          <ChangePassword />
+        </p>
         <StatusLine />
+        {user.role === "admin" && <AdminPanel me={user} />}
 
         <ScanForm onResult={showScan} />
         <p className="row">

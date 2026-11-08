@@ -12,7 +12,7 @@ These rules are the product. Do not break them, even temporarily, even to debug.
 2. **One door out.** Every request to an outside service goes through `backend/app/outbound.py`. No direct `httpx`/`requests` calls or vendor SDKs anywhere else. That module feeds the outbound log panel. The Next.js app talks only to the FastAPI backend on localhost. Its server code (route handlers, server components) never calls Exa, Tavily or any other external service.
 3. **Minimal queries.** Search with name + city/state only, or a company name. Never send phone numbers, emails, SSNs or birthdates. `outbound.py` rejects queries that contain them. Don't weaken that check.
 4. **Self-scan only.** A scan requires a `consent: true` flag. Demos use a consenting teammate.
-5. **User data stays on this laptop and out of git.** User data lives in memory, in `backend/local/` (gitignored), or in the local Postgres container (never a hosted database). Never commit real scan results, names or page text. Fixtures use fictional people and `.example` domains.
+5. **User data stays on this laptop and out of git.** User data lives in memory, in `backend/local/` (gitignored), or in the local Postgres container (never a hosted database). That includes accounts: usernames (no emails), scrypt password hashes and hashed session tokens. Each user sees only their own scans and outbound log; admins see the whole log. Never commit real scan results, names or page text. Fixtures use fictional people and `.example` domains.
 6. **Wording.** Say "likely source", never "who leaked it" or "leaked by". Every date shows its source. A missing date is "unknown", never a guess.
 
 ## Stack
@@ -22,11 +22,11 @@ These rules are the product. Do not break them, even temporarily, even to debug.
 - **Local LLM:** Ollama in JSON mode. The model is set by `OLLAMA_MODEL` (default `llama3.1:8b`).
 - **Frontend:** Next.js (App Router, React, TypeScript) in `frontend/`, on port 3000. It proxies `/api/*` to FastAPI on port 8000, so the browser only ever talks to localhost.
 - **Config:** `.env` at the repo root (`EXA_API_KEY`, `TAVILY_API_KEY`, `OLLAMA_URL`, `OLLAMA_MODEL`, `ALIAS_DOMAIN`, `DATABASE_URL`). `config.py` refuses an `OLLAMA_URL` or `DATABASE_URL` that isn't localhost. Commit `.env.example`, never `.env`.
-- **State:** the current scan in memory, saved scans in Postgres, and aliases and reports as JSON in `backend/local/`. Single user, runs on one laptop.
+- **State:** the current scan in memory, saved scans in Postgres, and aliases and reports as JSON in `backend/local/`. Runs on one laptop; local accounts, each with their own current scan and saved scans.
 
 ## Don't build
 
-User accounts or auth, real Gmail/IMAP integration, vector databases, agent frameworks (LangChain, CrewAI, etc.), multiple agents, an ORM or a second database, hosted or cloud databases, analytics or telemetry of any kind, extra frontend frameworks or UI component libraries on top of Next.js. If a task seems to need one of these, stop and ask.
+OAuth, hosted auth providers or email-based accounts (local username/password accounts with `user` and `admin` roles already exist; see `backend/app/auth.py`), real Gmail/IMAP integration, vector databases, agent frameworks (LangChain, CrewAI, etc.), multiple agents, an ORM or a second database, hosted or cloud databases, analytics or telemetry of any kind, extra frontend frameworks or UI component libraries on top of Next.js. If a task seems to need one of these, stop and ask.
 
 ## Layout (target; create files here as you build)
 
@@ -34,6 +34,7 @@ User accounts or auth, real Gmail/IMAP integration, vector databases, agent fram
 backend/
   app/
     main.py          FastAPI routes (JSON API only; Next.js serves the frontend)
+    auth.py          local accounts: password hashing, login cookie, roles
     config.py        loads .env; refuses a non-localhost OLLAMA_URL or DATABASE_URL
     outbound.py      logged HTTP client + minimal-query check
     models.py        pydantic models = the API contract with the frontend

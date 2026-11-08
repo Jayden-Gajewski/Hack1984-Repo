@@ -178,6 +178,36 @@ export interface OutboundEntry {
   status: number | null;
   ms: number | null;
   error: string | null;
+  user_id: number | null;
+}
+
+// ---------- Accounts ----------
+
+export type Role = "user" | "admin";
+
+export interface User {
+  id: number;
+  username: string;
+  role: Role;
+  created_at: string;
+}
+
+export interface Credentials {
+  username: string;
+  password: string;
+}
+
+export interface PasswordReset {
+  username: string;
+  code: string;
+  new_password: string;
+}
+
+// Shown to the admin once, to hand to the user in person.
+export interface ResetCode {
+  username: string;
+  code: string;
+  expires_at: string;
 }
 
 // ---------- Calls ----------
@@ -198,7 +228,7 @@ function errorMessage(data: unknown, status: number): string {
   return `Request failed (${status}).`;
 }
 
-async function request<T>(method: "GET" | "POST" | "DELETE", path: string, body?: unknown): Promise<T> {
+async function request<T>(method: "GET" | "POST" | "PATCH" | "DELETE", path: string, body?: unknown): Promise<T> {
   const res = await fetch(path, {
     method,
     headers: body === undefined ? undefined : { "Content-Type": "application/json" },
@@ -226,4 +256,16 @@ export const api = {
   outboundLog: (includeLocal: boolean) =>
     request<OutboundEntry[]>("GET", `/api/outbound-log?include_local=${includeLocal}`),
   clearOutboundLog: () => request<{ cleared: boolean }>("DELETE", "/api/outbound-log"),
+  // The login cookie is httpOnly and set by the backend; the browser sends it on its own.
+  me: () => request<User>("GET", "/api/auth/me"),
+  signup: (creds: Credentials) => request<User>("POST", "/api/auth/signup", creds),
+  login: (creds: Credentials) => request<User>("POST", "/api/auth/login", creds),
+  logout: () => request<{ logged_out: boolean }>("POST", "/api/auth/logout"),
+  changePassword: (current_password: string, new_password: string) =>
+    request<{ changed: boolean }>("POST", "/api/auth/password", { current_password, new_password }),
+  resetPassword: (body: PasswordReset) => request<User>("POST", "/api/auth/reset", body),
+  resetCode: (id: number) => request<ResetCode>("POST", `/api/admin/users/${id}/reset-code`),
+  users: () => request<User[]>("GET", "/api/admin/users"),
+  setRole: (id: number, role: Role) => request<User>("PATCH", `/api/admin/users/${id}`, { role }),
+  deleteUser: (id: number) => request<{ deleted: boolean }>("DELETE", `/api/admin/users/${id}`),
 };

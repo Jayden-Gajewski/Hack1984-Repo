@@ -16,12 +16,13 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 
-from app import db, outbound
+from app import auth, db, outbound
 from app.clients import ollama
 from app.config import get_settings
+from app.context import current_user_id
 from app.data import load_json
 from app.models import (
     AccountsRequest,
@@ -30,15 +31,21 @@ from app.models import (
     AliasHit,
     AliasRequest,
     BreachEvent,
+    Credentials,
     Draft,
     Exposure,
     LeadsResponse,
     OptOutRequest,
+    PasswordChange,
+    PasswordReset,
     PolicyResult,
     RescanResponse,
+    ResetCode,
+    RoleUpdate,
     ScanRequest,
     ScanResponse,
     StatusResponse,
+    User,
 )
 from app.outbound import OutboundEntry
 from app.stages import (
@@ -57,7 +64,7 @@ DB_DOWN = "Postgres isn't reachable. Start it with `docker compose up -d`."
 
 @dataclass
 class Session:
-    """The current scan, in memory. Single user on one laptop."""
+    """One user's current scan, in memory."""
 
     person: ScanRequest | None = None
     exposures: list[Exposure] = field(default_factory=list)
@@ -66,7 +73,34 @@ class Session:
     alias_hits: list[AliasHit] = field(default_factory=list)
 
 
-session = Session()
+_sessions: dict[int, Session] = {}
+
+
+class _UserSessions:
+    """`session.exposures` etc. read and write the logged-in user's own Session, so one user
+    can never draft opt-outs from, or re-scan, another user's scan."""
+
+    def _current(self) -> Session:
+        user_id = current_user_id.get()
+        if user_id is None:
+            raise HTTPException(401, "Log in first.")
+        return _sessions.setdefault(user_id, Session())
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._current(), name)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        setattr(self._current(), name, value)
+
+
+session: Any = _UserSessions()
+
+
+def _user_id() -> int:
+    user_id = current_user_id.get()
+    if user_id is None:
+        raise HTTPException(401, "Log in first.")
+    return user_id
 
 
 async def _stage(
@@ -129,7 +163,8 @@ async def lifespan(_: FastAPI):
     await outbound.close()
 
 
-app = FastAPI(title="Hack1984 API", lifespan=lifespan)
+# Every route needs a logged-in user except auth.PUBLIC_PATHS (status, sign-up, login).
+app = FastAPI(title="Hack1984 API", lifespan=lifespan, dependencies=[Depends(auth.require_user)])
 # Only answer requests addressed to this machine, which blocks DNS-rebinding pages from
 # reading saved scans or the outbound log through the browser.
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=["localhost", "127.0.0.1"])
@@ -190,6 +225,7 @@ async def scan(req: ScanRequest):
             response.scan_id,
             req.model_dump(exclude={"consent", "refresh"}),
             response.model_dump(),
+            _user_id(),
         )
     except Exception as exc:
         log.warning("Scan not saved: %s", exc)
@@ -201,7 +237,7 @@ async def _saved_scan(req: ScanRequest) -> ScanResponse | None:
     """The newest saved scan of this person from local Postgres, or None. If Postgres is down
     or the saved row doesn't fit the current models, the caller just runs a fresh scan."""
     try:
-        row = await asyncio.to_thread(db.find_scan, req.name, req.city, req.state)
+        row = await asyncio.to_thread(db.find_scan, req.name, req.city, req.state, _user_id())
         if row is None:
             return None
         saved_at, saved_response = row
@@ -217,7 +253,7 @@ async def _saved_scan(req: ScanRequest) -> ScanResponse | None:
 async def latest_scan():
     """The "load last scan" fallback, for when the venue Wi-Fi fails. Reads local Postgres."""
     try:
-        row = await asyncio.to_thread(db.latest_scan)
+        row = await asyncio.to_thread(db.latest_scan, _user_id())
     except Exception as exc:
         log.warning("Couldn't load the last scan: %s", exc)
         raise HTTPException(503, DB_DOWN) from None
@@ -301,12 +337,176 @@ async def inbox_check():
     return session.alias_hits
 
 
+def _log_owner(request: Request) -> int | None:
+    """Admins see and clear the whole log; users only their own entries."""
+    user = request.state.user
+    return None if user["role"] == "admin" else user["id"]
+
+
 @app.get("/api/outbound-log", response_model=list[OutboundEntry])
-async def outbound_log(include_local: bool = Query(default=True)):
-    return outbound.get_log(include_local=include_local)
+async def outbound_log(request: Request, include_local: bool = Query(default=True)):
+    return outbound.get_log(include_local=include_local, user_id=_log_owner(request))
 
 
 @app.delete("/api/outbound-log")
-async def clear_outbound_log():
-    outbound.clear_log()
+async def clear_outbound_log(request: Request):
+    outbound.clear_log(user_id=_log_owner(request))
     return {"cleared": True}
+
+
+# ---------- accounts ----------
+
+
+def _start_session(response: Response, user: dict[str, Any], token: str) -> None:
+    response.set_cookie(
+        auth.COOKIE,
+        token,
+        max_age=auth.SESSION_DAYS * 86400,
+        httponly=True,  # page scripts can't read it
+        samesite="strict",  # other sites can't send it
+        path="/",
+    )
+
+
+async def _db(fn: Callable[..., Any], *args: Any) -> Any:
+    try:
+        return await asyncio.to_thread(fn, *args)
+    except ValueError:
+        raise
+    except Exception as exc:
+        log.warning("Account database call failed: %s", exc)
+        raise HTTPException(503, f"Accounts need the local database. {DB_DOWN}") from None
+
+
+@app.post("/api/auth/signup", response_model=User)
+async def signup(creds: Credentials, response: Response):
+    """Create an account and log in. The first account ever becomes the admin."""
+    password_hash = await asyncio.to_thread(auth.hash_password, creds.password)
+    user = await _db(db.create_user, creds.username, password_hash)
+    if user is None:
+        raise HTTPException(409, "That username is taken.")
+    token = auth.new_token()
+    await _db(db.create_session, auth.token_hash(token), user["id"], auth.SESSION_DAYS)
+    _start_session(response, user, token)
+    return user
+
+
+@app.post("/api/auth/login", response_model=User)
+async def login(creds: Credentials, response: Response):
+    auth.check_throttle(creds.username)
+    found = await _db(db.user_with_hash, creds.username)
+    stored = found[1] if found else auth._DUMMY_HASH
+    ok = await asyncio.to_thread(auth.verify_password, creds.password, stored)
+    if not found or not ok:
+        auth.record_failure(creds.username)
+        raise HTTPException(401, "Wrong username or password.")
+    auth.clear_failures(creds.username)
+    user = found[0]
+    token = auth.new_token()
+    await _db(db.create_session, auth.token_hash(token), user["id"], auth.SESSION_DAYS)
+    _start_session(response, user, token)
+    return user
+
+
+@app.post("/api/auth/logout")
+async def logout(request: Request, response: Response):
+    """End this login and forget the user's in-memory scan, so the next person on this
+    laptop doesn't see it."""
+    user = await auth.user_from_request(request)
+    token = request.cookies.get(auth.COOKIE)
+    if token:
+        await _db(db.delete_session, auth.token_hash(token))
+    if user:
+        _sessions.pop(user["id"], None)
+    response.delete_cookie(auth.COOKIE, path="/")
+    return {"logged_out": True}
+
+
+@app.get("/api/auth/me", response_model=User)
+async def me(request: Request):
+    user = await auth.user_from_request(request)
+    if user is None:
+        raise HTTPException(401, "Not logged in.")
+    return user
+
+
+@app.post("/api/auth/password")
+async def change_password(body: PasswordChange, request: Request):
+    """A logged-in user changes their password. Their other logins are logged out; this one stays."""
+    user = request.state.user
+    auth.check_throttle(user["username"])
+    stored = await _db(db.password_hash_for, user["id"])
+    if not stored or not await asyncio.to_thread(auth.verify_password, body.current_password, stored):
+        auth.record_failure(user["username"])
+        raise HTTPException(401, "Your current password isn't right.")
+    auth.clear_failures(user["username"])
+    new_hash = await asyncio.to_thread(auth.hash_password, body.new_password)
+    token = request.cookies.get(auth.COOKIE)
+    await _db(db.set_password, user["id"], new_hash, auth.token_hash(token) if token else None)
+    return {"changed": True}
+
+
+@app.post("/api/auth/reset", response_model=User)
+async def reset_password(body: PasswordReset, response: Response):
+    """A forgotten password: spend the one-time code an admin created, set a new password and
+    log in. Every other login of that user is logged out."""
+    auth.check_throttle(body.username)
+    code_hash = auth.token_hash(auth.normalize_code(body.code))
+    user_id = await _db(db.use_reset, code_hash, body.username)
+    if user_id is None:
+        auth.record_failure(body.username)
+        raise HTTPException(400, "That reset code isn't valid for this username, or it has expired. Ask an admin for a new one.")
+    auth.clear_failures(body.username)
+    new_hash = await asyncio.to_thread(auth.hash_password, body.new_password)
+    await _db(db.set_password, user_id, new_hash, None)
+    found = await _db(db.user_with_hash, body.username)
+    if found is None:
+        raise HTTPException(404, "No user with that username.")
+    user = found[0]
+    token = auth.new_token()
+    await _db(db.create_session, auth.token_hash(token), user["id"], auth.SESSION_DAYS)
+    _start_session(response, user, token)
+    return user
+
+
+@app.post("/api/admin/users/{user_id}/reset-code", response_model=ResetCode)
+async def admin_reset_code(user_id: int, admin: dict = Depends(auth.require_admin)):
+    """Create a one-time password reset code for a user. It's shown here once; give it to the
+    user in person. Creating a new one cancels the old one."""
+    users = {u["id"]: u for u in await _db(db.list_users)}
+    if user_id not in users:
+        raise HTTPException(404, "No user with that id.")
+    code = auth.new_reset_code()
+    expires_at = await _db(db.create_reset, auth.token_hash(code), user_id, auth.RESET_MINUTES)
+    return ResetCode(username=users[user_id]["username"], code=code, expires_at=expires_at)
+
+
+@app.get("/api/admin/users", response_model=list[User])
+async def admin_users(admin: dict = Depends(auth.require_admin)):
+    return await _db(db.list_users)
+
+
+@app.patch("/api/admin/users/{user_id}", response_model=User)
+async def admin_set_role(user_id: int, body: RoleUpdate, admin: dict = Depends(auth.require_admin)):
+    try:
+        user = await _db(db.set_role, user_id, body.role)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from None
+    if user is None:
+        raise HTTPException(404, "No user with that id.")
+    return user
+
+
+@app.delete("/api/admin/users/{user_id}")
+async def admin_delete_user(user_id: int, admin: dict = Depends(auth.require_admin)):
+    """Delete a user, their logins and their saved scans."""
+    if user_id == admin["id"]:
+        raise HTTPException(409, "You can't delete your own account here.")
+    try:
+        deleted = await _db(db.delete_user, user_id)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from None
+    if not deleted:
+        raise HTTPException(404, "No user with that id.")
+    _sessions.pop(user_id, None)
+    return {"deleted": True}

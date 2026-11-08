@@ -50,8 +50,8 @@ def _saved(monkeypatch, calls):
     saved = {"scan_id": "old-scan", "errors": [],
              "exposures": [{"id": "s1", "broker": "ExampleBroker", "url": "https://people.example/jane"}]}
 
-    def find_scan(name, city, state):
-        calls.append((name, city, state))
+    def find_scan(name, city, state, user_id):
+        calls.append((name, city, state, user_id))
         return "2026-11-06T18:30:00+00:00", saved
 
     monkeypatch.setattr(main.db, "find_scan", find_scan)
@@ -70,7 +70,7 @@ def test_a_person_scanned_before_gets_the_saved_scan_without_searching(client, m
     body = res.json()
     assert res.status_code == 200
     assert body["scan_id"] == "old-scan" and body["saved_at"] == "2026-11-06T18:30:00+00:00"
-    assert calls == [("Jane Example", "Springfield", "IL")]
+    assert calls == [("Jane Example", "Springfield", "IL", 1)]  # only the logged-in user's scans
     assert main.session.exposures[0].id == "s1"  # opt-outs and re-scan work on the loaded scan
 
 

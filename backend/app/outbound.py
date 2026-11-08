@@ -27,6 +27,7 @@ import httpx
 from pydantic import BaseModel
 
 from app.config import LOCAL_HOSTS
+from app.context import current_user_id
 
 MAX_LOG_ENTRIES = 500
 LOCAL_BODY_CHARS = 300
@@ -76,6 +77,7 @@ class OutboundEntry(BaseModel):
     status: int | None = None
     ms: int | None = None
     error: str | None = None
+    user_id: int | None = None  # who the request was for; users see only their own entries
 
 
 _log: deque[OutboundEntry] = deque(maxlen=MAX_LOG_ENTRIES)
@@ -154,6 +156,7 @@ async def request(
         url=_redact_url(req.url),
         headers=_redact_headers(req.headers),
         body=_truncate(body) if local else body,
+        user_id=current_user_id.get(),
     )
     _log.append(entry)
 
@@ -169,9 +172,19 @@ async def request(
         entry.ms = int((time.monotonic() - started) * 1000)
 
 
-def get_log(include_local: bool = True) -> list[OutboundEntry]:
-    return [e for e in _log if include_local or not e.local]
+def get_log(include_local: bool = True, user_id: int | None = None) -> list[OutboundEntry]:
+    """Every entry, or only one user's when user_id is given (admins see all of them)."""
+    return [
+        e for e in _log
+        if (include_local or not e.local) and (user_id is None or e.user_id == user_id)
+    ]
 
 
-def clear_log() -> None:
+def clear_log(user_id: int | None = None) -> None:
+    """Clear every entry, or only one user's."""
+    if user_id is None:
+        _log.clear()
+        return
+    kept = [e for e in _log if e.user_id != user_id]
     _log.clear()
+    _log.extend(kept)

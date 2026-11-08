@@ -225,3 +225,64 @@ class StatusResponse(BaseModel):
     ollama_model: str
     model_pulled: bool
     database: bool
+
+
+# ---------- Accounts (see auth.py) ----------
+
+Role = Literal["user", "admin"]
+ROLES: tuple[str, ...] = get_args(Role)
+
+
+Password = Field(min_length=8, max_length=128)
+
+
+def _plain_username(v: str) -> str:
+    v = v.strip().lower()
+    if not all(ch.isascii() and (ch.isalnum() or ch in "._-") for ch in v):
+        raise ValueError("Usernames use letters, numbers, dots, dashes and underscores only.")
+    return v
+
+
+class Credentials(BaseModel):
+    """Sign-up and login. A username, not an email: the app collects as little as it can."""
+
+    username: str = Field(min_length=3, max_length=32)
+    password: str = Password
+
+    _username = field_validator("username")(classmethod(lambda cls, v: _plain_username(v)))
+
+
+class PasswordChange(BaseModel):
+    """A logged-in user changing their own password."""
+
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Password
+
+
+class PasswordReset(BaseModel):
+    """A forgotten password: the one-time code an admin created, plus the new password."""
+
+    username: str = Field(min_length=3, max_length=32)
+    code: str = Field(min_length=4, max_length=32)
+    new_password: str = Password
+
+    _username = field_validator("username")(classmethod(lambda cls, v: _plain_username(v)))
+
+
+class ResetCode(BaseModel):
+    """Shown to the admin once. They hand it to the user in person; it isn't stored readable."""
+
+    username: str
+    code: str
+    expires_at: str
+
+
+class User(BaseModel):
+    id: int
+    username: str
+    role: Role
+    created_at: str
+
+
+class RoleUpdate(BaseModel):
+    role: Role
