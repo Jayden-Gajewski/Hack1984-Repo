@@ -11,8 +11,14 @@ const DESCRIPTION =
   "Dossier finds your listings on people-search sites, shows the likely source with its evidence, and drafts the opt-out. Every request it sends is logged, including what Gemini reads.";
 
 export const metadata: Metadata = {
-  // Absolute URLs (the Open Graph image) use the public site's address when there is one.
-  metadataBase: new URL(process.env.SITE_URL ?? "http://localhost:3000"),
+  // Absolute URLs (the Open Graph image) use the public site's address when there is one. On
+  // Vercel without SITE_URL, the project's production address (a variable Vercel sets) stands in.
+  metadataBase: new URL(
+    process.env.SITE_URL ??
+      (process.env.VERCEL_PROJECT_PRODUCTION_URL
+        ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+        : "http://localhost:3000"),
+  ),
   title: { default: "Dossier: find where your personal data is exposed", template: "%s | Dossier" },
   description: DESCRIPTION,
   applicationName: "Dossier",

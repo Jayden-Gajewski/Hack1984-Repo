@@ -33,7 +33,7 @@ FastAPI app in `app/`. Read the privacy rules in the root `CLAUDE.md` first.
 | Method | Path | Body | Returns |
 |---|---|---|---|
 | GET | `/api/status` | | key presence, Ollama up, model pulled, Postgres up |
-| POST | `/api/scan` | `{name, city, state, consent, refresh?}` | `{scan_id, exposures, errors, saved_at}` (Stages 1 and 2); saved to Postgres. A person scanned before gets their newest saved scan back (`saved_at` set, nothing searched) unless `refresh` is true |
+| POST | `/api/scan` | `{name, city, state, consent, refresh?}` | `{scan_id, exposures, errors, saved_at}` (Stages 1 and 2); saved to Postgres. A person scanned before gets their newest saved scan back (`saved_at` set, nothing searched) unless `refresh` is true. The scan runs as its own task: a dropped request (Vercel's 120-second limit, a closed tab) doesn't stop it, and asking again for the same person joins it |
 | GET | `/api/scans/latest` | | the last saved scan ("load last scan" fallback) |
 | GET | `/api/brokers` | | the broker list |
 | GET | `/api/companies` | | account list for the picker: `data/companies.json` plus companies the user added |

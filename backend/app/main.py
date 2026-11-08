@@ -326,13 +326,37 @@ async def scan(req: ScanRequest):
         raise HTTPException(400, "A scan needs consent: you can only scan yourself.")
 
     current = _session()
-    if not req.refresh:
-        saved = await _saved_scan(req)
-        if saved is not None:
-            current.person, current.exposures = req, saved.exposures
-            return saved
+    key = (auth.current_user(), req.name.casefold(), req.city.casefold(), req.state)
+    running = _running_scans.get(key)
+    if running is None:
+        if not req.refresh:
+            saved = await _saved_scan(req)
+            if saved is not None:
+                current.person, current.exposures = req, saved.exposures
+                return saved
+        await _spend_search()
+        running = _running_scans.get(key)  # another request may have started it meanwhile
+        if running is None:
+            running = _running_scans[key] = asyncio.create_task(_run_scan(req, current))
+            running.add_done_callback(lambda task: _scan_done(key, task))
+    # If this request is dropped (Vercel stops waiting after 120 seconds, or the tab closes), the
+    # scan itself keeps going and is saved. Asking again joins it, or loads the saved result.
+    return await asyncio.shield(running)
 
-    await _spend_search()
+
+# Scans still running, per account and person: (account, name, city, state) -> task.
+_running_scans: dict[tuple[str | None, str, str, str], asyncio.Task[ScanResponse]] = {}
+
+
+def _scan_done(key: tuple[str | None, str, str, str], task: asyncio.Task[ScanResponse]) -> None:
+    if _running_scans.get(key) is task:
+        del _running_scans[key]
+    if not task.cancelled() and task.exception() is not None:  # nobody may be waiting to see it
+        log.error("Scan failed", exc_info=task.exception())
+
+
+async def _run_scan(req: ScanRequest, current: Session) -> ScanResponse:
+    """Stages 1 and 2 for one person, then save the scan. Runs as its own task (see scan())."""
     exposures, errors = await _stage(
         "Stage 1 (find exposures)", [], s1_exposures.find_exposures, req
     )
