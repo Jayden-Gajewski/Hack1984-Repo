@@ -109,6 +109,8 @@ class Exposure(BaseModel):
     broker_id: str | None = None
     source_kind: SourceKind = "broker"
     url: str
+    # More pages about this person on the same site, merged into this card (Stage 1).
+    other_urls: list[str] = []
     title: str = ""
     found_via: Literal["tavily", "exa"] | None = None
     text_source: TextSource = "snippet"

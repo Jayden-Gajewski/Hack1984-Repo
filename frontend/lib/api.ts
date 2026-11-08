@@ -56,6 +56,7 @@ export interface Exposure {
   broker_id: string | null;
   source_kind: SourceKind;
   url: string;
+  other_urls?: string[]; // more pages on the same site, merged into this card
   title: string;
   found_via: "tavily" | "exa" | null;
   text_source: TextSource;

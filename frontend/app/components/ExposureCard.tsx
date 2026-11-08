@@ -163,6 +163,28 @@ export default function ExposureCard({ exposure, onDraft, removal }: Props) {
 
         <ul className="found-how" aria-label="How this was found">
           {exposure.title && <li>Page title: {exposure.title}</li>}
+          {(exposure.other_urls?.length ?? 0) > 0 && (
+            <li>
+              Also on {exposure.other_urls!.length} more{" "}
+              {exposure.other_urls!.length === 1 ? "page" : "pages"} of this site:
+              <ul>
+                {exposure.other_urls!.map((u) => {
+                  const href = safeHref(u);
+                  return (
+                    <li key={u}>
+                      {href ? (
+                        <a href={href} target="_blank" rel="noopener noreferrer">
+                          {u}
+                        </a>
+                      ) : (
+                        u
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </li>
+          )}
           <li>Found with {exposure.found_via ? FOUND_VIA_LABEL[exposure.found_via] : "a search"}</li>
           <li>Read from {exposure.text_source === "extract" ? "the page itself" : "the search snippet"}</li>
           <li>Checked on this laptop by the local LLM</li>

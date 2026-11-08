@@ -254,6 +254,52 @@ def exposure_id(url: str) -> str:
     return hashlib.sha1(normalize_url(url).encode()).hexdigest()[:12]
 
 
+def _merge_fields(groups: list[list[FieldFinding]]) -> list[FieldFinding]:
+    """Fields from several pages, each value once (same rules as parse_analysis: a value
+    that repeats or is part of one we have is dropped, and the per-field cap holds)."""
+    merged: list[FieldFinding] = []
+    for fields in groups:
+        for f in fields:
+            same_field = [_squash(m.quote) for m in merged if m.field == f.field]
+            if len(same_field) >= (1 if f.field == "name" else MAX_VALUES_PER_FIELD):
+                continue
+            squashed = _squash(f.quote)
+            if any(squashed in other or other in squashed for other in same_field):
+                continue
+            merged.append(f)
+    return merged
+
+
+def merge_by_site(exposures: list[Exposure]) -> list[Exposure]:
+    """One card per site. Search often returns several pages about the same person on one
+    broker (a name page, a city page, a profile page); they become one card. The page that
+    shows the most is the card's url, the rest go in other_urls so opt-outs and re-scans
+    still cover them. Order follows each site's first card."""
+    groups: dict[str, list[Exposure]] = {}
+    for e in exposures:
+        groups.setdefault(e.broker_id or host_of(e.url), []).append(e)
+    merged: list[Exposure] = []
+    for pages in groups.values():
+        if len(pages) == 1:
+            merged.append(pages[0])
+            continue
+        # Most fields first; extracted text beats a snippet; otherwise search order.
+        ordered = sorted(pages, key=lambda e: (-len(e.fields), e.text_source != "extract"))
+        main = ordered[0]
+        dates = [e.published_date for e in pages if e.published_date]
+        urls = [e.url for e in ordered[1:]]
+        merged.append(
+            main.model_copy(
+                update={
+                    "fields": _merge_fields([e.fields for e in ordered]),
+                    "published_date": min(dates) if dates else None,  # earliest any page shows
+                    "other_urls": list(dict.fromkeys(u for u in urls if normalize_url(u) != normalize_url(main.url))),
+                }
+            )
+        )
+    return merged
+
+
 # ---------- the stage ----------
 
 
@@ -509,4 +555,4 @@ async def find_exposures(req: ScanRequest) -> tuple[list[Exposure], list[str]]:
         errors.append(
             f"The local LLM didn't answer for {unanswered} of {len(jobs)} pages, so they weren't checked."
         )
-    return exposures, errors
+    return merge_by_site(exposures), errors
