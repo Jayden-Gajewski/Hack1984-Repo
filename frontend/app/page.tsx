@@ -1,5 +1,7 @@
+import { cookies } from "next/headers";
 import Link from "next/link";
 import type { CSSProperties } from "react";
+import FilmPlayer from "./components/FilmPlayer";
 import ListingCycler from "./components/ListingCycler";
 import LogDemo from "./components/LogDemo";
 import Logo from "./components/Logo";
@@ -79,7 +81,9 @@ const TIERS = [
 const order = (n: number) => ({ "--i": n }) as CSSProperties;
 const delay = (ms: number) => ({ "--d": `${ms}ms` }) as CSSProperties;
 
-export default function Landing() {
+export default async function Landing() {
+  // Signed in on this laptop: the buttons go back to the app instead of to sign-up.
+  const signedIn = (await cookies()).has("h84_session");
   return (
     <div className="site">
       <header className="nav-bar">
@@ -88,17 +92,26 @@ export default function Landing() {
             <Logo />
           </Link>
           <nav className="nav-links" aria-label="Sections">
+            <a href="#watch">Demo</a>
             <a href="#how">How it works</a>
             <a href="#privacy">Privacy</a>
             <a href="#evidence">Evidence</a>
           </nav>
           <div className="nav-actions">
-            <Link href="/login" className="btn btn-ghost btn-sm">
-              Log in
-            </Link>
-            <Link href="/signup" className="btn btn-light btn-sm">
-              Sign up <Arrow />
-            </Link>
+            {signedIn ? (
+              <Link href="/app" className="btn btn-light btn-sm">
+                Open Dossier <Arrow />
+              </Link>
+            ) : (
+              <>
+                <Link href="/login" className="btn btn-ghost btn-sm">
+                  Log in
+                </Link>
+                <Link href="/signup" className="btn btn-light btn-sm">
+                  Sign up <Arrow />
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </header>
@@ -115,11 +128,11 @@ export default function Landing() {
               handing your data to one more company.
             </p>
             <div className="hero-ctas">
-              <Link href="/signup" className="btn btn-primary btn-lg">
+              <Link href={signedIn ? "/app" : "/signup"} className="btn btn-primary btn-lg">
                 Start a scan <Arrow />
               </Link>
-              <a href="#how" className="btn btn-ghost btn-lg">
-                See how it works
+              <a href="#watch" className="btn btn-ghost btn-lg">
+                Watch the 35-second demo
               </a>
             </div>
             <p className="hero-note">
@@ -149,6 +162,24 @@ export default function Landing() {
             </div>
           ))}
         </dl>
+
+        <section id="watch" className="film" aria-labelledby="watch-title">
+          <div className="wrap">
+            <div className="film-head">
+              <h2 id="watch-title" className="sec-title" data-reveal="words">
+                <Words text="See Dossier in 35 seconds" />
+              </h2>
+              <p className="sec-lede" data-reveal="fade" style={delay(150)}>
+                Find it, trace it, take it down: from a listing with your name on it to an opt-out sent from your
+                laptop.
+              </p>
+            </div>
+            <div data-reveal="fade" style={delay(200)}>
+              <FilmPlayer />
+            </div>
+            <p className="film-caption">Sample data: Jordan Avery and every site in the film are fictional. No sound.</p>
+          </div>
+        </section>
 
         <section id="how" className="lp-section">
           <div className="wrap">
@@ -246,16 +277,26 @@ export default function Landing() {
               <Words text="Take your data back." />
             </h2>
             <p className="sec-lede" data-reveal="fade" style={delay(150)}>
-              Create an account on this laptop to run your first scan.
+              {signedIn
+                ? "You're signed in on this laptop. Pick up where you left off."
+                : "Create an account on this laptop to run your first scan."}
             </p>
           </div>
           <div className="hero-ctas" data-reveal="fade" style={delay(250)}>
-            <Link href="/signup" className="btn btn-primary btn-glow btn-lg">
-              Create account <Arrow />
-            </Link>
-            <Link href="/login" className="btn btn-ghost btn-lg">
-              Log in
-            </Link>
+            {signedIn ? (
+              <Link href="/app" className="btn btn-primary btn-glow btn-lg">
+                Open Dossier <Arrow />
+              </Link>
+            ) : (
+              <>
+                <Link href="/signup" className="btn btn-primary btn-glow btn-lg">
+                  Create account <Arrow />
+                </Link>
+                <Link href="/login" className="btn btn-ghost btn-lg">
+                  Log in
+                </Link>
+              </>
+            )}
           </div>
         </section>
       </main>
